@@ -7,7 +7,7 @@ using VelsatBackendAPI.Data.Services;
 
 namespace VelsatBackendAPI.Data.Repositories
 {
-    public interface IUnitOfWork
+    public interface IUnitOfWork : IDisposable
     {
         IUserRepository UserRepository { get; }
 
@@ -32,5 +32,8 @@ namespace VelsatBackendAPI.Data.Repositories
         IKmServicioRepository KmServicioRepository { get; }
 
         IGacelaRepository GacelaRepository { get; }
+
+        void SaveChanges();
+
     }
 }

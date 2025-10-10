@@ -30,46 +30,5 @@ namespace VelsatBackendAPI.Controllers
         
         }
 
-        [HttpPost]
-        public async Task<IActionResult> CreateUser([FromBody]Account account)
-        {
-            if(account == null)
-            {
-                return BadRequest();
-            }
-            if (ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            var created = await _unitOfWork.UserRepository.InsertUser(account);
-
-            return Created("Created", created);
-        }
-
-        [HttpPut]
-        public async Task<IActionResult> UpdateUser([FromBody] Account account)
-        {
-            if (account == null)
-            {
-                return BadRequest();
-            }
-            if (ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            var created = await _unitOfWork.UserRepository.UpdateUser(account);
-
-            return NoContent();
-        }
-
-        [HttpDelete]
-        public async Task<IActionResult> DeleteUser(string id)
-        {
-            await _unitOfWork.UserRepository.DeleteUser(new Account { AccountID = id });
-
-            return NoContent();
-        }
     }
 }

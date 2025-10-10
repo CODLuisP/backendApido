@@ -1,90 +1,349 @@
 ﻿using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VelsatBackendAPI.Data.Services;
 
 namespace VelsatBackendAPI.Data.Repositories
 {
     public class UnitOfWork : IUnitOfWork, IDisposable
     {
-        private readonly IDbConnection _defaultConnection;
-        private IDbTransaction _defaultTransaction;
+        private readonly string _defaultConnectionString;
+        private readonly string _secondConnectionString;
 
-        private readonly IDbConnection _secondConnection;
-        private IDbTransaction _secondTransaction;
+        private MySqlConnection _defaultConnection;
+        private MySqlTransaction _defaultTransaction;
 
-        private readonly IUserRepository _userRepository;
-        private readonly IDatosCargainicialService _datosCargaInicialService;
-        private readonly IHistoricosRepository _historicosRepository;
-        private readonly IKilometrosRepository _kilometrosRepository;
-        private readonly IServidorRepository _servidorRepository;
-        private readonly ITurnosRepository _turnosRepository;
-        private readonly IPasajerosRepository _pasajerosRepository;
-        private readonly IPreplanRepository _preplanRepository;
-        private readonly IAlertaRepository _alertaRepository;
-        private readonly IRecorridoRepository _recorridoRepository;
-        private readonly IKmServicioRepository _kmServicioRepository;
-        private readonly IGacelaRepository _gacelaRepository;
+        private MySqlConnection _secondConnection;
+        private MySqlTransaction _secondTransaction;
+
+        // Repositorios lazy
+        private IUserRepository _userRepository;
+        private IDatosCargainicialService _datosCargaInicialService;
+        private IHistoricosRepository _historicosRepository;
+        private IKilometrosRepository _kilometrosRepository;
+        private IServidorRepository _servidorRepository;
+        private ITurnosRepository _turnosRepository;
+        private IPasajerosRepository _pasajerosRepository;
+        private IPreplanRepository _preplanRepository;
+        private IAlertaRepository _alertaRepository;
+        private IRecorridoRepository _recorridoRepository;
+        private IKmServicioRepository _kmServicioRepository;
+        private IGacelaRepository _gacelaRepository;
 
         private bool _disposed = false;
+        private bool _committed = false; // ⭐ NUEVO
+        private readonly object _lockObject = new object();
 
-        public UnitOfWork(MySqlConfiguration configuration, IConfiguration config)
+        public UnitOfWork(MySqlConfiguration configuration)
         {
-            _defaultConnection = new MySqlConnection(configuration.DefaultConnection);
-            _defaultConnection.Open();
-            _defaultTransaction = _defaultConnection.BeginTransaction();
-
-            _secondConnection = new MySqlConnection(configuration.SecondConnection);
-            _secondConnection.Open();
-            _secondTransaction = _secondConnection.BeginTransaction();
-
-            _userRepository = new UserRepository(_defaultConnection, _defaultTransaction);
-            _datosCargaInicialService = new DatosCargainicialService(_defaultConnection, _defaultTransaction);
-            _historicosRepository = new HistoricosRepository(_defaultConnection, _secondConnection, _secondTransaction);
-            _kilometrosRepository = new KilometrosRepository(_defaultConnection, _secondConnection, _defaultTransaction, _secondTransaction);
-
-            _servidorRepository = new ServidorRepository(_defaultConnection);
-            _turnosRepository = new TurnosRepository(_defaultConnection, _defaultTransaction);
-            _pasajerosRepository = new PasajerosRepository(_defaultConnection, _defaultTransaction);
-            _preplanRepository = new PreplanRepository(_defaultConnection, _secondConnection, _defaultTransaction);
-            _alertaRepository = new AlertaRepository(_defaultConnection, _defaultTransaction);
-            _recorridoRepository = new RecorridoRepository(_defaultConnection, _defaultTransaction);
-            _kmServicioRepository = new KmServicioRepository(_defaultConnection, _secondConnection, _defaultTransaction, _secondTransaction);
-            _gacelaRepository = new GacelaRepository(_defaultConnection, _defaultTransaction);
+            _defaultConnectionString = configuration.DefaultConnection
+                ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
+            _secondConnectionString = configuration.SecondConnection
+                ?? throw new ArgumentNullException(nameof(configuration.SecondConnection));
         }
 
-        public IUserRepository UserRepository => _userRepository;
-        public IDatosCargainicialService DatosCargainicialService => _datosCargaInicialService;
-        public IHistoricosRepository HistoricosRepository => _historicosRepository;
-        public IKilometrosRepository KilometrosRepository => _kilometrosRepository;
-        public IServidorRepository ServidorRepository => _servidorRepository;
-        public ITurnosRepository TurnosRepository => _turnosRepository;
-        public IPasajerosRepository PasajerosRepository => _pasajerosRepository;
-        public IPreplanRepository PreplanRepository => _preplanRepository;
-        public IAlertaRepository AlertaRepository => _alertaRepository;
-        public IRecorridoRepository RecorridoRepository => _recorridoRepository;
-        public IKmServicioRepository KmServicioRepository => _kmServicioRepository;
-        public IGacelaRepository GacelaRepository => _gacelaRepository;
+        // Conexión principal - se abre la primera vez que se usa
+        private MySqlConnection DefaultConnection
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_defaultConnection == null)
+                {
+                    lock (_lockObject)
+                    {
+                        if (_defaultConnection == null)
+                        {
+                            _defaultConnection = new MySqlConnection(_defaultConnectionString);
+                            _defaultConnection.Open();
+                            _defaultTransaction = _defaultConnection.BeginTransaction();
+                        }
+                    }
+                }
+                return _defaultConnection;
+            }
+        }
+
+        // Conexión secundaria - SOLO se abre cuando se accede a repositorios históricos
+        private MySqlConnection SecondConnection
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_secondConnection == null)
+                {
+                    lock (_lockObject)
+                    {
+                        if (_secondConnection == null)
+                        {
+                            _secondConnection = new MySqlConnection(_secondConnectionString);
+                            _secondConnection.Open();
+                            _secondTransaction = _secondConnection.BeginTransaction();
+                        }
+                    }
+                }
+                return _secondConnection;
+            }
+        }
+
+        // ⭐ NUEVO: Validación para prevenir uso después de commit
+        private void ValidateNotCommitted()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(UnitOfWork),
+                    "No se puede usar un UnitOfWork que ya ha sido liberado.");
+            }
+
+            if (_committed)
+            {
+                throw new InvalidOperationException(
+                    "Este UnitOfWork ya fue confirmado. Crea una nueva instancia para realizar más operaciones.");
+            }
+        }
+
+        // Repositorios que SOLO usan la conexión principal
+        public IUserRepository UserRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_userRepository == null)
+                {
+                    _userRepository = new UserRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _userRepository;
+            }
+        }
+
+        public IDatosCargainicialService DatosCargainicialService
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_datosCargaInicialService == null)
+                {
+                    _datosCargaInicialService = new DatosCargainicialService(DefaultConnection, _defaultTransaction);
+                }
+                return _datosCargaInicialService;
+            }
+        }
+
+        public IServidorRepository ServidorRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_servidorRepository == null)
+                {
+                    _servidorRepository = new ServidorRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _servidorRepository;
+            }
+        }
+
+        public ITurnosRepository TurnosRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_turnosRepository == null)
+                {
+                    _turnosRepository = new TurnosRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _turnosRepository;
+            }
+        }
+
+        public IPasajerosRepository PasajerosRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_pasajerosRepository == null)
+                {
+                    _pasajerosRepository = new PasajerosRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _pasajerosRepository;
+            }
+        }
+
+        public IPreplanRepository PreplanRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_preplanRepository == null)
+                {
+                    _preplanRepository = new PreplanRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _preplanRepository;
+            }
+        }
+
+        public IAlertaRepository AlertaRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_alertaRepository == null)
+                {
+                    _alertaRepository = new AlertaRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _alertaRepository;
+            }
+        }
+
+        public IRecorridoRepository RecorridoRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_recorridoRepository == null)
+                {
+                    _recorridoRepository = new RecorridoRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _recorridoRepository;
+            }
+        }
+
+        public IGacelaRepository GacelaRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_gacelaRepository == null)
+                {
+                    _gacelaRepository = new GacelaRepository(DefaultConnection, _defaultTransaction);
+                }
+                return _gacelaRepository;
+            }
+        }
+
+        // Repositorios que usan AMBAS conexiones (históricos)
+        public IHistoricosRepository HistoricosRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_historicosRepository == null)
+                {
+                    _historicosRepository = new HistoricosRepository(
+                        DefaultConnection,
+                        SecondConnection,
+                        _defaultTransaction,
+                        _secondTransaction);
+                }
+                return _historicosRepository;
+            }
+        }
+
+        public IKilometrosRepository KilometrosRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_kilometrosRepository == null)
+                {
+                    _kilometrosRepository = new KilometrosRepository(
+                        DefaultConnection,
+                        SecondConnection,
+                        _defaultTransaction,
+                        _secondTransaction);
+                }
+                return _kilometrosRepository;
+            }
+        }
+
+        public IKmServicioRepository KmServicioRepository
+        {
+            get
+            {
+                ValidateNotCommitted(); // ⭐ NUEVO
+
+                if (_kmServicioRepository == null)
+                {
+                    _kmServicioRepository = new KmServicioRepository(
+                        DefaultConnection,
+                        SecondConnection,
+                        _defaultTransaction,
+                        _secondTransaction);
+                }
+                return _kmServicioRepository;
+            }
+        }
 
         public void SaveChanges()
         {
-            try
+            ValidateNotCommitted(); // ⭐ NUEVO
+
+            lock (_lockObject)
             {
-                _defaultTransaction?.Commit();
-                _secondTransaction?.Commit();
+                try
+                {
+                    _defaultTransaction?.Commit();
+                    _secondTransaction?.Commit();
+
+                    _committed = true; // ⭐ NUEVO: Marca como confirmado
+                }
+                catch
+                {
+                    _defaultTransaction?.Rollback();
+                    _secondTransaction?.Rollback();
+                    throw;
+                }
+                finally
+                {
+                    // Limpiar transacciones después de commit/rollback
+                    DisposeTransactions(); // ⭐ NUEVO: Método extraído
+
+                    // ⭐ NUEVO: Cerrar conexiones inmediatamente para liberar recursos
+                    CloseConnections();
+                }
             }
-            catch
+        }
+
+        // ⭐ NUEVO: Método para liberar transacciones
+        private void DisposeTransactions()
+        {
+            if (_defaultTransaction != null)
             {
-                // Si hay error, hacer rollback
-                _defaultTransaction?.Rollback();
-                _secondTransaction?.Rollback();
-                throw;
+                _defaultTransaction.Dispose();
+                _defaultTransaction = null;
+            }
+
+            if (_secondTransaction != null)
+            {
+                _secondTransaction.Dispose();
+                _secondTransaction = null;
+            }
+        }
+
+        // ⭐ NUEVO: Método para cerrar conexiones inmediatamente
+        private void CloseConnections()
+        {
+            if (_defaultConnection != null && _defaultConnection.State == ConnectionState.Open)
+            {
+                _defaultConnection.Close();
+            }
+
+            if (_secondConnection != null && _secondConnection.State == ConnectionState.Open)
+            {
+                _secondConnection.Close();
             }
         }
 
@@ -98,49 +357,56 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             if (!_disposed && disposing)
             {
-                try
+                lock (_lockObject)
                 {
-                    // Primero hacer rollback si las transacciones siguen activas
-                    if (_defaultTransaction != null)
+                    try
                     {
-                        _defaultTransaction.Rollback();
-                        _defaultTransaction.Dispose();
-                        _defaultTransaction = null;
-                    }
-
-                    if (_secondTransaction != null)
-                    {
-                        _secondTransaction.Rollback();
-                        _secondTransaction.Dispose();
-                        _secondTransaction = null;
-                    }
-
-                    // Luego cerrar y liberar las conexiones
-                    if (_defaultConnection != null)
-                    {
-                        if (_defaultConnection.State == ConnectionState.Open)
+                        // ⭐ MODIFICADO: Solo hacer rollback si NO se hizo commit
+                        if (!_committed)
                         {
-                            _defaultConnection.Close();
-                        }
-                        _defaultConnection.Dispose();
-                    }
+                            if (_defaultTransaction != null)
+                            {
+                                try { _defaultTransaction.Rollback(); } catch { }
+                            }
 
-                    if (_secondConnection != null)
-                    {
-                        if (_secondConnection.State == ConnectionState.Open)
-                        {
-                            _secondConnection.Close();
+                            if (_secondTransaction != null)
+                            {
+                                try { _secondTransaction.Rollback(); } catch { }
+                            }
                         }
-                        _secondConnection.Dispose();
+
+                        // Liberar transacciones
+                        DisposeTransactions();
+
+                        // Cerrar y liberar conexiones
+                        if (_defaultConnection != null)
+                        {
+                            if (_defaultConnection.State == ConnectionState.Open)
+                            {
+                                _defaultConnection.Close();
+                            }
+                            _defaultConnection.Dispose();
+                            _defaultConnection = null;
+                        }
+
+                        if (_secondConnection != null)
+                        {
+                            if (_secondConnection.State == ConnectionState.Open)
+                            {
+                                _secondConnection.Close();
+                            }
+                            _secondConnection.Dispose();
+                            _secondConnection = null;
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error disposing UnitOfWork: {ex.Message}");
-                }
-                finally
-                {
-                    _disposed = true;
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error disposing UnitOfWork: {ex.Message}");
+                    }
+                    finally
+                    {
+                        _disposed = true;
+                    }
                 }
             }
         }

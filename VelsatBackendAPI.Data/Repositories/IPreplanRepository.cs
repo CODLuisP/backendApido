@@ -96,11 +96,5 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> NuevoLugarCliente(LugarCliente lugarCliente);
 
         Task<int> EliminarLugarCliente(int codlugar);
-
-
-        //MOBILE
-        Task<int> SubirPasajero(Pedido pedido);
-
-        Task<int> BajarPasajero(Pedido pedido);
     }
 }

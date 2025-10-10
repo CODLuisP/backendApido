@@ -31,6 +31,8 @@ namespace VelsatBackendAPI.Controllers
 
             var result = await _unitOfWork.PreplanRepository.InsertPedido(excel, fecact, tipo, usuario);
 
+            _unitOfWork.SaveChanges();
+
             return Ok(result);
         }
 
@@ -65,6 +67,8 @@ namespace VelsatBackendAPI.Controllers
 
             int result = await _unitOfWork.PreplanRepository.SavePedidos(pedidos, usuario);
 
+            _unitOfWork.SaveChanges();
+
             if (result == 1)
             {
                 return Ok(new { message = "Pedidos guardados correctamente" });
@@ -84,6 +88,8 @@ namespace VelsatBackendAPI.Controllers
             }
 
             int result = await _unitOfWork.PreplanRepository.BorrarPlan(empresa, fecha, usuario);
+
+            _unitOfWork.SaveChanges();
 
             if (result > 0)
             {
@@ -123,6 +129,8 @@ namespace VelsatBackendAPI.Controllers
             }
 
             int filasAfectadas = await _unitOfWork.PreplanRepository.UpdateDirec(coddire, codigo);
+
+            _unitOfWork.SaveChanges();
 
             if (filasAfectadas > 0)
             {
@@ -178,6 +186,9 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 var servicios = await _unitOfWork.PreplanRepository.CreateServicios(fecha, empresa, usuario);
+
+                _unitOfWork.SaveChanges();
+
                 return Ok(new { message = "Servicios creados exitosamente", data = servicios });
             }
             catch (Exception ex)
@@ -258,6 +269,8 @@ namespace VelsatBackendAPI.Controllers
             {
                 string resultado = await _unitOfWork.PreplanRepository.AsignacionServicio(listaServicios);
 
+                _unitOfWork.SaveChanges();
+
                 if (resultado == "Servicio Asignado")
                 {
                     return Ok(new { message = resultado });
@@ -282,6 +295,8 @@ namespace VelsatBackendAPI.Controllers
             }
 
             int resultado = await _unitOfWork.PreplanRepository.EliminacionMultiple(listaServicios);
+
+            _unitOfWork.SaveChanges();
 
             if (resultado > 0)
             {
@@ -370,6 +385,8 @@ namespace VelsatBackendAPI.Controllers
             {
                 int resultado = await _unitOfWork.PreplanRepository.UpdateControlServicio(servicio);
 
+                _unitOfWork.SaveChanges();
+
                 if (resultado > 0)
                 {
                     return Ok(new { mensaje = "Servicio actualizado correctamente.", filasAfectadas = resultado });
@@ -396,6 +413,8 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 int filasAfectadas = await _unitOfWork.PreplanRepository.CancelarAsignacion(codservicio);
+
+                _unitOfWork.SaveChanges();
 
                 if (filasAfectadas > 0)
                 {
@@ -424,6 +443,8 @@ namespace VelsatBackendAPI.Controllers
 
             int resultado = await _unitOfWork.PreplanRepository.CancelarServicio(servicio);
 
+            _unitOfWork.SaveChanges();
+
             if (resultado > 0)
             {
                 return Ok(new { message = "Servicio cancelado exitosamente." });
@@ -445,6 +466,9 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 string resultado = await _unitOfWork.PreplanRepository.NewServicio(servicio, usuario);
+
+                _unitOfWork.SaveChanges();
+
                 return Ok(new { mensaje = resultado });
             }
             catch (Exception ex)
@@ -460,6 +484,8 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest("El pedido no puede ser nulo.");
 
             int resultado = await _unitOfWork.PreplanRepository.UpdateEstadoServicio(pedido);
+
+            _unitOfWork.SaveChanges();
 
             if (resultado > 0)
                 return Ok(new { mensaje = "Estado actualizado correctamente", filasAfectadas = resultado });
@@ -1351,6 +1377,8 @@ namespace VelsatBackendAPI.Controllers
             {
                 int result = await _unitOfWork.PreplanRepository.RegistrarPasajeroGrupo(pedido, usuario);
 
+                _unitOfWork.SaveChanges();
+
                 if (result > 0)
                     return Ok(new { mensaje = "Pasajero registrado correctamente", filasAfectadas = result });
 
@@ -1369,6 +1397,8 @@ namespace VelsatBackendAPI.Controllers
             {
                 int result = await _unitOfWork.PreplanRepository.UpdateHorasServicio(codservicio, fecha, fecplan);
 
+                _unitOfWork.SaveChanges();
+
                 if (result > 0)
                     return Ok("Servicio actualizado correctamente.");
                 else
@@ -1386,6 +1416,9 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 int result = await _unitOfWork.PreplanRepository.UpdateDestinoServicio(codservicio, newcoddestino, newcodubicli);
+
+                _unitOfWork.SaveChanges();
+
                 if (result > 0)
                     return Ok("Servicio actualizado correctamente.");
                 else
@@ -1423,6 +1456,8 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 int result = await _unitOfWork.PreplanRepository.EliminarGrupoCero(usuario);
+
+                _unitOfWork.SaveChanges();
 
                 if (result > 0)
                     return Ok("Grupo eliminado correctamente.");
@@ -1492,6 +1527,8 @@ namespace VelsatBackendAPI.Controllers
         {
             var resultado = await _unitOfWork.PreplanRepository.GuardarConductorAsync(conductor, usuario);
 
+            _unitOfWork.SaveChanges();
+
             return resultado switch
             {
                 0 => BadRequest("Error al guardar conductor"),
@@ -1508,6 +1545,8 @@ namespace VelsatBackendAPI.Controllers
             {
                 // Ejecutar la modificación
                 var resultado = await _unitOfWork.PreplanRepository.ModificarConductorAsync(conductor);
+
+                _unitOfWork.SaveChanges();
 
                 return resultado switch
                 {
@@ -1533,6 +1572,8 @@ namespace VelsatBackendAPI.Controllers
 
                 var resultado = await _unitOfWork.PreplanRepository.HabilitarConductorAsync(id);
 
+                _unitOfWork.SaveChanges();
+
                 return resultado switch
                 {
                     0 => NotFound(new { message = "Conductor no encontrado", code = 0 }),
@@ -1555,6 +1596,8 @@ namespace VelsatBackendAPI.Controllers
                     return BadRequest(new { message = "Código de conductor inválido" });
 
                 var resultado = await _unitOfWork.PreplanRepository.DeshabilitarConductorAsync(id);
+
+                _unitOfWork.SaveChanges();
 
                 return resultado switch
                 {
@@ -1579,6 +1622,8 @@ namespace VelsatBackendAPI.Controllers
 
                 var resultado = await _unitOfWork.PreplanRepository.LiberarConductorAsync(id);
 
+                _unitOfWork.SaveChanges();
+
                 return resultado switch
                 {
                     0 => NotFound(new { message = "Conductor no encontrado", code = 0 }),
@@ -1601,6 +1646,8 @@ namespace VelsatBackendAPI.Controllers
                     return BadRequest(new { message = "Código de conductor inválido" });
 
                 var resultado = await _unitOfWork.PreplanRepository.EliminarConductorAsync(id);
+
+                _unitOfWork.SaveChanges();
 
                 return resultado switch
                 {
@@ -1625,6 +1672,8 @@ namespace VelsatBackendAPI.Controllers
 
                 var resultado = await _unitOfWork.PreplanRepository.HabilitarUnidadAsync(placa);
 
+                _unitOfWork.SaveChanges();
+
                 return resultado switch
                 {
                     0 => NotFound(new { message = "Unidad no encontrada", code = 0 }),
@@ -1648,6 +1697,8 @@ namespace VelsatBackendAPI.Controllers
 
                 var resultado = await _unitOfWork.PreplanRepository.DeshabilitarUnidadAsync(placa);
 
+                _unitOfWork.SaveChanges();
+
                 return resultado switch
                 {
                     0 => NotFound(new { message = "Unidad no encontrada", code = 0 }),
@@ -1667,6 +1718,9 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 var resultado = await _unitOfWork.PreplanRepository.LiberarUnidadAsync(placa);
+
+                _unitOfWork.SaveChanges();
+
                 return resultado switch
                 {
                     0 => NotFound(new { message = "Unidad no encontrada o no se pudo liberar", code = 0 }),
@@ -1686,6 +1740,9 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 var resultado = await _unitOfWork.PreplanRepository.UpdDirPasServicio(codpedido, codubicli);
+
+                _unitOfWork.SaveChanges();
+
                 return resultado switch
                 {
                     0 => NotFound(new { message = "Pedido no encontrado o no se pudo actualizar la dirección", code = 0 }),
@@ -1710,6 +1767,8 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 int filasAfectadas = await _unitOfWork.PreplanRepository.NuevoLugarCliente(lugarCliente);
+
+                _unitOfWork.SaveChanges();
 
                 if (filasAfectadas > 0)
                 {
@@ -1746,6 +1805,8 @@ namespace VelsatBackendAPI.Controllers
             {
                 int filasAfectadas = await _unitOfWork.PreplanRepository.EliminarLugarCliente(codlugar);
 
+                _unitOfWork.SaveChanges();
+
                 if (filasAfectadas > 0)
                 {
                     return Ok(new
@@ -1767,41 +1828,6 @@ namespace VelsatBackendAPI.Controllers
                     error = ex.Message
                 });
             }
-        }
-
-        //MOBILE APIS
-        [HttpPut("SubirPasajero")]
-        public async Task<IActionResult> SubirPasajero([FromBody] Pedido pedido)
-        {
-            if (pedido == null)
-                return BadRequest("El pedido no puede ser nulo.");
-
-            string fecaten = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
-            pedido.Fecaten = fecaten;
-
-            int resultado = await _unitOfWork.PreplanRepository.SubirPasajero(pedido);
-
-            if (resultado > 0)
-                return Ok(new { mensaje = "Pasajero subido correctamente", filasAfectadas = resultado });
-
-            return BadRequest("No se pudo subir el pasajero.");
-        }
-
-        [HttpPut("BajarPasajero")]
-        public async Task<IActionResult> BajarPasajero([FromBody] Pedido pedido)
-        {
-            if (pedido == null)
-                return BadRequest("El pedido no puede ser nulo.");
-
-            string fecaten = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
-            pedido.Fecaten = fecaten;
-
-            int resultado = await _unitOfWork.PreplanRepository.BajarPasajero(pedido);
-
-            if (resultado > 0)
-                return Ok(new { mensaje = "Pasajero bajado correctamente", filasAfectadas = resultado });
-
-            return BadRequest("No se pudo bajar el pasajero.");
         }
     }
 }

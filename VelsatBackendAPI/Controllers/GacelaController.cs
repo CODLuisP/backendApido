@@ -172,6 +172,8 @@ namespace VelsatBackendAPI.Controllers
                     totalFilasAfectadas += resultado;
                 }
 
+                _unitOfWork.SaveChanges();
+
                 if (totalFilasAfectadas > 0)
                     return Ok(new { mensaje = $"Se crearon {totalFilasAfectadas} subservicios correctamente", filasAfectadas = totalFilasAfectadas });
 
@@ -190,6 +192,8 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest("El código de servicio debe ser mayor que cero.");
 
             int resultado = await _unitOfWork.GacelaRepository.ReiniciarServicio(codservicio);
+
+            _unitOfWork.SaveChanges();
 
             if (resultado > 0)
                 return Ok(new { mensaje = "Servicio reiniciado correctamente", filasAfectadas = resultado });
@@ -215,6 +219,8 @@ namespace VelsatBackendAPI.Controllers
                     totalFilasAfectadas += resultado;
                 }
 
+                _unitOfWork.SaveChanges();
+
                 if (totalFilasAfectadas > 0)
                     return Ok(new { mensaje = $"Se guardaron {totalFilasAfectadas} servicios correctamente", filasAfectadas = totalFilasAfectadas });
 
@@ -235,8 +241,6 @@ namespace VelsatBackendAPI.Controllers
 
                 if (file == null || file.Length == 0)
                     return BadRequest("No se ha proporcionado un archivo válido.");
-                Console.WriteLine($"Archivo recibido: {file.FileName}, Tamaño: {file.Length}");
-                Console.WriteLine($"TipoGrupo: {tipoGrupo}, Usuario: {usuario}");
 
                 if (string.IsNullOrEmpty(tipoGrupo) || string.IsNullOrEmpty(usuario))
                     return BadRequest("Los parámetros tipoGrupo y usuario son requeridos.");
@@ -257,6 +261,8 @@ namespace VelsatBackendAPI.Controllers
 
                     // Procesar el archivo Excel
                     var servicios = await _unitOfWork.GacelaRepository.ProcessExcel(tempFilePath, tipoGrupo, usuario);
+
+                    _unitOfWork.SaveChanges();
 
                     return Ok(new
                     {
@@ -308,6 +314,8 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 var resultado = await _unitOfWork.GacelaRepository.RegistrarServicioExterno(listaServicios, usuario);
+
+                _unitOfWork.SaveChanges();
 
                 // Verificar si todos los servicios se registraron correctamente
                 var serviciosExitosos = resultado.Where(s => s.Estado == "Servicio Registrado Correctamente").Count();
@@ -370,6 +378,8 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 var resultado = await _unitOfWork.GacelaRepository.CancelarServicioExterno(listaServicios, usuario);
+
+                _unitOfWork.SaveChanges();
 
                 // Verificar si todos los servicios se cancelaron correctamente
                 var serviciosCancelados = resultado.Where(s => s.Estado == "Servicio Cancelado").Count();
@@ -444,6 +454,8 @@ namespace VelsatBackendAPI.Controllers
 
                 var resultado = await _unitOfWork.GacelaRepository.CancelarPasajeroExterno(pedido, usuario);
 
+                _unitOfWork.SaveChanges();
+
                 if (resultado == "Cancelación de pasajero existosa")
                 {
                     return Ok(new
@@ -499,6 +511,8 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 var resultado = await _unitOfWork.GacelaRepository.AgregarPasajeroExterno(pedido, usuario);
+
+                _unitOfWork.SaveChanges();
 
                 if (resultado == "Se agrego pasajero de forma existosa")
                 {

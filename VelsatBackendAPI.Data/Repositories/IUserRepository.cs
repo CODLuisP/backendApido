@@ -13,12 +13,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<Account> GetDetails(int id);
 
-        Task<bool> InsertUser(Account account);
-
-        Task<bool> UpdateUser(Account account);
-
-        Task<bool> DeleteUser(Account account);
-
         Task<Account> ValidarUser(string accountID, string password);
     }
 }

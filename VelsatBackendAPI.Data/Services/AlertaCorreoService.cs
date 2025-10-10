@@ -3,9 +3,9 @@ using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Mail;
 using System.Net;
-using System.Text;
+using System.Net.Mail;
+using System.Threading;
 using System.Threading.Tasks;
 using VelsatBackendAPI.Data.Repositories;
 using VelsatBackendAPI.Model.AlarmasCorreo;
@@ -33,37 +33,48 @@ namespace VelsatBackendAPI.Data.Services
                     var repo = unitOfWork.AlertaRepository;
 
                     var fecha = await repo.ObtenerFechaUltimaAlarmaAsync();
-                    Console.WriteLine($"Fecha última alarma detectada: {fecha}");  // Aquí puedes ver cuándo se ejecuta
+                    Console.WriteLine($"Fecha última alarma detectada: {fecha}");
 
                     if (fecha.HasValue && fecha > _ultimaActualizacion)
                     {
                         _ultimaActualizacion = fecha.Value;
 
                         var alertas = await repo.ObtenerAlertasNoEnviadasAsync();
-                        Console.WriteLine($"Se encontraron {alertas.Count} alertas no enviadas.");  // Número de alertas encontradas
+                        Console.WriteLine($"Se encontraron {alertas.Count} alertas no enviadas.");
 
-                        foreach (var alerta in alertas)
+                        if (alertas.Any())
                         {
-                            // Log o Console.WriteLine cuando se va a enviar el correo
-                            Console.WriteLine($"Enviando correo para la alerta {alerta.Codigo} - StatusCode: {alerta.StatusCode}");
+                            foreach (var alerta in alertas)
+                            {
+                                Console.WriteLine($"Enviando correo para la alerta {alerta.Codigo} - StatusCode: {alerta.StatusCode}");
 
-                            await EnviarCorreoAsync("rentaautoschiclayo@gmail.com", alerta);
+                                try
+                                {
+                                    await EnviarCorreoAsync("rentaautoschiclayo@gmail.com", alerta);
+                                    Console.WriteLine($"Correo enviado exitosamente para la alerta {alerta.Codigo}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error enviando correo para alerta {alerta.Codigo}: {ex.Message}");
+                                    // Continuar con las demás alertas aunque una falle
+                                }
+                            }
 
-                            // Aquí marcamos la alerta como enviada
-                            Console.WriteLine($"Correo enviado para la alerta {alerta.Codigo}. Marcar como procesada.");
+                            // ✅ Marcar como enviadas y hacer commit
+                            await repo.MarcarComoEnviadasAsync(alertas.Select(a => a.Codigo).ToList());
+                            unitOfWork.SaveChanges(); // ✅ AGREGAR ESTO
 
+                            Console.WriteLine($"{alertas.Count} alertas marcadas como procesadas.");
                         }
-
-                        await repo.MarcarComoEnviadasAsync(alertas.Select(a => a.Codigo).ToList());
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Aquí podrías loguear el error o mostrarlo por consola
-                    Console.WriteLine($"Error detectado: {ex.Message}");
+                    Console.WriteLine($"Error en el servicio de alertas: {ex.Message}");
+                    Console.WriteLine($"StackTrace: {ex.StackTrace}");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken); // Delay entre ejecuciones
+                await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
             }
         }
 
@@ -76,23 +87,23 @@ namespace VelsatBackendAPI.Data.Services
                 EnableSsl = true
             };
 
-            // Determinar el título según el statusCode
             string tituloAlerta = alerta.StatusCode switch
             {
                 64787 => "🚨 Alerta! Desconexión de Batería",
                 63553 => "🚨 Alerta! Botón de Pánico",
-                //62476 => "🚨 Alerta! Encendido de Motor",
                 _ => "🚨 Alerta! Evento Desconocido"
             };
 
-            var mail = new MailMessage(new MailAddress("cmyg@velsat.com.pe", "Velsat SAC"), new MailAddress(correo))
+            var mail = new MailMessage(
+                new MailAddress("cmyg@velsat.com.pe", "Velsat SAC"),
+                new MailAddress(correo))
             {
                 Subject = tituloAlerta,
                 Body = GenerarCuerpoCorreo(alerta),
                 IsBodyHtml = true
             };
-            mail.To.Add(correo); // destino original
-            mail.To.Add("cmyg@velsat.com.pe"); // copia al remitente
+
+            mail.To.Add("cmyg@velsat.com.pe");
 
             await smtp.SendMailAsync(mail);
         }
@@ -106,7 +117,6 @@ namespace VelsatBackendAPI.Data.Services
             string tituloAlerta;
             string imagenAlerta;
 
-            // Puedes personalizar el HTML como prefieras
             switch (alerta.StatusCode)
             {
                 case 64787:
@@ -117,14 +127,10 @@ namespace VelsatBackendAPI.Data.Services
                     tituloAlerta = "BOTÓN DE PÁNICO";
                     imagenAlerta = "https://res.cloudinary.com/dyc4ik1ko/image/upload/panico_i540gn.jpg";
                     break;
-                //case 62476:
-                //    tituloAlerta = "ENCENDIDO DE MOTOR";
-                //    imagenAlerta = "https://res.cloudinary.com/dyc4ik1ko/image/upload/motor_qr3ucy.jpg";
-                //    break;
                 default:
                     tituloAlerta = "ALERTA DESCONOCIDA";
                     imagenAlerta = "https://res.cloudinary.com/dyc4ik1ko/image/upload/bateria_c59x4t.jpg";
-                break;
+                    break;
             }
 
             return $@"

@@ -41,21 +41,6 @@ namespace VelsatBackendAPI.Data.Repositories
             return _defaultConnection.QueryFirstOrDefaultAsync<Account>("Select accountID, password, description from usuarios where accountID = @id", new {id});
         }
 
-        public Task<bool> InsertUser(Account account)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> UpdateUser(Account account)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> DeleteUser(Account account)
-        {
-            throw new NotImplementedException();
-        }
-
         public Task<Account> ValidarUser(string login, string clave)
         {
             const string sql = "Select accountID, password from usuarios where accountID = @login and password = @clave";
