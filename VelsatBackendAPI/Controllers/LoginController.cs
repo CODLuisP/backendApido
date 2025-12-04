@@ -13,18 +13,15 @@ namespace VelsatBackendAPI.Controllers
     [ApiController]
     public class LoginController : ControllerBase
     {
-        private readonly IUnitOfWork _unitOfWork;
+        // ✅ CAMBIO: Inyectar Factory en lugar de UnitOfWork
+        private readonly IReadOnlyUnitOfWork _readOnlyUow;
         private readonly string secretkey;
 
-        // ← ELIMINAR: IHubContext<ActualizacionTiempoReal> _hubContext
-        // ← ELIMINAR: Dictionary<string, Timer> userTimers
-
-        public LoginController(IUnitOfWork unitOfWork, IConfiguration config)
+        // ✅ CAMBIO: Constructor recibe Factory
+        public LoginController(IReadOnlyUnitOfWork readOnlyUow, IConfiguration config)
         {
-            _unitOfWork = unitOfWork;
+            _readOnlyUow = readOnlyUow;
             secretkey = config.GetSection("settings").GetSection("secretkey").Value;
-
-            // ← ELIMINAR: _hubContext = hubContext;
         }
 
         [HttpPost("login")]
@@ -35,31 +32,21 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest("Los campos están vacíos");
             }
 
-            var account = await _unitOfWork.UserRepository.ValidarUser(request.Login, request.Clave);
+            var account = await _readOnlyUow.UserRepository.ValidarUser(request.Login, request.Clave);
 
             if (account != null)
             {
                 var token = GenerateLoginToken(account);
-
-                // ← ELIMINAR: await _hubContext.Clients.Group(request.Login).SendAsync("UnirGrupo", request.Login);
-                // ← ELIMINAR: IniciarTemporizadorDatosEnTiempoReal(request.Login);
-
                 return StatusCode(StatusCodes.Status200OK, new { Token = token, Username = request.Login });
             }
 
             return StatusCode(StatusCodes.Status401Unauthorized);
-        }
 
-        // ← ELIMINAR TODO ESTE BLOQUE:
-        // - IniciarTemporizadorDatosEnTiempoReal()
-        // - EnviarDatosEnTiempoReal()
-        // - ObtenerDatosCargaDesdeBD()
-        // - DetenerTimer()
+        }
 
         private string GenerateLoginToken(Account account)
         {
             var keyBytes = Encoding.ASCII.GetBytes(secretkey);
-
             var claims = new ClaimsIdentity();
             claims.AddClaim(new Claim(ClaimTypes.NameIdentifier, account.AccountID));
 
@@ -72,7 +59,6 @@ namespace VelsatBackendAPI.Controllers
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var tokenConfig = tokenHandler.CreateToken(tokenDescriptor);
-
             string tokenString = tokenHandler.WriteToken(tokenConfig);
 
             return tokenString;

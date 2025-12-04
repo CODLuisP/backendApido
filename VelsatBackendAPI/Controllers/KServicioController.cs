@@ -10,13 +10,14 @@ namespace VelsatBackendAPI.Controllers
     [ApiController]
     public class KServicioController : Controller
     {
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly IReadOnlyUnitOfWork _readOnlyUow; // ✅ Cambiar a ReadOnly
 
-        public KServicioController(IUnitOfWork unitOfWork)
+        public KServicioController(IReadOnlyUnitOfWork readOnlyUow) // ✅ Cambiar
         {
-            _unitOfWork = unitOfWork;
+            _readOnlyUow = readOnlyUow;
         }
 
+        // PASO 3: Envolver métodos en using
         [HttpGet("kilometraje")]
         public async Task<IActionResult> GetKmServicios([FromQuery] string fecha)
         {
@@ -25,25 +26,37 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var resultado = await _unitOfWork.KmServicioRepository.GetKmServicios(fecha);
+                var resultado = await _readOnlyUow.KmServicioRepository.GetKmServicios(fecha);
                 return Ok(resultado);
             }
             catch (Exception ex)
             {
                 // Podrías loguear el error aquí si usas ILogger
-                return StatusCode(500, $"Ocurrió un error al obtener los datos: {ex.Message}");
+                return StatusCode(500, new { message = "Error al obtener los datos", error = ex.Message });
             }
+
         }
 
         [HttpGet("ExcelKmServicios")]
         public async Task<IActionResult> ResumenExcelKm([FromQuery] string fecha)
         {
-            var resultado = await _unitOfWork.KmServicioRepository.GetKmServicios(fecha);
+            if (string.IsNullOrEmpty(fecha))
+                return BadRequest("Debe ingresar una fecha.");
 
-            var excelBytes = ConvertDataExcel(resultado, fecha);
-            string fileName = $"Kilometros_Servicios_Aremys_{fecha}.xlsx";
 
-            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            try
+            {
+                var resultado = await _readOnlyUow.KmServicioRepository.GetKmServicios(fecha);
+                var excelBytes = ConvertDataExcel(resultado, fecha);
+
+                string fileName = $"Kilometros_Servicios_Aremys_{fecha}.xlsx";
+                return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al generar el Excel", error = ex.Message });
+            }
+
         }
 
         private byte[] ConvertDataExcel(List<KilometrajeServicio> resultado, string fecha)

@@ -13,11 +13,14 @@ namespace VelsatBackendAPI.Controllers
     public class PreplanController : Controller
     {
 
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly IReadOnlyUnitOfWork _readOnlyUow;  // ✅ Para GET
+        private readonly IUnitOfWork _uow;
 
-        public PreplanController(IUnitOfWork unitOfWork)
+        // ✅ CAMBIO: Inyectar Factory en lugar de UnitOfWork
+        public PreplanController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow)
         {
-            _unitOfWork = unitOfWork;
+            _readOnlyUow = readOnlyUow;
+            _uow = uow;
         }
 
         // POST api/preplan/insert
@@ -29,11 +32,17 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest("El arreglo Excel está vacío.");
             }
 
-            var result = await _unitOfWork.PreplanRepository.InsertPedido(excel, fecact, tipo, usuario);
+            try
+            {
+                var result = await _uow.PreplanRepository.InsertPedido(excel, fecact, tipo, usuario);
+                _uow.SaveChanges();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al insertar pedido", error = ex.Message });
+            }
 
-            _unitOfWork.SaveChanges();
-
-            return Ok(result);
         }
 
 
@@ -42,11 +51,11 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var pedidos = await _unitOfWork.PreplanRepository.GetPedidos(dato, empresa, usuario);
+                var pedidos = await _readOnlyUow.PreplanRepository.GetPedidos(dato, empresa, usuario);
 
                 if (pedidos == null || pedidos.Count == 0)
                 {
-                    return NotFound("No se encontraron pedidos.");
+                    return Ok("No se encontraron pedidos.");
                 }
 
                 return Ok(pedidos);
@@ -55,50 +64,65 @@ namespace VelsatBackendAPI.Controllers
             {
                 return StatusCode(500, "Hubo un error al procesar la solicitud.");
             }
+
         }
 
         [HttpPut("save")]
-        public async Task<IActionResult> SavePedidos([FromBody] IEnumerable<Pedido> pedidos, string usuario)
+        public async Task<IActionResult> SavePedidos([FromBody] IEnumerable<Pedido> pedidos, [FromQuery] string usuario)
         {
-            if (pedidos == null)
+            if (pedidos == null || !pedidos.Any())
             {
-                return BadRequest(new { message = "Datos inválidos" });
+                return BadRequest(new { message = "Datos inválidos o lista vacía" });
             }
 
-            int result = await _unitOfWork.PreplanRepository.SavePedidos(pedidos, usuario);
-
-            _unitOfWork.SaveChanges();
-
-            if (result == 1)
+            try
             {
-                return Ok(new { message = "Pedidos guardados correctamente" });
+                int result = await _uow.PreplanRepository.SavePedidos(pedidos, usuario);
+                _uow.SaveChanges();
+
+                if (result == 1)
+                {
+                    return Ok(new { message = "Pedidos guardados correctamente" });
+                }
+                else
+                {
+                    return StatusCode(500, new { message = "Error al guardar los pedidos" });
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error al guardar los pedidos" });
+                return StatusCode(500, new { message = "Error al guardar los pedidos", error = ex.Message });
             }
+
         }
 
         [HttpPut("delete")]
-        public async Task<IActionResult> BorrarPlan(string empresa, string fecha, string usuario)
+        public async Task<IActionResult> BorrarPlan([FromQuery] string empresa, [FromQuery] string fecha, [FromQuery] string usuario)
         {
             if (string.IsNullOrEmpty(empresa) || string.IsNullOrEmpty(fecha) || string.IsNullOrEmpty(usuario))
             {
                 return BadRequest(new { message = "Datos inválidos. Se requiere empresa, fecha y usuario." });
             }
 
-            int result = await _unitOfWork.PreplanRepository.BorrarPlan(empresa, fecha, usuario);
-
-            _unitOfWork.SaveChanges();
-
-            if (result > 0)
+            try
             {
-                return Ok(new { message = "Plan borrado correctamente." });
+                int result = await _uow.PreplanRepository.BorrarPlan(empresa, fecha, usuario);
+                _uow.SaveChanges();
+
+                if (result > 0)
+                {
+                    return Ok(new { message = "Plan borrado correctamente." });
+                }
+                else
+                {
+                    return NotFound(new { message = "No se encontró el registro para borrar." });
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return StatusCode(500, new { message = "No se encontró el registro o hubo un error al borrar el plan." });
+                return StatusCode(500, new { message = "Error al borrar el plan", error = ex.Message });
             }
+
         }
 
         [HttpGet("lugares/{codCliente}")]
@@ -108,38 +132,51 @@ namespace VelsatBackendAPI.Controllers
             {
                 return BadRequest(new { message = "Código de cliente es requerido." });
             }
-
-            var lugares = await _unitOfWork.PreplanRepository.GetLugares(codCliente);
-
-            if (lugares == null || lugares.Count == 0)
+            try
             {
-                return NotFound(new { message = "No se encontraron lugares para el cliente." });
+                var lugares = await _readOnlyUow.PreplanRepository.GetLugares(codCliente);
+
+                if (lugares == null || lugares.Count == 0)
+                {
+                    return NotFound(new { message = "No se encontraron lugares para el cliente." });
+                }
+
+                return Ok(lugares);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener lugares", error = ex.Message });
             }
 
-            return Ok(lugares);
         }
 
         [HttpPut("direccion/{coddire}/{codigo}")]
         public async Task<IActionResult> UpdateDirec([FromRoute] string coddire, [FromRoute] string codigo)
         {
-
             if (string.IsNullOrEmpty(coddire) || string.IsNullOrEmpty(codigo))
             {
                 return BadRequest(new { message = "Datos inválidos. Se requiere código de cliente y dirección." });
             }
 
-            int filasAfectadas = await _unitOfWork.PreplanRepository.UpdateDirec(coddire, codigo);
-
-            _unitOfWork.SaveChanges();
-
-            if (filasAfectadas > 0)
+            try
             {
-                return Ok(new { message = "Dirección actualizada correctamente" });
+                int filasAfectadas = await _uow.PreplanRepository.UpdateDirec(coddire, codigo);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new { message = "Dirección actualizada correctamente" });
+                }
+                else
+                {
+                    return NotFound(new { message = "No se encontró el registro para actualizar" });
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return NotFound(new { message = "No se encontró el registro para actualizar" });
+                return StatusCode(500, new { message = "Error al actualizar dirección", error = ex.Message });
             }
+
         }
 
         [HttpGet("conductores")]
@@ -149,23 +186,31 @@ namespace VelsatBackendAPI.Controllers
             {
                 return BadRequest(new { message = "El usuario es requerido" });
             }
-
-            var conductores = await _unitOfWork.PreplanRepository.GetConductores(usuario);
-
-            if (conductores == null || conductores.Count == 0)
+            try
             {
-                return NotFound(new { message = "No se encontraron conductores para este usuario" });
+                var conductores = await _readOnlyUow.PreplanRepository.GetConductores(usuario);
+
+                if (conductores == null || conductores.Count == 0)
+                {
+                    return NotFound(new { message = "No se encontraron conductores para este usuario" });
+                }
+
+                return Ok(conductores);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener conductores", error = ex.Message });
             }
 
-            return Ok(conductores);
         }
 
         [HttpGet("unidades")]
         public async Task<IActionResult> GetUnidades([FromQuery] string usuario)
         {
+
             try
             {
-                var unidades = await _unitOfWork.PreplanRepository.GetUnidades(usuario);
+                var unidades = await _readOnlyUow.PreplanRepository.GetUnidades(usuario);
 
                 if (unidades == null || unidades.Count == 0)
                 {
@@ -178,83 +223,103 @@ namespace VelsatBackendAPI.Controllers
             {
                 return StatusCode(500, new { message = "Error interno del servidor", error = ex.Message });
             }
+
         }
 
         [HttpPost("servicios")]
         public async Task<IActionResult> CreateServicios([FromQuery] string fecha, [FromQuery] string empresa, [FromQuery] string usuario)
         {
+            if (string.IsNullOrEmpty(fecha) || string.IsNullOrEmpty(empresa) || string.IsNullOrEmpty(usuario))
+            {
+                return BadRequest(new { message = "Los parámetros fecha, empresa y usuario son requeridos" });
+            }
             try
             {
-                var servicios = await _unitOfWork.PreplanRepository.CreateServicios(fecha, empresa, usuario);
-
-                _unitOfWork.SaveChanges();
-
+                var servicios = await _uow.PreplanRepository.CreateServicios(fecha, empresa, usuario);
+                _uow.SaveChanges();
                 return Ok(new { message = "Servicios creados exitosamente", data = servicios });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error al crear los servicios", error = ex.Message });
             }
+
         }
 
         [HttpGet("Getservicios")]
         public async Task<IActionResult> GetServicios([FromQuery] string fecha, [FromQuery] string usu)
         {
+            if (string.IsNullOrEmpty(fecha) || string.IsNullOrEmpty(usu))
+            {
+                return BadRequest(new { message = "Los parámetros fecha y usuario son requeridos" });
+            }
             try
             {
-                var servicios = await _unitOfWork.PreplanRepository.GetServicios(fecha, usu);
+                var servicios = await _readOnlyUow.PreplanRepository.GetServicios(fecha, usu);
 
                 if (servicios == null || servicios.Count == 0)
                 {
-                    return NotFound("No se encontraron servicios.");
+                    return NotFound(new { message = "No se encontraron servicios." });
                 }
 
                 return Ok(servicios);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+                return StatusCode(500, new { message = "Error al obtener servicios", error = ex.Message });
             }
+
         }
 
         [HttpGet("GetPasajeros")]
-        public async Task<IActionResult> GetPasajeros([FromQuery] string palabra, string codusuario)
+        public async Task<IActionResult> GetPasajeros([FromQuery] string palabra, [FromQuery] string codusuario)
         {
+            if (string.IsNullOrEmpty(palabra) || string.IsNullOrEmpty(codusuario))
+            {
+                return BadRequest(new { message = "Los parámetros palabra y codusuario son requeridos" });
+            }
+
             try
             {
-                var pasajeros = await _unitOfWork.PreplanRepository.GetPasajeros(palabra, codusuario);
+                var pasajeros = await _readOnlyUow.PreplanRepository.GetPasajeros(palabra, codusuario);
 
                 if (pasajeros == null || !pasajeros.Any())
                 {
-                    return NotFound("No se encontraron pasajeros.");
+                    return NotFound(new { message = "No se encontraron pasajeros." });
                 }
 
                 return Ok(pasajeros);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+                return StatusCode(500, new { message = "Error al obtener pasajeros", error = ex.Message });
             }
+
         }
 
         [HttpGet("GetServicioPasajero")]
         public async Task<IActionResult> GetServicioPasajero([FromQuery] string usuario, [FromQuery] string fec, [FromQuery] string codcliente)
         {
+            if (string.IsNullOrEmpty(usuario) || string.IsNullOrEmpty(fec) || string.IsNullOrEmpty(codcliente))
+            {
+                return BadRequest(new { message = "Los parámetros usuario, fec y codcliente son requeridos" });
+            }
             try
             {
-                var pasajeros = await _unitOfWork.PreplanRepository.GetServicioPasajero(usuario, fec, codcliente);
+                var pasajeros = await _readOnlyUow.PreplanRepository.GetServicioPasajero(usuario, fec, codcliente);
 
                 if (pasajeros == null || !pasajeros.Any())
                 {
-                    return NotFound("No se encontraron pasajeros.");
+                    return NotFound(new { message = "No se encontraron pasajeros." });
                 }
 
                 return Ok(pasajeros);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+                return StatusCode(500, new { message = "Error al obtener servicio de pasajeros", error = ex.Message });
             }
+
         }
 
         [HttpPost("AsignarServicio")]
@@ -262,14 +327,12 @@ namespace VelsatBackendAPI.Controllers
         {
             if (listaServicios == null || !listaServicios.Any())
             {
-                return BadRequest("La lista de servicios no puede estar vacía.");
+                return BadRequest(new { message = "La lista de servicios no puede estar vacía." });
             }
-
             try
             {
-                string resultado = await _unitOfWork.PreplanRepository.AsignacionServicio(listaServicios);
-
-                _unitOfWork.SaveChanges();
+                string resultado = await _uow.PreplanRepository.AsignacionServicio(listaServicios);
+                _uow.SaveChanges();
 
                 if (resultado == "Servicio Asignado")
                 {
@@ -277,13 +340,14 @@ namespace VelsatBackendAPI.Controllers
                 }
                 else
                 {
-                    return NotFound(new { message = resultado });
+                    return BadRequest(new { message = resultado });
                 }
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error en la asignación del servicio", error = ex.Message });
             }
+
         }
 
         [HttpDelete("eliminacionmultiple")]
@@ -294,16 +358,23 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest(new { message = "La lista de servicios está vacía o es nula" });
             }
 
-            int resultado = await _unitOfWork.PreplanRepository.EliminacionMultiple(listaServicios);
-
-            _unitOfWork.SaveChanges();
-
-            if (resultado > 0)
+            try
             {
-                return Ok(new { message = "Servicios eliminados correctamente" });
+                int resultado = await _uow.PreplanRepository.EliminacionMultiple(listaServicios);
+                _uow.SaveChanges();
+
+                if (resultado > 0)
+                {
+                    return Ok(new { message = "Servicios eliminados correctamente", serviciosEliminados = resultado });
+                }
+
+                return BadRequest(new { message = "No se pudieron eliminar los servicios" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al eliminar servicios", error = ex.Message });
             }
 
-            return BadRequest(new { message = "No se pudieron eliminar los servicios" });
         }
 
         //[HttpGet("playback")]
@@ -345,14 +416,22 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest(new { mensaje = "El parámetro 'usuario' es obligatorio." });
             }
 
-            var conductores = await _unitOfWork.PreplanRepository.GetConductorDetalle(usuario);
-
-            if (conductores == null || !conductores.Any())
+            try
             {
-                return NotFound(new { mensaje = "No se encontró el conductor." });
+                var conductores = await _readOnlyUow.PreplanRepository.GetConductorDetalle(usuario);
+
+                if (conductores == null || !conductores.Any())
+                {
+                    return NotFound(new { mensaje = "No se encontró el conductor." });
+                }
+
+                return Ok(conductores);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener detalle del conductor", error = ex.Message });
             }
 
-            return Ok(conductores);
         }
 
         [HttpGet("PasajeroList")]
@@ -363,15 +442,24 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest(new { mensaje = "El parámetro 'codservicio' es obligatorio." });
             }
 
-            var pasajeros = await _unitOfWork.PreplanRepository.ListaPasajeroServicio(codservicio);
-
-            if (pasajeros == null || !pasajeros.Any())
+            try
             {
-                return NotFound(new { mensaje = "No se encontraron pasajeros para el servicio." });
+                var pasajeros = await _readOnlyUow.PreplanRepository.ListaPasajeroServicio(codservicio);
+
+                if (pasajeros == null || !pasajeros.Any())
+                {
+                    return NotFound(new { mensaje = "No se encontraron pasajeros para el servicio." });
+                }
+
+                return Ok(pasajeros);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener la lista de pasajeros.", error = ex.Message });
             }
 
-            return Ok(pasajeros);
         }
+
 
         [HttpPut("actualizarOrden")]
         public async Task<IActionResult> UpdateControlServicio([FromBody] Servicio servicio)
@@ -380,12 +468,12 @@ namespace VelsatBackendAPI.Controllers
             {
                 return BadRequest("El servicio no puede ser nulo.");
             }
-
             try
             {
-                int resultado = await _unitOfWork.PreplanRepository.UpdateControlServicio(servicio);
+                int resultado = await _uow.PreplanRepository.UpdateControlServicio(servicio);
 
-                _unitOfWork.SaveChanges();
+                // ✅ Solo en PUT (actualización)
+                _uow.SaveChanges();
 
                 if (resultado > 0)
                 {
@@ -400,7 +488,9 @@ namespace VelsatBackendAPI.Controllers
             {
                 return StatusCode(500, new { mensaje = "Error interno del servidor.", error = ex.Message });
             }
+
         }
+
 
         [HttpPut("canasig/{codservicio}")]
         public async Task<IActionResult> CancelarAsignacion(string codservicio)
@@ -412,9 +502,10 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                int filasAfectadas = await _unitOfWork.PreplanRepository.CancelarAsignacion(codservicio);
+                int filasAfectadas = await _uow.PreplanRepository.CancelarAsignacion(codservicio);
 
-                _unitOfWork.SaveChanges();
+                // ✅ Solo en PUT (actualización)
+                _uow.SaveChanges();
 
                 if (filasAfectadas > 0)
                 {
@@ -429,7 +520,9 @@ namespace VelsatBackendAPI.Controllers
             {
                 return StatusCode(500, new { error = "Ocurrió un error al cancelar la asignación.", detalle = ex.Message });
             }
+
         }
+
 
         [HttpDelete("cancelar/{codservicio}")]
         public async Task<IActionResult> CancelarServicio(string codservicio)
@@ -439,21 +532,31 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest("El código del servicio es requerido.");
             }
 
-            var servicio = new Servicio { Codservicio = codservicio };
-
-            int resultado = await _unitOfWork.PreplanRepository.CancelarServicio(servicio);
-
-            _unitOfWork.SaveChanges();
-
-            if (resultado > 0)
+            try
             {
-                return Ok(new { message = "Servicio cancelado exitosamente." });
+                var servicio = new Servicio { Codservicio = codservicio };
+
+                int resultado = await _uow.PreplanRepository.CancelarServicio(servicio);
+
+                // ✅ Solo en DELETE
+                _uow.SaveChanges();
+
+                if (resultado > 0)
+                {
+                    return Ok(new { message = "Servicio cancelado exitosamente." });
+                }
+                else
+                {
+                    return NotFound(new { message = "No se encontró el servicio a cancelar." });
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return NotFound(new { message = "No se encontró el servicio a cancelar." });
+                return StatusCode(500, new { message = "Error al cancelar el servicio.", error = ex.Message });
             }
+
         }
+
 
         [HttpPost("AgregarServicio")]
         public async Task<IActionResult> GrabarServicioMovil([FromBody] Servicio servicio, [FromQuery] string usuario)
@@ -462,55 +565,95 @@ namespace VelsatBackendAPI.Controllers
             {
                 return BadRequest("El servicio no puede ser nulo.");
             }
-
             try
             {
-                string resultado = await _unitOfWork.PreplanRepository.NewServicio(servicio, usuario);
+                string resultado = await _uow.PreplanRepository.NewServicio(servicio, usuario);
 
-                _unitOfWork.SaveChanges();
+                // ✅ Solo en POST (inserción)
+                _uow.SaveChanges();
 
                 return Ok(new { mensaje = resultado });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { mensaje = "Error interno del servidor", error = ex.Message });
+                return StatusCode(500, new { mensaje = "Error interno del servidor.", error = ex.Message });
             }
+
         }
+
 
         [HttpPut("UpdateEstado")]
         public async Task<IActionResult> UpdateEstado([FromBody] Pedido pedido)
         {
             if (pedido == null)
+            {
                 return BadRequest("El pedido no puede ser nulo.");
+            }
 
-            int resultado = await _unitOfWork.PreplanRepository.UpdateEstadoServicio(pedido);
+            try
+            {
+                int resultado = await _uow.PreplanRepository.UpdateEstadoServicio(pedido);
 
-            _unitOfWork.SaveChanges();
+                // ✅ Solo en PUT
+                _uow.SaveChanges();
 
-            if (resultado > 0)
-                return Ok(new { mensaje = "Estado actualizado correctamente", filasAfectadas = resultado });
+                if (resultado > 0)
+                {
+                    return Ok(new { mensaje = "Estado actualizado correctamente.", filasAfectadas = resultado });
+                }
 
-            return BadRequest("No se pudo actualizar el pedido.");
+                return BadRequest("No se pudo actualizar el pedido.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error interno del servidor.", error = ex.Message });
+            }
+
         }
 
-        //REPORTE CARLOS GODOY
+
+        // REPORTE CARLOS GODOY
         [HttpGet("ExcelDiferencias")]
-        public async Task<IActionResult> ReporteDiferencia([FromQuery] string fecini, [FromQuery] string fecfin, [FromQuery] string aerolinea, [FromQuery] string usuario, [FromQuery] string tipo)
+        public async Task<IActionResult> ReporteDiferencia(
+            [FromQuery] string fecini,
+            [FromQuery] string fecfin,
+            [FromQuery] string aerolinea,
+            [FromQuery] string usuario,
+            [FromQuery] string tipo)
         {
-            var feciniDT = DateTime.ParseExact(fecini, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-            var fecfinDT = DateTime.ParseExact(fecfin, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+            try
+            {
+                var feciniDT = DateTime.ParseExact(fecini, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                var fecfinDT = DateTime.ParseExact(fecfin, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
-            // Formatear al estilo que necesitas: dd/MM/yyyy HH:mm
-            string feciniFormateada = feciniDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-            string fecfinFormateada = fecfinDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                // Formatear fechas al estilo requerido: dd/MM/yyyy HH:mm
+                string feciniFormateada = feciniDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                string fecfinFormateada = fecfinDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
-            var resultado = await _unitOfWork.PreplanRepository.ReporteDiferencia(feciniFormateada, fecfinFormateada, aerolinea, usuario, tipo);
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteDiferencia(
+                    feciniFormateada,
+                    fecfinFormateada,
+                    aerolinea,
+                    usuario,
+                    tipo
+                );
 
-            var excelBytes = DataExcelSheet(resultado, fecini, fecfin, aerolinea, usuario, tipo);
-            string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}_{tipo}.xlsx";
+                var excelBytes = DataExcelSheet(resultado, fecini, fecfin, aerolinea, usuario, tipo);
+                string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}_{tipo}.xlsx";
 
-            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+                return File(
+                    excelBytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fileName
+                );
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al generar el reporte de diferencias.", error = ex.Message });
+            }
+
         }
+
 
         private byte[] DataExcelSheet(List<Pedido> resultado, string fecini, string fecfin, string aerolinea, string usuario, string tipo)
         {
@@ -883,24 +1026,44 @@ namespace VelsatBackendAPI.Controllers
         //}
 
 
-        //REPORTE EXCEL Control servicios
+        // REPORTE EXCEL - Control Servicios
         [HttpGet("ServiciosExcel")]
         public async Task<IActionResult> ResumenServiciosExcel([FromQuery] string fecini, [FromQuery] string fecfin, [FromQuery] string aerolinea, [FromQuery] string usuario)
         {
-            var feciniDT = DateTime.ParseExact(fecini, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-            var fecfinDT = DateTime.ParseExact(fecfin, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+            try
+            {
+                var feciniDT = DateTime.ParseExact(fecini, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                var fecfinDT = DateTime.ParseExact(fecfin, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
-            // Formatear al estilo que necesitas: dd/MM/yyyy HH:mm
-            string feciniFormateada = feciniDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-            string fecfinFormateada = fecfinDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                // Formatear fechas al estilo requerido: dd/MM/yyyy HH:mm
+                string feciniFormateada = feciniDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                string fecfinFormateada = fecfinDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
-            var resultado = await _unitOfWork.PreplanRepository.ReporteFormatoAvianca(feciniFormateada, fecfinFormateada, aerolinea, usuario);
+                // Llamada al repositorio
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteFormatoAvianca(
+                    feciniFormateada,
+                    fecfinFormateada,
+                    aerolinea,
+                    usuario
+                );
 
-            var excelBytes = ConvertDataExcel(resultado, fecini, fecfin, aerolinea, usuario);
-            string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}.xlsx";
+                // Generar archivo Excel
+                var excelBytes = ConvertDataExcel(resultado, fecini, fecfin, aerolinea, usuario);
+                string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}.xlsx";
 
-            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+                return File(
+                    excelBytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fileName
+                );
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al generar el reporte de servicios.", error = ex.Message });
+            }
+
         }
+
 
         private byte[] ConvertDataExcel(List<Pedido> resultado, string fecini, string fecfin, string aerolinea, string usuario)
         {
@@ -1148,10 +1311,12 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
+                // Convertir las fechas al formato requerido: dd/MM/yyyy HH:mm
                 fecini = DateTime.Parse(fecini).ToString("dd/MM/yyyy") + " 00:00";
                 fecfin = DateTime.Parse(fecfin).ToString("dd/MM/yyyy") + " 23:59";
 
-                var resultado = await _unitOfWork.PreplanRepository.ReporteFormatoAremys(fecini, fecfin, aerolinea);
+                // Llamada al repositorio
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteFormatoAremys(fecini, fecfin, aerolinea);
 
                 if (resultado == null || resultado.Count == 0)
                 {
@@ -1163,26 +1328,48 @@ namespace VelsatBackendAPI.Controllers
             catch (Exception ex)
             {
                 // Manejo de errores
-                return StatusCode(500, $"Error interno: {ex.Message}");
+                return StatusCode(500, new { mensaje = "Error interno al generar el reporte Aremys.", error = ex.Message });
             }
+
         }
+
 
         [HttpGet("ResumenExcelAremys")]
         public async Task<IActionResult> ResumenExcelAremys([FromQuery] string fecini, [FromQuery] string fecfin, [FromQuery] string aerolinea)
         {
-            var feciniDT = DateTime.ParseExact(fecini, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-            var fecfinDT = DateTime.ParseExact(fecfin, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+            try
+            {
+                // Parsear las fechas recibidas (formato ISO)
+                var feciniDT = DateTime.ParseExact(fecini, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                var fecfinDT = DateTime.ParseExact(fecfin, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
-            // Formatear al estilo que necesitas: dd/MM/yyyy HH:mm
-            string feciniFormateada = feciniDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-            string fecfinFormateada = fecfinDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                // Formatear al estilo requerido: dd/MM/yyyy HH:mm
+                string feciniFormateada = feciniDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                string fecfinFormateada = fecfinDT.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
-            var resultado = await _unitOfWork.PreplanRepository.ReporteFormatoAremys(feciniFormateada, fecfinFormateada, aerolinea);
+                // Obtener los datos desde el repositorio
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteFormatoAremys(feciniFormateada, fecfinFormateada, aerolinea);
 
-            var excelBytes = ConvertDataExcelAremys(resultado, fecini, fecfin, aerolinea);
-            string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}.xlsx";
+                if (resultado == null || resultado.Count == 0)
+                {
+                    return NotFound("No se encontraron registros para exportar.");
+                }
 
-            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+                // Generar el archivo Excel
+                var excelBytes = ConvertDataExcelAremys(resultado, fecini, fecfin, aerolinea);
+                string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}.xlsx";
+
+                return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al generar el reporte Excel de Aremys.",
+                    error = ex.Message
+                });
+            }
+
         }
 
         private byte[] ConvertDataExcelAremys(List<Pedido> resultado, string fecini, string fecfin, string aerolinea)
@@ -1373,61 +1560,90 @@ namespace VelsatBackendAPI.Controllers
         [HttpPost("AgregarPasajero")]
         public async Task<IActionResult> RegistrarPasajeroGrupo([FromBody] Pedido pedido, [FromQuery] string usuario)
         {
+            if (pedido == null)
+                return BadRequest(new { mensaje = "El pedido no puede ser nulo." });
+
             try
             {
-                int result = await _unitOfWork.PreplanRepository.RegistrarPasajeroGrupo(pedido, usuario);
+                int result = await _uow.PreplanRepository.RegistrarPasajeroGrupo(pedido, usuario);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo en POST, PUT, DELETE
 
                 if (result > 0)
                     return Ok(new { mensaje = "Pasajero registrado correctamente", filasAfectadas = result });
 
-                return BadRequest(new { mensaje = "No se pudo registrar el pasajero" });
+                return BadRequest(new { mensaje = "No se pudo registrar el pasajero." });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { mensaje = "Error interno", detalle = ex.Message });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno al registrar el pasajero.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPut("UpdateHoras")]
         public async Task<IActionResult> UpdateHorasServicio([FromQuery] string codservicio, [FromQuery] string fecha, [FromQuery] string fecplan)
         {
+            if (string.IsNullOrEmpty(codservicio) || string.IsNullOrEmpty(fecha) || string.IsNullOrEmpty(fecplan))
+                return BadRequest("Todos los parámetros son requeridos.");
+
             try
             {
-                int result = await _unitOfWork.PreplanRepository.UpdateHorasServicio(codservicio, fecha, fecplan);
+                int result = await _uow.PreplanRepository.UpdateHorasServicio(codservicio, fecha, fecplan);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo porque es un PUT (operación de escritura)
 
                 if (result > 0)
-                    return Ok("Servicio actualizado correctamente.");
-                else
-                    return NotFound("No se encontró el servicio con el código proporcionado.");
+                    return Ok(new { mensaje = "Servicio actualizado correctamente.", filasAfectadas = result });
+
+                return NotFound(new { mensaje = "No se encontró el servicio con el código proporcionado." });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Error al actualizar el servicio: {ex.Message}");
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al actualizar el servicio.",
+                    detalle = ex.Message
+                });
             }
+
         }
 
         [HttpPut("UpdateDestino")]
         public async Task<IActionResult> UpdateDestinoServicio([FromQuery] string codservicio, [FromQuery] string newcoddestino, [FromQuery] string newcodubicli)
         {
+            if (string.IsNullOrEmpty(codservicio) ||
+                string.IsNullOrEmpty(newcoddestino) ||
+                string.IsNullOrEmpty(newcodubicli))
+            {
+                return BadRequest(new { mensaje = "Todos los parámetros son requeridos." });
+            }
+
             try
             {
-                int result = await _unitOfWork.PreplanRepository.UpdateDestinoServicio(codservicio, newcoddestino, newcodubicli);
+                int result = await _uow.PreplanRepository.UpdateDestinoServicio(codservicio, newcoddestino, newcodubicli);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo porque es un PUT (operación de escritura)
 
                 if (result > 0)
-                    return Ok("Servicio actualizado correctamente.");
-                else
-                    return NotFound("No se encontró el servicio con el código proporcionado.");
+                    return Ok(new { mensaje = "Servicio actualizado correctamente.", filasAfectadas = result });
+
+                return NotFound(new { mensaje = "No se encontró el servicio con el código proporcionado." });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Error al actualizar el servicio: {ex.Message}");
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al actualizar el destino del servicio.",
+                    detalle = ex.Message
+                });
             }
+
         }
 
         [HttpGet("GetDestinos")]
@@ -1435,399 +1651,498 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var destinos = await _unitOfWork.PreplanRepository.GetDestinos(palabra);
+                var destinos = await _readOnlyUow.PreplanRepository.GetDestinos(palabra);
 
                 if (destinos == null || !destinos.Any())
                 {
-                    return NotFound("No se encontraron destinos.");
+                    return NotFound(new { mensaje = "No se encontraron destinos." });
                 }
 
                 return Ok(destinos);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al obtener los destinos.",
+                    detalle = ex.Message
+                });
             }
+
         }
 
         [HttpPut("GrupoCero")]
         public async Task<IActionResult> EliminarGrupoCero([FromQuery] string usuario)
         {
+            if (string.IsNullOrEmpty(usuario))
+                return BadRequest(new { mensaje = "El parámetro 'usuario' es requerido." });
+
             try
             {
-                int result = await _unitOfWork.PreplanRepository.EliminarGrupoCero(usuario);
+                int result = await _uow.PreplanRepository.EliminarGrupoCero(usuario);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo porque es un PUT
 
                 if (result > 0)
-                    return Ok("Grupo eliminado correctamente.");
-                else
-                    return NotFound("No se encontraron registros para eliminar.");
+                    return Ok(new { mensaje = "Grupo eliminado correctamente.", filasAfectadas = result });
+
+                return NotFound(new { mensaje = "No se encontraron registros para eliminar." });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Error al eliminar el grupo: {ex.Message}");
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al eliminar el grupo.",
+                    detalle = ex.Message
+                });
             }
+
         }
 
         [HttpGet("conductores/{usuario}")]
         public async Task<ActionResult<List<Conductor>>> GetConductoresByUsuario(string usuario)
         {
+            if (string.IsNullOrWhiteSpace(usuario))
+            {
+                return BadRequest(new { mensaje = "El parámetro 'usuario' es requerido." });
+            }
+
             try
             {
-                if (string.IsNullOrWhiteSpace(usuario))
-                {
-                    return BadRequest("El parámetro usuario es requerido");
-                }
-
-                var conductores = await _unitOfWork.PreplanRepository.GetConductoresxUsuario(usuario);
+                var conductores = await _readOnlyUow.PreplanRepository.GetConductoresxUsuario(usuario);
 
                 if (conductores == null || !conductores.Any())
                 {
-                    return NotFound("No se encontraron conductores para el usuario especificado");
+                    return NotFound(new { mensaje = "No se encontraron conductores para el usuario especificado." });
                 }
 
                 return Ok(conductores);
             }
             catch (Exception ex)
             {
-                // Log del error aquí si tienes un logger configurado
-                return StatusCode(500, "Error interno del servidor");
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
 
         [HttpGet("carros/{usuario}")]
         public async Task<ActionResult<List<Carro>>> GetUnidadesxUsuario(string usuario)
         {
+            if (string.IsNullOrWhiteSpace(usuario))
+            {
+                return BadRequest(new { mensaje = "El parámetro 'usuario' es requerido." });
+            }
+
             try
             {
-                if (string.IsNullOrWhiteSpace(usuario))
-                {
-                    return BadRequest("El parámetro usuario es requerido");
-                }
-
-                var carros = await _unitOfWork.PreplanRepository.GetUnidadesxUsuario(usuario);
+                var carros = await _readOnlyUow.PreplanRepository.GetUnidadesxUsuario(usuario);
 
                 if (carros == null || !carros.Any())
                 {
-                    return NotFound("No se encontraron carros para el usuario especificado");
+                    return NotFound(new { mensaje = "No se encontraron carros para el usuario especificado." });
                 }
 
                 return Ok(carros);
             }
             catch (Exception ex)
             {
-                // Log del error aquí si tienes un logger configurado
-                return StatusCode(500, "Error interno del servidor");
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
 
         [HttpPost("NuevoConductor/{usuario}")]
-        public async Task<IActionResult> GuardarConductor([FromBody] Conductor conductor, string usuario)
+        public async Task<IActionResult> GuardarConductor([FromBody] Conductor conductor, [FromRoute] string usuario)
         {
-            var resultado = await _unitOfWork.PreplanRepository.GuardarConductorAsync(conductor, usuario);
-
-            _unitOfWork.SaveChanges();
-
-            return resultado switch
+            if (conductor == null)
             {
-                0 => BadRequest("Error al guardar conductor"),
-                1 => Ok("Conductor guardado exitosamente"),
-                2 => Conflict("El conductor ya existe"),
-                _ => StatusCode(500, "Error interno")
-            };
+                return BadRequest(new { message = "El conductor no puede ser nulo" });
+            }
+
+            if (string.IsNullOrEmpty(usuario))
+            {
+                return BadRequest(new { message = "El usuario es requerido" });
+            }
+
+            try
+            {
+                var resultado = await _uow.PreplanRepository.GuardarConductorAsync(conductor, usuario);
+                _uow.SaveChanges();
+
+                return resultado switch
+                {
+                    0 => BadRequest(new { message = "Error al guardar conductor" }),
+                    1 => Ok(new { message = "Conductor guardado exitosamente" }),
+                    2 => Conflict(new { message = "El conductor ya existe" }),
+                    _ => StatusCode(500, new { message = "Error interno" })
+                };
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al guardar conductor", error = ex.Message });
+            }
+
         }
 
         [HttpPut("ModificarConductor/{id}")]
         public async Task<IActionResult> ModificarConductor(int id, [FromBody] Conductor conductor)
         {
+            if (conductor == null)
+                return BadRequest(new { mensaje = "El objeto 'conductor' no puede ser nulo." });
+
             try
             {
-                // Ejecutar la modificación
-                var resultado = await _unitOfWork.PreplanRepository.ModificarConductorAsync(conductor);
+                var resultado = await _uow.PreplanRepository.ModificarConductorAsync(conductor);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo porque es un PUT (operación de escritura)
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Conductor no encontrado o no se pudo modificar", code = 0 }),
-                    1 => Ok(new { message = "Conductor modificado exitosamente", code = 1 }),
-                    _ => StatusCode(500, new { message = "Error interno", code = -1 })
+                    0 => NotFound(new { mensaje = "Conductor no encontrado o no se pudo modificar.", code = 0 }),
+                    1 => Ok(new { mensaje = "Conductor modificado exitosamente.", code = 1 }),
+                    _ => Ok(new { mensaje = $"{resultado} registros modificados", code = resultado })
                 };
             }
             catch (Exception ex)
             {
-                // Log del error si tienes logger
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPost("HabilitarCond/{id}")]
         public async Task<IActionResult> HabilitarConductor(int id)
         {
+
+            if (id <= 0)
+                return BadRequest(new { mensaje = "Código de conductor inválido." });
+
             try
             {
-                if (id <= 0)
-                    return BadRequest(new { message = "Código de conductor inválido" });
+                var resultado = await _uow.PreplanRepository.HabilitarConductorAsync(id);
 
-                var resultado = await _unitOfWork.PreplanRepository.HabilitarConductorAsync(id);
-
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo porque es un POST (operación de escritura)
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Conductor no encontrado", code = 0 }),
-                    1 => Ok(new { message = "Conductor habilitado exitosamente", code = 1 }),
-                    _ => StatusCode(500, new { message = "Error interno", code = -1 })
+                    0 => NotFound(new { mensaje = "Conductor no encontrado.", code = 0 }),
+                    1 => Ok(new { mensaje = "Conductor habilitado exitosamente.", code = 1 }),
+                    _ => StatusCode(500, new { mensaje = "Error interno al habilitar el conductor.", code = -1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPost("DeshabilitarCond/{id}")]
         public async Task<IActionResult> DeshabilitarConductor(int id)
         {
+            if (id <= 0)
+                return BadRequest(new { mensaje = "Código de conductor inválido." });
+
             try
             {
-                if (id <= 0)
-                    return BadRequest(new { message = "Código de conductor inválido" });
+                var resultado = await _uow.PreplanRepository.DeshabilitarConductorAsync(id);
 
-                var resultado = await _unitOfWork.PreplanRepository.DeshabilitarConductorAsync(id);
-
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo en operaciones POST/PUT/DELETE
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Conductor no encontrado", code = 0 }),
-                    1 => Ok(new { message = "Conductor deshabilitado exitosamente", code = 1 }),
-                    _ => StatusCode(500, new { message = "Error interno", code = -1 })
+                    0 => NotFound(new { mensaje = "Conductor no encontrado.", code = 0 }),
+                    1 => Ok(new { mensaje = "Conductor deshabilitado exitosamente.", code = 1 }),
+                    _ => StatusCode(500, new { mensaje = "Error interno al deshabilitar el conductor.", code = -1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPost("Liberar/{id}")]
         public async Task<IActionResult> LiberarConductor(int id)
         {
+            if (id <= 0)
+                return BadRequest(new { mensaje = "Código de conductor inválido." });
+
             try
             {
-                if (id <= 0)
-                    return BadRequest(new { message = "Código de conductor inválido" });
+                var resultado = await _uow.PreplanRepository.LiberarConductorAsync(id);
 
-                var resultado = await _unitOfWork.PreplanRepository.LiberarConductorAsync(id);
-
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo se ejecuta en operaciones POST, PUT o DELETE
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Conductor no encontrado", code = 0 }),
-                    1 => Ok(new { message = "Conductor liberado exitosamente", code = 1 }),
-                    _ => StatusCode(500, new { message = "Error interno", code = -1 })
+                    0 => NotFound(new { mensaje = "Conductor no encontrado.", code = 0 }),
+                    1 => Ok(new { mensaje = "Conductor liberado exitosamente.", code = 1 }),
+                    _ => StatusCode(500, new { mensaje = "Error interno al liberar el conductor.", code = -1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpDelete("Eliminar/{id}")]
         public async Task<IActionResult> EliminarConductorDelete(int id)
         {
+            if (id <= 0)
+                return BadRequest(new { mensaje = "Código de conductor inválido." });
+
             try
             {
-                if (id <= 0)
-                    return BadRequest(new { message = "Código de conductor inválido" });
+                var resultado = await _uow.PreplanRepository.EliminarConductorAsync(id);
 
-                var resultado = await _unitOfWork.PreplanRepository.EliminarConductorAsync(id);
-
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo en operaciones DELETE, POST o PUT
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Conductor no encontrado", code = 0 }),
-                    1 => Ok(new { message = "Conductor eliminado exitosamente", code = 1 }),
-                    _ => StatusCode(500, new { message = "Error interno", code = -1 })
+                    0 => NotFound(new { mensaje = "Conductor no encontrado.", code = 0 }),
+                    1 => Ok(new { mensaje = "Conductor eliminado exitosamente.", code = 1 }),
+                    _ => StatusCode(500, new { mensaje = "Error interno al eliminar el conductor.", code = -1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPost("HabilitarUnidad/{placa}")]
         public async Task<IActionResult> HabilitarUnidad(string placa)
         {
+            if (string.IsNullOrWhiteSpace(placa))
+                return BadRequest(new { mensaje = "La placa de la unidad es requerida." });
+
             try
             {
-                if (string.IsNullOrWhiteSpace(placa))
-                    return BadRequest(new { message = "La placa de la unidad es requerida" });
+                var resultado = await _uow.PreplanRepository.HabilitarUnidadAsync(placa);
 
-                var resultado = await _unitOfWork.PreplanRepository.HabilitarUnidadAsync(placa);
-
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Solo en POST, PUT o DELETE
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Unidad no encontrada", code = 0 }),
-                    1 => Ok(new { message = "Unidad habilitada exitosamente", code = 1 }),
-                    _ => StatusCode(500, new { message = "Error interno", code = -1 })
+                    0 => NotFound(new { mensaje = "Unidad no encontrada.", code = 0 }),
+                    1 => Ok(new { mensaje = "Unidad habilitada exitosamente.", code = 1 }),
+                    _ => StatusCode(500, new { mensaje = "Error interno al habilitar la unidad.", code = -1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPost("DeshabilitarUnidad/{placa}")]
         public async Task<IActionResult> DeshabilitarUnidad(string placa)
         {
+            if (string.IsNullOrWhiteSpace(placa))
+                return BadRequest(new { mensaje = "La placa de la unidad es requerida." });
+
             try
             {
-                if (string.IsNullOrWhiteSpace(placa))
-                    return BadRequest(new { message = "La placa de la unidad es requerida" });
+                var resultado = await _uow.PreplanRepository.DeshabilitarUnidadAsync(placa);
 
-                var resultado = await _unitOfWork.PreplanRepository.DeshabilitarUnidadAsync(placa);
-
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Confirmar transacción
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Unidad no encontrada", code = 0 }),
-                    1 => Ok(new { message = "Unidad deshabilitada exitosamente", code = 1 }),
-                    _ => StatusCode(500, new { message = "Error interno", code = -1 })
+                    0 => NotFound(new { mensaje = "Unidad no encontrada.", code = 0 }),
+                    1 => Ok(new { mensaje = "Unidad deshabilitada exitosamente.", code = 1 }),
+                    _ => StatusCode(500, new { mensaje = "Error interno al deshabilitar la unidad.", code = -1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPut("LiberarUnidad/{placa}")]
         public async Task<IActionResult> LiberarUnidad(string placa)
         {
+            if (string.IsNullOrWhiteSpace(placa))
+                return BadRequest(new { mensaje = "La placa de la unidad es requerida." });
+
             try
             {
-                var resultado = await _unitOfWork.PreplanRepository.LiberarUnidadAsync(placa);
+                var resultado = await _uow.PreplanRepository.LiberarUnidadAsync(placa);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges(); // ✅ Se guarda solo si la operación fue exitosa
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Unidad no encontrada o no se pudo liberar", code = 0 }),
-                    1 => Ok(new { message = "Unidad liberada exitosamente", code = 1 }),
-                    _ => Ok(new { message = $"{resultado} unidades liberadas exitosamente", code = 1 })
+                    0 => NotFound(new { mensaje = "Unidad no encontrada o no se pudo liberar.", code = 0 }),
+                    1 => Ok(new { mensaje = "Unidad liberada exitosamente.", code = 1 }),
+                    _ => Ok(new { mensaje = $"{resultado} unidades liberadas exitosamente.", code = 1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPut("ActualizarDireccionPasajero/{codpedido}/{codubicli}")]
         public async Task<IActionResult> UpdDirPasServicio(int codpedido, string codubicli)
         {
+            if (codpedido <= 0)
+                return BadRequest(new { mensaje = "El código del pedido es inválido." });
+
+            if (string.IsNullOrWhiteSpace(codubicli))
+                return BadRequest(new { mensaje = "El código de ubicación del cliente es requerido." });
+
             try
             {
-                var resultado = await _unitOfWork.PreplanRepository.UpdDirPasServicio(codpedido, codubicli);
+                var resultado = await _uow.PreplanRepository.UpdDirPasServicio(codpedido, codubicli);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges();
 
                 return resultado switch
                 {
-                    0 => NotFound(new { message = "Pedido no encontrado o no se pudo actualizar la dirección", code = 0 }),
-                    1 => Ok(new { message = "Dirección del servicio actualizada exitosamente", code = 1 }),
-                    _ => Ok(new { message = $"{resultado} servicios actualizados exitosamente", code = 1 })
+                    0 => NotFound(new { mensaje = "Pedido no encontrado o no se pudo actualizar la dirección.", code = 0 }),
+                    1 => Ok(new { mensaje = "Dirección del pasajero actualizada exitosamente.", code = 1 }),
+                    _ => Ok(new { mensaje = $"{resultado} servicios actualizados exitosamente.", code = 1 })
                 };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
             }
+
         }
+
 
         [HttpPost("DireccionAdicional")]
         public async Task<IActionResult> CrearLugarCliente([FromBody] LugarCliente lugarCliente)
         {
             if (lugarCliente == null)
-            {
-                return BadRequest(new { message = "Los datos del lugar cliente son requeridos." });
-            }
+                return BadRequest(new { mensaje = "Los datos del lugar cliente son requeridos." });
 
             try
             {
-                int filasAfectadas = await _unitOfWork.PreplanRepository.NuevoLugarCliente(lugarCliente);
+                int filasAfectadas = await _uow.PreplanRepository.NuevoLugarCliente(lugarCliente);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges();
 
                 if (filasAfectadas > 0)
                 {
                     return Ok(new
                     {
-                        message = "Dirección adiocional creada exitosamente.",
-                        filasAfectadas = filasAfectadas
+                        mensaje = "Dirección adicional creada exitosamente.",
+                        filasAfectadas
                     });
                 }
-                else
-                {
-                    return BadRequest(new { message = "No se pudo crear la dirección." });
-                }
+
+                return BadRequest(new { mensaje = "No se pudo crear la dirección." });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new
                 {
-                    message = "Error interno del servidor al crear la dirección.",
-                    error = ex.Message
+                    mensaje = "Error interno del servidor al crear la dirección.",
+                    detalle = ex.Message
                 });
             }
+
         }
+
 
         [HttpDelete("EliminarDireccion")]
         public async Task<IActionResult> EliminarLugarCliente(int codlugar)
         {
-            if (codlugar <= 1)
-            {
-                return BadRequest(new { message = "Código de lugar inválido." });
-            }
+            if (codlugar <= 0)
+                return BadRequest(new { mensaje = "Código de lugar inválido." });
 
             try
             {
-                int filasAfectadas = await _unitOfWork.PreplanRepository.EliminarLugarCliente(codlugar);
+                int filasAfectadas = await _uow.PreplanRepository.EliminarLugarCliente(codlugar);
 
-                _unitOfWork.SaveChanges();
+                _uow.SaveChanges();
 
                 if (filasAfectadas > 0)
                 {
                     return Ok(new
                     {
-                        message = "Dirección eliminada exitosamente.",
-                        filasAfectadas = filasAfectadas
+                        mensaje = "Dirección eliminada exitosamente.",
+                        filasAfectadas
                     });
                 }
-                else
-                {
-                    return NotFound(new { message = "No se encontró la dirección a eliminar." });
-                }
+
+                return NotFound(new { mensaje = "No se encontró la dirección a eliminar." });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new
                 {
-                    message = "Error interno del servidor al eliminar la dirección.",
-                    error = ex.Message
+                    mensaje = "Error interno del servidor al eliminar la dirección.",
+                    detalle = ex.Message
                 });
             }
+
         }
+
     }
 }

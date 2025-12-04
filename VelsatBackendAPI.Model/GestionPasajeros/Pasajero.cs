@@ -14,6 +14,7 @@ namespace VelsatBackendAPI.Model.GestionPasajeros
         public char? Sexo { get; set; }
         public string? Empresa { get; set; }
         public string? Codusuario { get; set; }
+        public string? Codlugar { get; set; }
         public string? Zona { get; set; }
         public string Direccion { get; set; }
         public string Distrito { get; set; }

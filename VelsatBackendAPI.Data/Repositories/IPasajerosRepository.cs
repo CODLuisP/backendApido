@@ -19,7 +19,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<string> InsertPasajero(Pasajero pasajero, string codusuario);
 
-        Task<string> UpdatePasajero(Pasajero pasajero, string codusuario, int codcliente, string codlan);
+        Task<string> UpdatePasajero(Pasajero pasajero, string codusuario, int codcliente, string codlan, string codlugar);
 
         Task<string> DeletePasajero(int codcliente, string codusuario);
 

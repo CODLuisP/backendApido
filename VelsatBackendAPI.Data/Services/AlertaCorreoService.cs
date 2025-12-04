@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,54 +27,58 @@ namespace VelsatBackendAPI.Data.Services
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                IServiceScope? scope = null;
+                IUnitOfWork? uow = null;
+
                 try
                 {
-                    using var scope = _serviceProvider.CreateScope();
-                    var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-                    var repo = unitOfWork.AlertaRepository;
+                    scope = _serviceProvider.CreateScope();
+                    var factory = scope.ServiceProvider.GetRequiredService<IUnitOfWorkFactory>();
+
+                    // ✅ Crear UnitOfWork (NECESITA transacciones porque hace UPDATE)
+                    uow = factory.Create();
+
+                    var repo = uow.AlertaRepository;
 
                     var fecha = await repo.ObtenerFechaUltimaAlarmaAsync();
-                    Console.WriteLine($"Fecha última alarma detectada: {fecha}");
 
                     if (fecha.HasValue && fecha > _ultimaActualizacion)
                     {
                         _ultimaActualizacion = fecha.Value;
-
                         var alertas = await repo.ObtenerAlertasNoEnviadasAsync();
-                        Console.WriteLine($"Se encontraron {alertas.Count} alertas no enviadas.");
 
                         if (alertas.Any())
                         {
                             foreach (var alerta in alertas)
                             {
-                                Console.WriteLine($"Enviando correo para la alerta {alerta.Codigo} - StatusCode: {alerta.StatusCode}");
-
                                 try
                                 {
                                     await EnviarCorreoAsync("rentaautoschiclayo@gmail.com", alerta);
-                                    Console.WriteLine($"Correo enviado exitosamente para la alerta {alerta.Codigo}");
                                 }
                                 catch (Exception ex)
                                 {
-                                    Console.WriteLine($"Error enviando correo para alerta {alerta.Codigo}: {ex.Message}");
-                                    // Continuar con las demás alertas aunque una falle
                                 }
                             }
 
-                            // ✅ Marcar como enviadas y hacer commit
+                            // ✅ Marcar como enviadas
                             await repo.MarcarComoEnviadasAsync(alertas.Select(a => a.Codigo).ToList());
-                            unitOfWork.SaveChanges(); // ✅ AGREGAR ESTO
 
-                            Console.WriteLine($"{alertas.Count} alertas marcadas como procesadas.");
+                            // ✅ CRÍTICO: Commit de la transacción
+                            uow.SaveChanges();
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error en el servicio de alertas: {ex.Message}");
-                    Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                }
+                finally
+                {
+                    // ✅ CRÍTICO: Disponer en orden inverso
+                    uow?.Dispose();
+                    scope?.Dispose();
                 }
 
+                // Esperar 3 segundos antes del siguiente ciclo
                 await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
             }
         }

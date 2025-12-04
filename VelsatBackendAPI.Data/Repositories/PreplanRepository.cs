@@ -1087,7 +1087,7 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             string sql = @"Select l.codlugar, l.wy, l.wx, c.codcliente from cliente c, lugarcliente l where l.codcli = c.codlugar and c.codlan = @Codlan and c.estadocuenta = 'A' and l.estado = 'A'";
 
-            var parameters = new { Codlan = pasajero.Codlan, Empresa = pasajero.Empresa };
+            var parameters = new { Codlan = pasajero.Codlan };
 
             var result = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
 
@@ -3145,7 +3145,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<Usuario> BuscarTotalServerAsync(Conductor conductor)
         {
-            string sql = "SELECT loginusu FROM totalserver WHERE loginusu = @Login";
+            string sql = "SELECT loginusu FROM serverprueba WHERE loginusu = @Login";
             var parameters = new { Login = conductor.Login };
 
             var result = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _defaultTransaction);
@@ -3184,7 +3184,7 @@ namespace VelsatBackendAPI.Data.Repositories
             // Insertar en tabla taxi
             await _defaultConnection.ExecuteAsync(sqlTaxi, parametersEdriver, transaction: _defaultTransaction);
 
-            string sqlTotalServer = @"INSERT INTO totalserver (loginusu, servidor) VALUES (@Login, 'http://66.240.210.125:8090/')";
+            string sqlTotalServer = @"INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@Login, 'https://velsat.pe:2087','c')";
 
             var parametersTotalServer = new
             {
@@ -3226,12 +3226,38 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<int> ModificarConductorAsync(Conductor conductor)
         {
-            string sql = @"UPDATE taxi SET nombres = @Nombres, apellidos = @Apellidos, telefono = @Telefono, email = @Email, brevete = @Brevete, dni = @Dni, direccion = @Direccion, sctr = @Sctr, catbrevete = @CatBrevete, estbrevete = @EstBrevete, fecvalidbrevete = @FecValidBrevete WHERE codtaxi = @Codigo";
+            // ✅ Validar que el conductor no sea null
+            if (conductor == null)
+                throw new ArgumentNullException(nameof(conductor), "El conductor no puede ser null");
+
+            // ✅ Validar que tenga un código válido
+            if (conductor.Codigo <= 0)
+                throw new ArgumentException("El código del conductor es inválido", nameof(conductor.Codigo));
+
+            // Primera actualización en la tabla taxi
+            string sql = @"
+UPDATE taxi 
+SET nombres = @Nombres, 
+    apellidos = @Apellidos, 
+    login = @Login, 
+    clave = @Clave, 
+    telefono = @Telefono, 
+    email = @Email, 
+    brevete = @Brevete, 
+    dni = @Dni, 
+    direccion = @Direccion, 
+    sctr = @Sctr, 
+    catbrevete = @CatBrevete, 
+    estbrevete = @EstBrevete, 
+    fecvalidbrevete = @FecValidBrevete 
+WHERE codtaxi = @Codigo";
 
             var parameters = new
             {
                 Nombres = conductor.Nombres,
                 Apellidos = conductor.Apellidos,
+                Login = conductor.Login,
+                Clave = conductor.Clave,
                 Telefono = conductor.Telefono,
                 Email = conductor.Email,
                 Brevete = conductor.Brevete,
@@ -3244,7 +3270,46 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codigo = conductor.Codigo
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            // Ejecutar primera actualización
+            int rowsAffected = await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+
+            // ✅ Buscar usuario existente
+            var usuarioExistente = await BuscarTotalServerAsync(conductor);
+
+            // ✅ Si existe, actualizar. Si no existe, crear
+            if (usuarioExistente != null && !string.IsNullOrEmpty(usuarioExistente.Login))
+            {
+                // 📝 ACTUALIZAR registro existente
+                string sql2 = @"UPDATE servermobile SET loginusu = @Login WHERE loginusu = @Loginusu";
+
+                var parameters2 = new
+                {
+                    Login = conductor.Login,
+                    Loginusu = usuarioExistente.Login
+                };
+
+                int rowsAffected2 = await _defaultConnection.ExecuteAsync(sql2, parameters2, transaction: _defaultTransaction);
+                rowsAffected += rowsAffected2;
+            }
+            else
+            {
+                // ➕ CREAR nuevo registro
+                string sqlInsert = @"
+INSERT INTO servermobile (loginusu, servidor, tipo) 
+VALUES (@Login, @Servidor, @Tipo)";
+
+                var parametersInsert = new
+                {
+                    Login = conductor.Login,
+                    Servidor = "https://velsat.pe:2087",
+                    Tipo = "c"
+                };
+
+                int rowsInserted = await _defaultConnection.ExecuteAsync(sqlInsert, parametersInsert, transaction: _defaultTransaction);
+                rowsAffected += rowsInserted;
+            }
+
+            return rowsAffected;
         }
 
         public async Task<int> HabilitarConductorAsync(int codigoConductor)

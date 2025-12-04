@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using DocumentFormat.OpenXml.Bibliography;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -30,7 +31,7 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<IEnumerable<Pasajero>> GetPasajero(int codcliente)
         {
             const string sql = @"
-                SELECT c.codlan, c.apellidos, c.telefono, c.sexo, c.empresa, c.codusuario, 
+                SELECT c.codlan, c.apellidos, c.telefono, c.sexo, c.empresa, c.codusuario, c.codlugar,
                        z.zona, l.direccion, l.distrito, l.wy, l.wx 
                 FROM cliente c 
                 JOIN lugarcliente l ON c.codlugar = l.codcli 
@@ -66,8 +67,8 @@ namespace VelsatBackendAPI.Data.Repositories
                 VALUES (@Codlugar, @Apellidos, 123, 'A', @Codusuario, @Codlan, @Sexo, @Empresa, @Telefono)";
 
             const string sqlDos = @"
-                INSERT INTO serverprueba(loginusu, servidor) 
-                VALUES (@Loginusu, 'https://velsat.pe:8586')";
+                INSERT INTO servermobile(loginusu, servidor, tipo) 
+                VALUES (@Loginusu, 'https://velsat.pe:2087', 'p')";
 
             const string sqlTres = @"
                 INSERT INTO lugarcliente(codcli, direccion, distrito, wy, wx, estado, zona) 
@@ -97,51 +98,96 @@ namespace VelsatBackendAPI.Data.Repositories
             };
 
             // ✅ Ejecutar las 3 queries - NO hacer commit aquí
-            await _defaultConnection.ExecuteAsync(sqlUno, parametersUno, _defaultTransaction);
-            await _defaultConnection.ExecuteAsync(sqlDos, parametersDos, _defaultTransaction);
-            await _defaultConnection.ExecuteAsync(sqlTres, parametersTres, _defaultTransaction);
+            await _defaultConnection.ExecuteAsync(sqlUno, parametersUno, transaction: _defaultTransaction);
+            await _defaultConnection.ExecuteAsync(sqlDos, parametersDos, transaction: _defaultTransaction);
+            await _defaultConnection.ExecuteAsync(sqlTres, parametersTres, transaction: _defaultTransaction);
 
             return "Success insertion";
         }
 
-        public async Task<string> UpdatePasajero(Pasajero pasajero, string codusuario, int codcliente, string codlan)
+        public async Task<string> UpdatePasajero(Pasajero pasajero, string codusuario, int codcliente, string codlan, string codlugar)
         {
-            const string sqlUno = @"
-                UPDATE cliente 
-                SET apellidos = @Apellidos, codusuario = @Codusuario, sexo = @Sexo, 
-                    empresa = @Empresa, telefono = @Telefono 
-                WHERE codcliente = @Codcliente";
-
-            const string sqlDos = @"
-                UPDATE lugarcliente 
-                SET direccion = @Direccion, distrito = @Distrito, wy = @Wy, wx = @Wx, zona = @Zona 
-                WHERE codcli = @Codcli AND estado = 'A'";
-
-            var parametersUno = new
+            try
             {
-                Apellidos = pasajero.Apellidos,
-                Codusuario = codusuario,
-                Sexo = pasajero.Sexo,
-                Empresa = pasajero.Empresa,
-                Telefono = pasajero.Telefono,
-                Codcliente = codcliente
-            };
+                const string sqlUpdateCliente = @"
+            UPDATE cliente 
+            SET apellidos = @Apellidos, codlan = @Codlan, codlugar = @Codlan, codusuario = @Codusuario, 
+                sexo = @Sexo, empresa = @Empresa, telefono = @Telefono 
+            WHERE codcliente = @Codcliente";
 
-            var parametersDos = new
+                int? usuarioExistente = await BuscarTotalServerAsync(pasajero.Codlan);
+
+                string sqlLugarCliente;
+                if (codusuario.Equals("cgacela", StringComparison.OrdinalIgnoreCase))
+                {
+                    const string sqlDesactivar = @"UPDATE lugarcliente SET estado = 'E' WHERE codcli = @Codcli";
+                    await _defaultConnection.ExecuteAsync(sqlDesactivar, new { Codcli = codlugar }, transaction: _defaultTransaction);
+
+                    sqlLugarCliente = @"INSERT INTO lugarcliente (codcli, direccion, distrito, wy, wx, zona, estado) 
+                                VALUES (@Codcli, @Direccion, @Distrito, @Wy, @Wx, @Zona, 'A')";
+                }
+                else
+                {
+                    sqlLugarCliente = @"UPDATE lugarcliente 
+                                SET codcli = @Codlan, direccion = @Direccion, distrito = @Distrito, wy = @Wy, wx = @Wx, zona = @Zona 
+                                WHERE codcli = @Codcli AND estado = 'A'";
+                }
+
+                var parametersCliente = new
+                {
+                    Apellidos = pasajero.Apellidos,
+                    Codlan = codlan,
+                    Codlugar = codlan,
+                    Codusuario = codusuario,
+                    Sexo = pasajero.Sexo,
+                    Empresa = pasajero.Empresa,
+                    Telefono = pasajero.Telefono,
+                    Codcliente = codcliente
+                };
+
+                var parametersLugarCliente = new
+                {
+                    Codlan = codlan,
+                    Direccion = pasajero.Direccion,
+                    Distrito = pasajero.Distrito,
+                    Wy = pasajero.Wy,
+                    Wx = pasajero.Wx,
+                    Zona = pasajero.Zona,
+                    Codcli = codlugar
+                };
+
+                await _defaultConnection.ExecuteAsync(sqlUpdateCliente, parametersCliente, transaction: _defaultTransaction);
+                await _defaultConnection.ExecuteAsync(sqlLugarCliente, parametersLugarCliente, transaction: _defaultTransaction);
+
+                // Si NO existe, insertar nuevo registro
+                if (!usuarioExistente.HasValue)
+                {
+                    const string sqlInsertServerMobile = @"INSERT INTO servermobile(loginusu, servidor, tipo) VALUES (@Codlan, 'https://velsat.pe:2087', 'p')";
+                    var parametersServer = new
+                    {
+                        Codlan = codlan
+                    };
+
+                    await _defaultConnection.ExecuteAsync(sqlInsertServerMobile, parametersServer, transaction: _defaultTransaction);
+                }
+
+                return "Success update";
+            }
+            catch (Exception ex)
             {
-                Direccion = pasajero.Direccion,
-                Distrito = pasajero.Distrito,
-                Wy = pasajero.Wy,
-                Wx = pasajero.Wx,
-                Zona = pasajero.Zona,
-                Codcli = codlan
-            };
+                return $"Error: {ex.Message}";
+            }
+        }
 
-            // ✅ Ejecutar las 2 queries - NO hacer commit aquí
-            await _defaultConnection.ExecuteAsync(sqlUno, parametersUno, _defaultTransaction);
-            await _defaultConnection.ExecuteAsync(sqlDos, parametersDos, _defaultTransaction);
 
-            return "Success update";
+        private async Task<int?> BuscarTotalServerAsync(string codlan)
+        {
+            string sql = "SELECT id FROM servermobile WHERE loginusu = @Codlan";
+            var parameters = new { Codlan = codlan };
+
+            var result = await _defaultConnection.QueryFirstOrDefaultAsync<int?>(sql, parameters, transaction: _defaultTransaction);
+
+            return result;
         }
 
         public async Task<string> DeletePasajero(int codcliente, string codusuario)
@@ -157,7 +203,7 @@ namespace VelsatBackendAPI.Data.Repositories
             await _defaultConnection.ExecuteAsync(
                 sql,
                 new { Codcliente = codcliente, Codelimina = codusuario, Fechaelim = fechaelim },
-                _defaultTransaction);
+                transaction: _defaultTransaction);
 
             return "Success delete";
         }
@@ -227,8 +273,8 @@ namespace VelsatBackendAPI.Data.Repositories
             };
 
             // ✅ NO hacer commit aquí
-            await _defaultConnection.ExecuteAsync(sqlUno, parametersUno, _defaultTransaction);
-            await _defaultConnection.ExecuteAsync(sqlTres, parametersTres, _defaultTransaction);
+            await _defaultConnection.ExecuteAsync(sqlUno, parametersUno, transaction: _defaultTransaction);
+            await _defaultConnection.ExecuteAsync(sqlTres, parametersTres, transaction: _defaultTransaction);
 
             return "Success insertion";
         }

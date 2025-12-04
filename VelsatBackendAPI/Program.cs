@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Configuration.AddJsonFile("appsettings.json");
+
 var secretkey = builder.Configuration.GetSection("settings").GetSection("secretkey").Value;
 var keyBytes = Encoding.UTF8.GetBytes(secretkey);
 
@@ -49,7 +50,11 @@ var mysqlConfiguration = new MySqlConfiguration(
 );
 builder.Services.AddSingleton(mysqlConfiguration);
 
-//builder.Services.AddSingleton(new MySqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+builder.Services.AddScoped<IReadOnlyUnitOfWork, ReadOnlyUnitOfWork>();
+
+builder.Services.AddSingleton<IUnitOfWorkFactory, UnitOfWorkFactory>();
 
 builder.Services.AddCors(options =>
 {
@@ -70,44 +75,39 @@ builder.Services.AddSession(options =>
     options.IdleTimeout = TimeSpan.FromHours(1);
 });
 
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-
-builder.Services.AddScoped<LoginController>();
-
-builder.Services.AddSignalR(o =>
-{
-    o.EnableDetailedErrors = true;
-});
+//Comentar SIGNALR temporal
+//builder.Services.AddSignalR(o =>
+//{
+//    o.EnableDetailedErrors = true;
+//});
+//
 
 //Descomentar para 107 - Env�o de correos
 
-//builder.Services.AddScoped<IDbConnection>(sp =>
-//    new MySql.Data.MySqlClient.MySqlConnection(
-//        builder.Configuration.GetConnectionString("DefaultConnection")
-//    ));
-
 //builder.Services.AddHostedService<AlertaCorreoService>();
+
 //HASTA AC�
 
 var app = builder.Build();
 
-
-// Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
-//{
-//  app.UseSwagger();
-//app.UseSwaggerUI();
-//}
+// ✅ Limpiar todos los pools de MySQL al iniciar la aplicación
+try
+{
+    MySql.Data.MySqlClient.MySqlConnection.ClearAllPools();
+    Console.WriteLine("✅ [Startup] Pools de MySQL limpiados correctamente");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"⚠️ [Startup] Error limpiando pools: {ex.Message}");
+}
 
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
-
 app.UseRouting();
 
 app.UseAuthentication();
-
 app.UseAuthorization();
 
 app.UseCors("AllowSpecificOrigin");
@@ -116,6 +116,8 @@ app.UseSession();
 
 app.MapControllers();
 
-app.MapHub<ActualizacionTiempoReal>("/dataHubDevice/{username}");
+//Comentar para SIGNALR
+//app.MapHub<ActualizacionTiempoReal>("/dataHubDevice/{username}");
+//
 
 app.Run();

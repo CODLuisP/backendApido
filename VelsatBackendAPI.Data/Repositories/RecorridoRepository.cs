@@ -27,23 +27,18 @@ namespace VelsatBackendAPI.Data.Repositories
             return (fechaInicio, fechaFin);
         }
 
-        public async Task<List<SelectedServicio>> GetSelectServicio(string fechaIngresada)
+        public async Task<List<SelectedServicio>> GetSelectServicio(string fechaIngresada, string empresa, string usuario)
         {
             var (fechaInicio, fechaFin) = RangoFechas(fechaIngresada);
 
-            const string sql = @"
-                SELECT codservicio, numero, tipo, unidad, empresa 
-                FROM servicio 
-                WHERE fecha BETWEEN @Fechaini AND @Fechafin 
-                  AND empresa = 'TALMA' 
-                  AND codusuario = 'cgacela' 
-                  AND unidad IS NOT NULL 
-                  AND estado != 'C'";
+            const string sql = @"SELECT codservicio, numero, tipo, unidad, empresa FROM servicio WHERE fecha BETWEEN @Fechaini AND @Fechafin AND empresa = @Empresa AND codusuario = @Usuario AND unidad IS NOT NULL AND estado != 'C'";
 
             var parametros = new
             {
                 Fechaini = fechaInicio,
-                Fechafin = fechaFin
+                Fechafin = fechaFin,
+                Empresa = empresa,
+                Usuario = usuario
             };
 
             var resultado = await _defaultConnection.QueryAsync<SelectedServicio>(
@@ -54,24 +49,19 @@ namespace VelsatBackendAPI.Data.Repositories
             return resultado.ToList();
         }
 
-        public async Task<RecorridoServicio> GetDatosServicio(string fecha, string numero)
+        public async Task<RecorridoServicio> GetDatosServicio(string fecha, string numero, string empresa, string usuario)
         {
             var (fechaInicio, fechaFin) = RangoFechas(fecha);
 
-            const string sql = @"
-                SELECT codservicio, numero, tipo, unidad, empresa, fechaini, fechafin 
-                FROM servicio 
-                WHERE empresa = 'TALMA' 
-                  AND codusuario = 'cgacela' 
-                  AND fecha BETWEEN @Fechaini AND @Fechafin 
-                  AND estado != 'C' 
-                  AND numero = @Numero";
+            const string sql = @"SELECT codservicio, numero, tipo, unidad, empresa, fechaini, fechafin FROM servicio WHERE empresa = @Empresa AND codusuario = @Usuario AND fecha BETWEEN @Fechaini AND @Fechafin AND estado != 'C' AND numero = @Numero";
 
             var parameters = new
             {
                 Fechaini = fechaInicio,
                 Fechafin = fechaFin,
-                Numero = numero
+                Numero = numero,
+                Empresa = empresa,
+                Usuario = usuario
             };
 
             var result = await _defaultConnection.QueryAsync<RecorridoServicio>(

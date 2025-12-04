@@ -1,7 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using VelsatBackendAPI.Data.Repositories;
-using VelsatBackendAPI.Model;
 
 namespace VelsatBackendAPI.Controllers
 {
@@ -9,26 +7,47 @@ namespace VelsatBackendAPI.Controllers
     [ApiController]
     public class UserController : ControllerBase
     {
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly IReadOnlyUnitOfWork _readOnlyUow; // ✅ Cambiar a ReadOnly
 
-        public UserController(IUnitOfWork unitOfWork)
+        public UserController(IReadOnlyUnitOfWork readOnlyUow) // ✅ Cambiar
         {
-            _unitOfWork = unitOfWork;
+            _readOnlyUow = readOnlyUow;
         }
-        
 
+        // ✅ GET - Solo lectura
         [HttpGet]
         public async Task<IActionResult> GetAllUsers()
         {
-            return Ok(await _unitOfWork.UserRepository.GetAllUsers());
+            try
+            {
+                var users = await _readOnlyUow.UserRepository.GetAllUsers();
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener los usuarios", error = ex.Message });
+            }
+
         }
 
+        // ✅ GET - Solo lectura
         [HttpGet("{id}")]
         public async Task<IActionResult> GetUserDetails(int id)
         {
-            return Ok(await _unitOfWork.UserRepository.GetDetails(id));
-        
-        }
+            try
+            {
+                var user = await _readOnlyUow.UserRepository.GetDetails(id);
 
+                if (user == null)
+                    return NotFound(new { message = $"No se encontró el usuario con ID {id}" });
+
+                return Ok(user);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener los detalles del usuario", error = ex.Message });
+            }
+
+        }
     }
 }

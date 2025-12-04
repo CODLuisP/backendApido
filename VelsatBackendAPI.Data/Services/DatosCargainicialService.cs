@@ -181,10 +181,70 @@ namespace VelsatBackendAPI.Data.Services
             return listDevices;
         }
 
+        public async Task<DatosCargainicial> ObtenerDatosVehiculoAsync(string login, string placa)
+        {
+            var deviceIds = await GetDeviceIdsAsync(login);
+
+            if (!deviceIds.Any())
+            {
+                return new DatosCargainicial
+                {
+                    FechaActual = DateTime.Now,
+                    DatosDevice = new List<Device>()
+                };
+            }
+
+            const string sqlGetVehicle = @"SELECT deviceID, lastValidLatitude, lastValidLongitude, lastOdometerKM, odometerini, kmini, description, direccion, codgeoact, lastValidHeading, lastValidSpeed, rutaact, servicio FROM device WHERE deviceID IN @DeviceIDs AND deviceID = @Placa";
+
+            var vehiculos = await _defaultConnection.QueryAsync<Device>(
+                sqlGetVehicle,
+                new { DeviceIDs = deviceIds, Placa = placa },
+                transaction: _defaultTransaction);
+
+            return new DatosCargainicial
+            {
+                FechaActual = DateTime.Now,
+                DatosDevice = vehiculos.ToList()
+            };
+        }
+
         public void ClearDeviceIdsCache()
         {
             _deviceIds = null;
             _currentLogin = null;
+        }
+
+        public async Task<IEnumerable<CantidadRegistro>> CantidadRegistros()
+        {
+            // Obtener la hora actual de Perú
+            var zonaHoraPeru = TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time");
+            var ahoraPeru = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zonaHoraPeru);
+
+            // Truncar al inicio de la hora actual (minutos y segundos en 0)
+            var inicioHoraActual = new DateTime(
+                ahoraPeru.Year,
+                ahoraPeru.Month,
+                ahoraPeru.Day,
+                ahoraPeru.Hour,
+                0,
+                0
+            );
+
+            // Convertir a Unix timestamp
+            var unixTimestampInicio = (int)((DateTimeOffset)inicioHoraActual).ToUnixTimeSeconds();
+
+            var query = @"SELECT accountID, deviceID, COUNT(*) as Cantidad 
+                  FROM eventdata 
+                  WHERE timestamp >= @HoraUnix 
+                  GROUP BY accountID, deviceID 
+                  ORDER BY Cantidad DESC";
+
+            var resultado = await _defaultConnection.QueryAsync<CantidadRegistro>(
+                query,
+                new { HoraUnix = unixTimestampInicio },
+                transaction: _defaultTransaction);
+
+            return resultado;
         }
     }
 }

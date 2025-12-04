@@ -29,6 +29,16 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<KilometrosReporting> GetKmReporting(string fechaini, string fechafin, string deviceID, string accountID)
         {
+            accountID = await ObtenerAccountIDCorrecto(deviceID, accountID);
+
+            if (string.IsNullOrEmpty(accountID))
+            {
+                return new KilometrosReporting
+                {
+                    Mensaje = $"No se encontró información para el deviceID: {deviceID}"
+                };
+            }
+
             var dates = FormatDate(fechaini, fechafin);
 
             fechaini = dates.dateStart;
@@ -237,6 +247,29 @@ namespace VelsatBackendAPI.Data.Repositories
                 dateStart = fechaInicioString,
                 dateEnd = fechaFinString,
             };
+        }
+
+        private async Task<string> ObtenerAccountIDCorrecto(string deviceID, string accountID)
+        {
+            const string sqlAccountFromDevice = "SELECT accountID FROM device WHERE deviceID = @DeviceID";
+
+            var newAccountID = _defaultConnection.QueryFirstOrDefault<string>(
+                sqlAccountFromDevice,
+                new { DeviceID = deviceID },
+                transaction: _defaultTransaction);
+
+            if (!string.IsNullOrEmpty(newAccountID))
+            {
+                return newAccountID; // ✅ Retorna el accountID de la BD
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(accountID))
+                {
+                    return null; // ❌ No se encontró accountID
+                }
+                return accountID; // ✅ Retorna el accountID del parámetro
+            }
         }
     }
 }

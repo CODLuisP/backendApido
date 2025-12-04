@@ -185,78 +185,43 @@ namespace VelsatBackendAPI.Hubs
             }
         }
 
-        // ⭐ MÉTODO COMPLETAMENTE REESCRITO Y OPTIMIZADO
+        // ⭐ OPTIMIZADO: Usa ReadOnlyUnitOfWork (sin transacciones)
         private async Task EnviarDatosDirectamente(string username)
         {
-            // ⭐ CRÍTICO: Crear scope dentro de try-catch para evitar fugas de memoria
             IServiceScope? scope = null;
+            IReadOnlyUnitOfWork? readOnlyUow = null;
 
             try
             {
                 scope = _serviceScopeFactory.CreateScope();
 
-                _logger.LogDebug("[SignalR] Obteniendo datos para: {Username}", username);
+                // ✅ Obtener ReadOnlyUnitOfWork (sin transacciones)
+                readOnlyUow = scope.ServiceProvider.GetRequiredService<IReadOnlyUnitOfWork>();
 
-                // ⭐ CRÍTICO: Usar using para liberar el UnitOfWork inmediatamente
-                using (var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>())
-                {
-                    var datosCargaActualizados = await unitOfWork.DatosCargainicialService
-                        .ObtenerDatosCargaInicialAsync(username);
+                var datosCargaActualizados = await readOnlyUow.DatosCargainicialService
+                    .ObtenerDatosCargaInicialAsync(username);
 
-                    datosCargaActualizados.FechaActual = DateTime.Now;
+                datosCargaActualizados.FechaActual = DateTime.Now;
 
-                    _logger.LogDebug("[SignalR] Datos obtenidos para {Username}: {DeviceCount} dispositivos",
-                        username, datosCargaActualizados.DatosDevice?.Count ?? 0);
+                await _hubContext.Clients.Group(username)
+                    .SendAsync("ActualizarDatos", datosCargaActualizados);
 
-                    // ⭐ MEJORADO: Enviar datos al grupo con timeout implícito
-                    await _hubContext.Clients.Group(username)
-                        .SendAsync("ActualizarDatos", datosCargaActualizados);
-
-                    _logger.LogDebug("[SignalR] Datos enviados exitosamente para: {Username}", username);
-
-                    // ⭐ NOTA: NO llamamos SaveChanges() porque es solo lectura
-                    // El Dispose() del using hará rollback automático (seguro para lecturas)
-                } // ⭐ Aquí se libera el UnitOfWork y se cierran las conexiones
-
-            }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("ya fue confirmado") ||
-                                                       ex.Message.Contains("already been committed"))
-            {
-                _logger.LogWarning("[SignalR] UnitOfWork ya confirmado para {Username}: {Message}",
-                    username, ex.Message);
-                // No detenemos el timer, esto puede ser transitorio
-            }
-            catch (ObjectDisposedException ex)
-            {
-                _logger.LogWarning(ex, "[SignalR] Objeto disposed para {Username}. Deteniendo timer.", username);
-                DetenerTimer(username);
-            }
-            catch (HubException ex)
-            {
-                // ⭐ NUEVO: Errores específicos de SignalR (cliente desconectado, etc.)
-                _logger.LogWarning(ex, "[SignalR] Error de Hub para {Username}. Posible desconexión.", username);
-                // No detenemos el timer, el cliente podría reconectarse
-            }
-            catch (OperationCanceledException ex)
-            {
-                // ⭐ NUEVO: Operación cancelada (timeout, etc.)
-                _logger.LogWarning(ex, "[SignalR] Operación cancelada para {Username}", username);
-                // No detenemos el timer, reintentar en el próximo ciclo
+                _logger.LogDebug("[SignalR] ✅ Datos enviados correctamente a {Username}", username);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[SignalR] Error enviando datos para {Username}", username);
+                _logger.LogError(ex, "[SignalR] ❌ Error enviando datos para {Username}", username);
 
-                // ⭐ MEJORADO: Solo detener timer en errores críticos
                 if (EsErrorCritico(ex))
                 {
-                    _logger.LogError("[SignalR] Error crítico detectado. Deteniendo timer para {Username}", username);
+                    _logger.LogCritical("[SignalR] 🚨 Error crítico - Deteniendo timer para {Username}", username);
                     DetenerTimer(username);
                 }
             }
             finally
             {
-                // ⭐ CRÍTICO: Siempre liberar el scope para evitar memory leaks
+                // ✅ CRÍTICO: Disponer en orden inverso
+                readOnlyUow?.Dispose();
                 scope?.Dispose();
             }
         }
