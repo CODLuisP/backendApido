@@ -16,16 +16,21 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly IDbConnection _defaultConnection;
         private readonly IDbTransaction _defaultTransaction;
 
-        public PasajerosRepository(IDbConnection defaultConnection, IDbTransaction defaultTransaction)
+        private readonly IDbConnection _doConnection;
+        private readonly IDbTransaction _doTransaction;
+
+        public PasajerosRepository(IDbConnection defaultConnection, IDbTransaction defaultTransaction, IDbConnection doConnection, IDbTransaction doTransaction)
         {
             _defaultConnection = defaultConnection;
             _defaultTransaction = defaultTransaction;
+            _doConnection = doConnection;
+            _doTransaction = doTransaction;
         }
 
         public async Task<IEnumerable<CodNomPas>> GetCodigo()
         {
             const string sql = "SELECT codcliente, apellidos FROM cliente WHERE estadocuenta = 'A'";
-            return await _defaultConnection.QueryAsync<CodNomPas>(sql, transaction: _defaultTransaction);
+            return await _doConnection.QueryAsync<CodNomPas>(sql, transaction: _doTransaction);
         }
 
         public async Task<IEnumerable<Pasajero>> GetPasajero(int codcliente)
@@ -40,10 +45,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 ORDER BY l.codlugar DESC 
                 LIMIT 1";
 
-            return await _defaultConnection.QueryAsync<Pasajero>(
+            return await _doConnection.QueryAsync<Pasajero>(
                 sql,
                 new { Codcliente = codcliente },
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
         }
 
         public async Task<IEnumerable<Tarifa>> GetTarifa(string codusuario)
@@ -54,10 +59,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 ? "jperiche"
                 : codusuario;
 
-            return await _defaultConnection.QueryAsync<Tarifa>(
+            return await _doConnection.QueryAsync<Tarifa>(
                 sql,
                 new { Codusuario = targetUser },
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
         }
 
         public async Task<string> InsertPasajero(Pasajero pasajero, string codusuario)
@@ -98,9 +103,9 @@ namespace VelsatBackendAPI.Data.Repositories
             };
 
             // ✅ Ejecutar las 3 queries - NO hacer commit aquí
-            await _defaultConnection.ExecuteAsync(sqlUno, parametersUno, transaction: _defaultTransaction);
+            await _doConnection.ExecuteAsync(sqlUno, parametersUno, transaction: _doTransaction);
             await _defaultConnection.ExecuteAsync(sqlDos, parametersDos, transaction: _defaultTransaction);
-            await _defaultConnection.ExecuteAsync(sqlTres, parametersTres, transaction: _defaultTransaction);
+            await _doConnection.ExecuteAsync(sqlTres, parametersTres, transaction: _doTransaction);
 
             return "Success insertion";
         }
@@ -156,8 +161,8 @@ namespace VelsatBackendAPI.Data.Repositories
                     Codcli = codlugar
                 };
 
-                await _defaultConnection.ExecuteAsync(sqlUpdateCliente, parametersCliente, transaction: _defaultTransaction);
-                await _defaultConnection.ExecuteAsync(sqlLugarCliente, parametersLugarCliente, transaction: _defaultTransaction);
+                await _doConnection.ExecuteAsync(sqlUpdateCliente, parametersCliente, transaction: _doTransaction);
+                await _doConnection.ExecuteAsync(sqlLugarCliente, parametersLugarCliente, transaction: _doTransaction);
 
                 // Si NO existe, insertar nuevo registro
                 if (!usuarioExistente.HasValue)
@@ -200,10 +205,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 WHERE codcliente = @Codcliente";
 
             // ✅ NO hacer commit aquí
-            await _defaultConnection.ExecuteAsync(
+            await _doConnection.ExecuteAsync(
                 sql,
                 new { Codcliente = codcliente, Codelimina = codusuario, Fechaelim = fechaelim },
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
 
             return "Success delete";
         }
@@ -223,7 +228,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codlan = $"%{codlan}%" };
 
-            var pasajeros = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var pasajeros = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             List<Usuario> listaPasajeros = pasajeros.Select(row => new Usuario
             {
@@ -273,8 +278,8 @@ namespace VelsatBackendAPI.Data.Repositories
             };
 
             // ✅ NO hacer commit aquí
-            await _defaultConnection.ExecuteAsync(sqlUno, parametersUno, transaction: _defaultTransaction);
-            await _defaultConnection.ExecuteAsync(sqlTres, parametersTres, transaction: _defaultTransaction);
+            await _doConnection.ExecuteAsync(sqlUno, parametersUno, transaction: _doTransaction);
+            await _doConnection.ExecuteAsync(sqlTres, parametersTres, transaction: _doTransaction);
 
             return "Success insertion";
         }

@@ -12,7 +12,8 @@ namespace VelsatBackendAPI.Model
         public string DeviceId { get; set; }
         public double LastValidLatitude { get; set; }
         public double LastValidLongitude { get; set; }
-        public double LastValidHeading { get; set; }      
+        public double LastValidHeading { get; set; }
+        public double LastGPSTimestamp { get; set; }
         public double LastValidSpeed { get; set; }
         public double LastOdometerKM { get; set; }
         public double Odometerini { get; set; }

@@ -11,13 +11,13 @@ namespace VelsatBackendAPI.Data.Repositories
 {
     public class RecorridoRepository : IRecorridoRepository
     {
-        private readonly IDbConnection _defaultConnection;
-        private readonly IDbTransaction _defaultTransaction;
+        private readonly IDbConnection _doConnection;
+        private readonly IDbTransaction _doTransaction;
 
-        public RecorridoRepository(IDbConnection defaultConnection, IDbTransaction defaultTransaction)
+        public RecorridoRepository(IDbConnection doConnection, IDbTransaction doTransaction)
         {
-            _defaultConnection = defaultConnection;
-            _defaultTransaction = defaultTransaction;
+            _doConnection = doConnection;
+            _doTransaction = doTransaction;
         }
 
         private (string fechaInicio, string fechaFin) RangoFechas(string fecha)
@@ -41,10 +41,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 Usuario = usuario
             };
 
-            var resultado = await _defaultConnection.QueryAsync<SelectedServicio>(
+            var resultado = await _doConnection.QueryAsync<SelectedServicio>(
                 sql,
                 parametros,
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
 
             return resultado.ToList();
         }
@@ -64,10 +64,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 Usuario = usuario
             };
 
-            var result = await _defaultConnection.QueryAsync<RecorridoServicio>(
+            var result = await _doConnection.QueryAsync<RecorridoServicio>(
                 sql,
                 parameters,
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
 
             return result.First();
         }
@@ -79,10 +79,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 FROM subservicio 
                 WHERE codservicio = @Codservicio AND codcliente <> '4175'";
 
-            var codClientes = await _defaultConnection.QueryAsync<string>(
+            var codClientes = await _doConnection.QueryAsync<string>(
                 sqlClientes,
                 new { Codservicio = codservicio },
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
 
             if (!codClientes.Any())
                 return new List<PasajeroServicio>();
@@ -94,10 +94,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parametros = new { Codclientes = codClientes.Distinct().ToList() };
 
-            var pasajerosDB = await _defaultConnection.QueryAsync<(string codlan, string apellidos)>(
+            var pasajerosDB = await _doConnection.QueryAsync<(string codlan, string apellidos)>(
                 sqlPasajeros,
                 parametros,
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
 
             var resultado = pasajerosDB
                 .Select((p, index) => new PasajeroServicio

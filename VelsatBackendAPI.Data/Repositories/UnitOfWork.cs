@@ -10,12 +10,16 @@ namespace VelsatBackendAPI.Data.Repositories
     {
         private readonly string _defaultConnectionString;
         private readonly string _secondConnectionString;
+        private readonly string _doConnectionString;
 
         private MySqlConnection _defaultConnection;
         private MySqlTransaction _defaultTransaction;
 
         private MySqlConnection _secondConnection;
         private MySqlTransaction _secondTransaction;
+
+        private MySqlConnection _doConnection;
+        private MySqlTransaction _doTransaction;
 
         // ✅ Usar Lazy<T> para thread-safety sin locks manuales
         private readonly Lazy<IUserRepository> _userRepository;
@@ -41,6 +45,9 @@ namespace VelsatBackendAPI.Data.Repositories
                 ?? throw new ArgumentNullException(nameof(configuration.DefaultConnection));
             _secondConnectionString = configuration.SecondConnection
                 ?? throw new ArgumentNullException(nameof(configuration.SecondConnection));
+            _doConnectionString = configuration.DOConnection
+            ?? throw new ArgumentNullException(nameof(configuration.DOConnection));
+
 
             // ✅ Inicializar Lazy para cada repositorio
             _userRepository = new Lazy<IUserRepository>(() =>
@@ -53,22 +60,22 @@ namespace VelsatBackendAPI.Data.Repositories
                 new ServidorRepository(DefaultConnection, _defaultTransaction));
 
             _turnosRepository = new Lazy<ITurnosRepository>(() =>
-                new TurnosRepository(DefaultConnection, _defaultTransaction));
+                new TurnosRepository(DOConnection, _doTransaction));
 
             _pasajerosRepository = new Lazy<IPasajerosRepository>(() =>
-                new PasajerosRepository(DefaultConnection, _defaultTransaction));
+                new PasajerosRepository(DefaultConnection, _defaultTransaction, DOConnection, _doTransaction));
 
             _preplanRepository = new Lazy<IPreplanRepository>(() =>
-                new PreplanRepository(DefaultConnection, _defaultTransaction));
+                new PreplanRepository(DefaultConnection, _defaultTransaction, DOConnection, _doTransaction));
 
             _alertaRepository = new Lazy<IAlertaRepository>(() =>
                 new AlertaRepository(DefaultConnection, _defaultTransaction));
 
             _recorridoRepository = new Lazy<IRecorridoRepository>(() =>
-                new RecorridoRepository(DefaultConnection, _defaultTransaction));
+                new RecorridoRepository(DOConnection, _doTransaction));
 
             _gacelaRepository = new Lazy<IGacelaRepository>(() =>
-                new GacelaRepository(DefaultConnection, _defaultTransaction));
+                new GacelaRepository(DefaultConnection, _defaultTransaction, DOConnection, _doTransaction));
 
             // Repositorios con ambas conexiones
             _historicosRepository = new Lazy<IHistoricosRepository>(() =>
@@ -78,7 +85,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 new KilometrosRepository(DefaultConnection, SecondConnection, _defaultTransaction, _secondTransaction));
 
             _kmServicioRepository = new Lazy<IKmServicioRepository>(() =>
-                new KmServicioRepository(DefaultConnection, SecondConnection, _defaultTransaction, _secondTransaction));
+                new KmServicioRepository(DefaultConnection, SecondConnection, _defaultTransaction, _secondTransaction, DOConnection, _doTransaction));
         }
 
         // ✅ Conexión principal con inicialización thread-safe y retry logic
@@ -138,6 +145,35 @@ namespace VelsatBackendAPI.Data.Repositories
                     }
                 }
                 return _secondConnection;
+            }
+        }
+
+        // ✅ NUEVA: Propiedad para conexión DO
+        private MySqlConnection DOConnection
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+
+                if (_doConnection == null)
+                {
+                    lock (_lockObject)
+                    {
+                        if (_doConnection == null)
+                        {
+                            _doConnection = OpenConnectionWithRetry(
+                                _doConnectionString,
+                                "DO (con transacción)");
+
+                            // ✅ Iniciar transacción en DO
+                            _doTransaction = _doConnection.BeginTransaction();
+
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[UnitOfWork] Transacción DO iniciada");
+                        }
+                    }
+                }
+                return _doConnection;
             }
         }
 
@@ -350,22 +386,30 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 try
                 {
-                    // Commit de las transacciones
+                    // ✅ Commit de las 3 transacciones
                     _defaultTransaction?.Commit();
                     _secondTransaction?.Commit();
+                    _doTransaction?.Commit(); // ✅ NUEVA
 
                     _committed = true;
+
+                    System.Diagnostics.Debug.WriteLine(
+                        "[UnitOfWork] ✅ Todas las transacciones confirmadas");
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Rollback en caso de error
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[UnitOfWork] ❌ Error en SaveChanges: {ex.Message}");
+
+                    // ✅ Rollback de las 3 transacciones en caso de error
                     try { _defaultTransaction?.Rollback(); } catch { }
                     try { _secondTransaction?.Rollback(); } catch { }
+                    try { _doTransaction?.Rollback(); } catch { } // ✅ NUEVA
+
                     throw;
                 }
                 finally
                 {
-                    // ✅ CRÍTICO: Liberar TODO inmediatamente después de commit
                     DisposeTransactionsAndConnections();
                 }
             }
@@ -387,22 +431,23 @@ namespace VelsatBackendAPI.Data.Repositories
                 _secondTransaction = null;
             }
 
-            // ✅ Cerrar Y disponer conexiones inmediatamente
+            if (_doTransaction != null) // ✅ NUEVA
+            {
+                _doTransaction.Dispose();
+                _doTransaction = null;
+            }
+
+            // Cerrar y disponer conexiones
             if (_defaultConnection != null)
             {
                 try
                 {
                     if (_defaultConnection.State == ConnectionState.Open)
-                    {
                         _defaultConnection.Close();
-                    }
                     _defaultConnection.Dispose();
                 }
                 catch { }
-                finally
-                {
-                    _defaultConnection = null;
-                }
+                finally { _defaultConnection = null; }
             }
 
             if (_secondConnection != null)
@@ -410,20 +455,24 @@ namespace VelsatBackendAPI.Data.Repositories
                 try
                 {
                     if (_secondConnection.State == ConnectionState.Open)
-                    {
                         _secondConnection.Close();
-                    }
                     _secondConnection.Dispose();
                 }
                 catch { }
-                finally
-                {
-                    _secondConnection = null;
-                }
+                finally { _secondConnection = null; }
             }
 
-            // ✅ NUEVO: Sugerir al GC que limpie inmediatamente (opcional, solo si hay problemas graves)
-            // GC.Collect(0, GCCollectionMode.Optimized);
+            if (_doConnection != null) // ✅ NUEVA
+            {
+                try
+                {
+                    if (_doConnection.State == ConnectionState.Open)
+                        _doConnection.Close();
+                    _doConnection.Dispose();
+                }
+                catch { }
+                finally { _doConnection = null; }
+            }
         }
 
         // ✅ Dispose optimizado
@@ -437,9 +486,7 @@ namespace VelsatBackendAPI.Data.Repositories
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed)
-            {
-                return; // Ya fue liberado
-            }
+                return;
 
             if (disposing)
             {
@@ -447,7 +494,6 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     try
                     {
-                        // ✅ MEJORADO: Rollback solo si la transacción está activa
                         if (!_committed)
                         {
                             try
@@ -469,17 +515,23 @@ namespace VelsatBackendAPI.Data.Repositories
                             {
                                 System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Rollback second error: {ex.Message}");
                             }
+
+                            try // ✅ NUEVA
+                            {
+                                if (_doTransaction != null && _doTransaction.Connection != null)
+                                    _doTransaction.Rollback();
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Rollback DO error: {ex.Message}");
+                            }
                         }
 
-                        // Liberar todo
                         DisposeTransactionsAndConnections();
-
-                        // Disponer repositorios si implementan IDisposable
                         DisposeRepositories();
                     }
                     catch (Exception ex)
                     {
-                        // Log el error pero no lanzar excepciones en Dispose
                         System.Diagnostics.Debug.WriteLine($"[UnitOfWork] Error disposing: {ex.Message}");
                     }
                     finally

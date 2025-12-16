@@ -89,7 +89,7 @@ namespace VelsatBackendAPI.Data.Services
             }
 
             const string sqlGetDevices = @"
-                SELECT deviceID, lastValidLatitude, lastValidLongitude, lastOdometerKM, 
+                SELECT deviceID, lastGPSTimestamp, lastValidLatitude, lastValidLongitude, lastOdometerKM, 
                        odometerini, kmini, description, direccion, codgeoact, 
                        lastValidHeading, lastValidSpeed, rutaact, servicio 
                 FROM device 
@@ -168,8 +168,7 @@ namespace VelsatBackendAPI.Data.Services
             }
 
             const string sqlGetSimplifiedDevices = @"
-                SELECT DISTINCT d.deviceID, d.rutaact, d.lastValidSpeed, 
-                       d.lastValidLatitude, d.lastValidLongitude 
+                SELECT DISTINCT d.deviceID, d.rutaact, d.lastValidSpeed, d.lastValidLatitude, d.lastValidLongitude 
                 FROM device d 
                 WHERE d.deviceID IN @DeviceIds";
 

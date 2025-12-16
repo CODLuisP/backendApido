@@ -1,6 +1,7 @@
 ﻿using MySql.Data.MySqlClient;
 using System;
 using System.Data;
+using System.Data.Common;
 using VelsatBackendAPI.Data.Services;
 
 namespace VelsatBackendAPI.Data.Repositories
@@ -13,9 +14,11 @@ namespace VelsatBackendAPI.Data.Repositories
     {
         private readonly string _defaultConnectionString;
         private readonly string _secondConnectionString;
+        private readonly string _doConnectionString;
 
         private MySqlConnection _defaultConnection;
         private MySqlConnection _secondConnection;
+        private MySqlConnection _doConnection;
 
         private readonly Lazy<IDatosCargainicialService> _datosCargaInicialService;
         private readonly Lazy<IServidorRepository> _servidorRepository;
@@ -40,18 +43,22 @@ namespace VelsatBackendAPI.Data.Repositories
             _secondConnectionString = configuration.SecondConnection // ✅ NUEVO
                 ?? throw new ArgumentNullException(nameof(configuration.SecondConnection));
 
+            _doConnectionString = configuration.DOConnection // ✅ NUEVA
+           ?? throw new ArgumentNullException(nameof(configuration.DOConnection));
+
+
             // ✅ Inicializar servicio SIN transacción (segundo parámetro = null)
             _datosCargaInicialService = new Lazy<IDatosCargainicialService>(() => new DatosCargainicialService(DefaultConnection, null));
             _servidorRepository = new Lazy<IServidorRepository>(() => new ServidorRepository(DefaultConnection, null));
             _historicosRepository = new Lazy<IHistoricosRepository>(() => new HistoricosRepository(DefaultConnection, SecondConnection, null, null));
             _kilometrosRepository = new Lazy<IKilometrosRepository>(() => new KilometrosRepository(DefaultConnection, SecondConnection, null, null));
-            _kmServicioRepository = new Lazy<IKmServicioRepository>(() => new KmServicioRepository(DefaultConnection, SecondConnection, null, null));
-            _recorridoRepository = new Lazy<IRecorridoRepository>(() => new RecorridoRepository(DefaultConnection, null));
+            _kmServicioRepository = new Lazy<IKmServicioRepository>(() => new KmServicioRepository(DefaultConnection, SecondConnection, null, null, DOConnection, null));
+            _recorridoRepository = new Lazy<IRecorridoRepository>(() => new RecorridoRepository(DOConnection, null));
             _userRepository = new Lazy<IUserRepository>(() => new UserRepository(DefaultConnection, null));
-            _gacelaRepository = new Lazy<IGacelaRepository>(() => new GacelaRepository(DefaultConnection, null));
-            _pasajeroRepository = new Lazy<IPasajerosRepository>(() => new PasajerosRepository(DefaultConnection, null));
-            _preplanRepository = new Lazy<IPreplanRepository>(() => new PreplanRepository(DefaultConnection, null));
-            _turnosRepository = new Lazy<ITurnosRepository>(() => new TurnosRepository(DefaultConnection, null));
+            _gacelaRepository = new Lazy<IGacelaRepository>(() => new GacelaRepository(DefaultConnection, null, DOConnection, null));
+            _pasajeroRepository = new Lazy<IPasajerosRepository>(() => new PasajerosRepository(DefaultConnection, null, DOConnection, null));
+            _preplanRepository = new Lazy<IPreplanRepository>(() => new PreplanRepository(DefaultConnection, null, DOConnection, null));
+            _turnosRepository = new Lazy<ITurnosRepository>(() => new TurnosRepository(DOConnection, null));
         }
 
         private MySqlConnection DefaultConnection
@@ -100,6 +107,29 @@ namespace VelsatBackendAPI.Data.Repositories
                     }
                 }
                 return _secondConnection;
+            }
+        }
+
+        private MySqlConnection DOConnection
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+
+                if (_doConnection == null || _doConnection.State != ConnectionState.Open)
+                {
+                    lock (_lockObject)
+                    {
+                        if (_doConnection == null || _doConnection.State != ConnectionState.Open)
+                        {
+                            _doConnection = OpenConnectionWithRetry(
+                                _doConnectionString,
+                                "DO");
+                        }
+                    }
+                }
+                return _doConnection;
             }
         }
 
@@ -324,6 +354,17 @@ namespace VelsatBackendAPI.Data.Repositories
                             $"[ReadOnlyUnitOfWork] Conexión SECOND {connectionId} cerrada");
                     }
 
+                    // ✅ Cerrar conexión DO
+                    if (_doConnection != null)
+                    {
+                        var connectionId = _doConnection.ServerThread;
+                        if (_doConnection.State == ConnectionState.Open)
+                            _doConnection.Close();
+                        _doConnection.Dispose();
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[ReadOnlyUnitOfWork] Conexión DO {connectionId} cerrada");
+                    }
+
                     // Disponer servicios si fueron creados
                     if (_datosCargaInicialService.IsValueCreated &&
                         _datosCargaInicialService.Value is IDisposable disposable)
@@ -340,6 +381,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     _defaultConnection = null;
                     _secondConnection = null;
+                    _doConnection = null;
                     _disposed = true;
                 }
             }

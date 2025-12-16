@@ -75,8 +75,7 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Cell(12, 5).Value = "VELOCIDAD";
                 worksheet.Cell(12, 6).Value = "LATITUD";
                 worksheet.Cell(12, 7).Value = "LONGITUD";
-                worksheet.Cell(12, 8).Value = "ODÓMETRO";
-                worksheet.Cell(12, 9).Value = "UBICACIÓN";
+                worksheet.Cell(12, 8).Value = "UBICACIÓN";
 
                 bool colorAzul = true;
 
@@ -130,8 +129,8 @@ namespace VelsatBackendAPI.Controllers
 
                 worksheet.Range("B10:E10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
                 worksheet.Range("B10:E10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
-                worksheet.Range("F10:I10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
-                worksheet.Range("F10:I10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+                worksheet.Range("F10:H10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("F10:H10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 var rangoCeldas = worksheet.Range("B4:H7");
                 rangoCeldas.Merge();
@@ -174,7 +173,7 @@ namespace VelsatBackendAPI.Controllers
 
 
                 worksheet.Row(12).Height = 40;
-                for (int i = 2; i <= 9; i++)
+                for (int i = 2; i <= 8; i++)
                 {
                     worksheet.Cell(12, i).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
                     worksheet.Cell(12, i).Style.Font.Bold = true;
@@ -191,7 +190,7 @@ namespace VelsatBackendAPI.Controllers
                     XLColor filaColor = XLColor.FromHtml(filaColorHex);
 
 
-                    for (int j = 2; j <= 9; j++)
+                    for (int j = 2; j <= 8; j++)
                     {
                         worksheet.Cell(i + 13, j).Value =
                             j == 2 ? (i + 1) :
@@ -200,14 +199,13 @@ namespace VelsatBackendAPI.Controllers
                             (j == 5 ? gps.SpeedKPH.ToString("0.0") + " KM/H" :
                             (j == 6 ? Math.Round(gps.Latitude, 5) :
                             (j == 7 ? Math.Round(gps.Longitude, 5) :
-                            (j == 8 ? Math.Round(gps.OdometerKM, 2) :
-                            gps.Address))))));
+                            gps.Address)))));
 
                         worksheet.Cell(i + 13, j).Style.Fill.BackgroundColor = filaColor;
                         worksheet.Cell(i + 13, j).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                         worksheet.Cell(i + 13, j).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-                        if (j == 9)
+                        if (j == 8)
                         {
                             worksheet.Cell(i + 13, j).Style.Alignment.WrapText = true;
                         }
@@ -225,8 +223,7 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Column(5).Width = 18;
                 worksheet.Column(6).Width = 18;
                 worksheet.Column(7).Width = 18;
-                worksheet.Column(8).Width = 18;
-                worksheet.Column(9).Width = 65;
+                worksheet.Column(8).Width = 65;
 
                 var tableRange = worksheet.Range(worksheet.Cell(12, 2), worksheet.LastCellUsed(XLCellsUsedOptions.All));
 

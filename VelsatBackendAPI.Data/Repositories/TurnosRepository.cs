@@ -9,13 +9,13 @@ namespace VelsatBackendAPI.Data.Repositories
 {
     public class TurnosRepository : ITurnosRepository
     {
-        private readonly IDbConnection _defaultConnection;
-        private readonly IDbTransaction _defaultTransaction;
+        private readonly IDbConnection _doConnection;
+        private readonly IDbTransaction _doTransaction;
 
-        public TurnosRepository(IDbConnection defaultConnection, IDbTransaction defaultTransaction)
+        public TurnosRepository(IDbConnection doConnection, IDbTransaction doTransaction)
         {
-            _defaultConnection = defaultConnection;
-            _defaultTransaction = defaultTransaction;
+            _doConnection = doConnection;
+            _doTransaction = doTransaction;
         }
 
         public async Task<IEnumerable<TurnoAvianca>> GetTurnos(string accountID)
@@ -25,10 +25,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 WHERE usuario = @AccountID AND eliminado = '0' 
                 ORDER BY area, subarea, codrl";
 
-            return await _defaultConnection.QueryAsync<TurnoAvianca>(
+            return await _doConnection.QueryAsync<TurnoAvianca>(
                 sql,
                 new { AccountID = accountID },
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
         }
 
         public async Task<string> InsertTurno(TurnoAvianca turno, string accountID)
@@ -49,7 +49,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Usuario = accountID
             };
 
-            await _defaultConnection.ExecuteAsync(sql, parameters, _defaultTransaction);
+            await _doConnection.ExecuteAsync(sql, parameters, _doTransaction);
 
             return "Success insertion";
         }
@@ -73,7 +73,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Programa = turno.Programa
             };
 
-            await _defaultConnection.ExecuteAsync(sql, parameters, _defaultTransaction);
+            await _doConnection.ExecuteAsync(sql, parameters, _doTransaction);
 
             return "Success update";
         }
@@ -82,7 +82,7 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             const string sql = "UPDATE turnoavianca SET eliminado = '1' WHERE codigo = @Codigo";
 
-            await _defaultConnection.ExecuteAsync(sql, new { Codigo = codigo }, _defaultTransaction);
+            await _doConnection.ExecuteAsync(sql, new { Codigo = codigo }, _doTransaction);
 
             return "Success delete";
         }
@@ -95,10 +95,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 GROUP BY {campo} 
                 ORDER BY {campo}";
 
-            return await _defaultConnection.QueryAsync<string>(
+            return await _doConnection.QueryAsync<string>(
                 sql,
                 new { AccountID = accountID },
-                transaction: _defaultTransaction);
+                transaction: _doTransaction);
         }
     }
 }

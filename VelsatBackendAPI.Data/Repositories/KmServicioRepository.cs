@@ -17,16 +17,22 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly IDbTransaction _defaultTransaction;
         private readonly IDbTransaction _secondTransaction;
 
+        private readonly IDbConnection _doConnection;
+        private readonly IDbTransaction _doTransaction;
+
         public KmServicioRepository(
             IDbConnection defaultConnection,
             IDbConnection secondConnection,
             IDbTransaction defaultTransaction,
-            IDbTransaction secondTransaction)
+            IDbTransaction secondTransaction,
+            IDbConnection doConnection, IDbTransaction doTransaction)
         {
             _defaultConnection = defaultConnection;
             _secondConnection = secondConnection;
             _defaultTransaction = defaultTransaction;
             _secondTransaction = secondTransaction;
+            _doConnection = doConnection;
+            _doTransaction = doTransaction;
         }
 
         public async Task<List<KilometrajeServicio>> GetKmServicios(string fechaIngresada)
@@ -44,10 +50,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parametros = new { Fechaini = fechaInicio, Fechafin = fechaFin };
 
-            var servicios = (await _defaultConnection.QueryAsync<KilometrajeServicio>(
+            var servicios = (await _doConnection.QueryAsync<KilometrajeServicio>(
                 sql,
                 parametros,
-                transaction: _defaultTransaction)).ToList(); // ✅ Ya tiene transaction
+                transaction: _doTransaction)).ToList(); // ✅ Ya tiene transaction
 
             foreach (var servicio in servicios)
             {
@@ -198,10 +204,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
             const string sql = "SELECT apellidos FROM taxi WHERE estado = 'A' AND codtaxi = @Codtaxi";
 
-            var result = await _defaultConnection.QueryFirstOrDefaultAsync<string>(
+            var result = await _doConnection.QueryFirstOrDefaultAsync<string>(
                 sql,
                 new { Codtaxi = codtaxiInt },
-                transaction: _defaultTransaction); // ✅ AGREGAR ESTO
+                transaction: _doTransaction); // ✅ AGREGAR ESTO
 
             return result;
         }

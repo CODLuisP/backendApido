@@ -28,12 +28,14 @@ namespace VelsatBackendAPI.Data.Repositories
 {
     public class PreplanRepository : IPreplanRepository
     {
-        private readonly IDbConnection _defaultConnection; IDbTransaction _defaultTransaction;
+        private readonly IDbConnection _defaultConnection; IDbTransaction _defaultTransaction; IDbConnection _doConnection; IDbTransaction _doTransaction;
 
-        public PreplanRepository(IDbConnection defaultconnection, IDbTransaction defaulttransaction)
+        public PreplanRepository(IDbConnection defaultconnection, IDbTransaction defaulttransaction, IDbConnection doConnection, IDbTransaction doTransaction)
         {
             _defaultConnection = defaultconnection;
             _defaultTransaction = defaulttransaction;
+            _doConnection = doConnection;
+            _doTransaction = doTransaction;
         }
 
         private string SetEmpresa(string empresa)
@@ -77,7 +79,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Empresa = empresas, Usuario = usuario };
 
-            var pedidos = (await _defaultConnection.QueryAsync<Pedido>(sql, parameters, transaction: _defaultTransaction)).ToList();
+            var pedidos = (await _doConnection.QueryAsync<Pedido>(sql, parameters, transaction: _doTransaction)).ToList();
 
             int cont = 1;
 
@@ -141,7 +143,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codlugar = codlugar
             };
 
-            var results = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (!results.Any())
             {
@@ -175,7 +177,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codcli = codcli
             };
 
-            var results = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (!results.Any())
             {
@@ -214,7 +216,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codtaxi = codtaxiInt
             };
 
-            var results = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (!results.Any())
             {
@@ -254,7 +256,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codlan = codlanInt,
             };
 
-            var result = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _defaultTransaction);
+            var result = await _doConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _doTransaction);
 
             if (result == null)
             {
@@ -299,7 +301,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     var consultaCliente = @"SELECT apellidos FROM cliente WHERE codlugar = @CodLugar";
                     var parametrosCliente = new { CodLugar = item.CodigoOracle };
 
-                    var nombreCliente = await _defaultConnection.QueryFirstOrDefaultAsync<string>(consultaCliente, parametrosCliente, transaction: _defaultTransaction);
+                    var nombreCliente = await _doConnection.QueryFirstOrDefaultAsync<string>(consultaCliente, parametrosCliente, transaction: _doTransaction);
                     Console.WriteLine($"[DEBUG] Nombre cliente obtenido: {nombreCliente ?? "NULL"}");
 
                     if (string.IsNullOrWhiteSpace(nombreCliente))
@@ -367,7 +369,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
                         var consulta = @"SELECT * FROM turnoavianca WHERE subarea = @Subarea AND codrl = @CodRol AND empresa = @Empresa AND usuario = @Usuario AND eliminado = '0'";
 
-                        var turnosObtenidos = await _defaultConnection.QueryAsync<TurnoAvianca>(consulta, parametros, transaction: _defaultTransaction);
+                        var turnosObtenidos = await _doConnection.QueryAsync<TurnoAvianca>(consulta, parametros, transaction: _doTransaction);
                         Console.WriteLine($"[DEBUG] Turnos encontrados: {turnosObtenidos?.Count() ?? 0}");
 
                         if (!turnosObtenidos.Any())
@@ -417,7 +419,7 @@ namespace VelsatBackendAPI.Data.Repositories
                             Tipo = turno.Tipo,
                         };
 
-                        var preplanObtenido = await _defaultConnection.QueryFirstOrDefaultAsync<PreTurno>(consultaPreplan, parametrosPreplan, transaction: _defaultTransaction);
+                        var preplanObtenido = await _doConnection.QueryFirstOrDefaultAsync<PreTurno>(consultaPreplan, parametrosPreplan, transaction: _doTransaction);
                         Console.WriteLine($"[DEBUG] Preplan obtenido: {(preplanObtenido != null ? $"Codigo: {preplanObtenido.Codigo}, Orden: {preplanObtenido.Orden}, Numero: {preplanObtenido.Numero}" : "NULL")}");
 
                         // Valores por defecto para clientes nuevos
@@ -501,7 +503,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 foreach (var item in pedido)
                 {
                     Console.WriteLine($"[DEBUG] Insertando pedido {++insertedCount}/{pedido.Count}: {item.Codcliente} - {item.Fecha}");
-                    await _defaultConnection.ExecuteAsync(consultaPedido, item, transaction: _defaultTransaction);
+                    await _doConnection.ExecuteAsync(consultaPedido, item, transaction: _doTransaction);
                 }
 
                 Console.WriteLine($"[DEBUG] Transacción confirmada exitosamente");
@@ -525,7 +527,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parametros = new { Tipo = tipo, Subarea = subarea, CodRol = codrl, Empresa = empresa, Usuario = usuario };
 
-            return await _defaultConnection.QueryFirstOrDefaultAsync<string>(sql, parametros, transaction: _defaultTransaction);
+            return await _doConnection.QueryFirstOrDefaultAsync<string>(sql, parametros, transaction: _doTransaction);
         }
 
 
@@ -574,7 +576,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Usuario = usuario
             };
 
-            int rowsAffected = await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            int rowsAffected = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
             return rowsAffected > 0 ? 1 : 0;
         }
@@ -589,7 +591,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Usuario = usuario
             };
 
-            int rowsAffected = await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            int rowsAffected = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
             return rowsAffected > 0 ? 1 : 0;
         }
@@ -611,14 +613,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 Fecha = fecha
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<List<LugarCliente>> GetLugares(string coddcliente)
         {
             string sql = "SELECT * FROM lugarcliente WHERE codcli = @Codcliente";
 
-            var lugares = await _defaultConnection.QueryAsync<LugarCliente>(sql, new { Codcliente = coddcliente }, transaction: _defaultTransaction);
+            var lugares = await _doConnection.QueryAsync<LugarCliente>(sql, new { Codcliente = coddcliente }, transaction: _doTransaction);
 
             return lugares.ToList();
         }
@@ -633,14 +635,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codigo = codigo
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<List<Usuario>> GetConductores(string usuario)
         {
             string sql = @"SELECT codtaxi, nombres, apellidos FROM taxi WHERE codusuario = @Usuario and estado = 'A' and habilitado = '1'";
 
-            var conductores = await _defaultConnection.QueryAsync<dynamic>(sql, new { Usuario = usuario }, transaction: _defaultTransaction);
+            var conductores = await _doConnection.QueryAsync<dynamic>(sql, new { Usuario = usuario }, transaction: _doTransaction);
 
             var listaConductores = new List<Usuario>();
 
@@ -957,7 +959,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codigo = codigo
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         private async Task<Servicio?> GrabarServicios(Servicio su, string usuario)
@@ -1078,7 +1080,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Observacion = pedido.Observacion
             };
 
-            int filasAfectadas = await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            int filasAfectadas = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
             return filasAfectadas;
         }
@@ -1089,7 +1091,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codlan = pasajero.Codlan };
 
-            var result = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var result = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (!result.Any())
             {
@@ -1133,11 +1135,11 @@ namespace VelsatBackendAPI.Data.Repositories
                 NumeroMovil = servicio.Numero
             };
 
-            await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
             string sqlSelect = "SELECT codservicio FROM servicio ORDER BY codservicio DESC LIMIT 1";
 
-            var result = await _defaultConnection.QueryFirstOrDefaultAsync<Servicio>(sqlSelect, transaction: _defaultTransaction);
+            var result = await _doConnection.QueryFirstOrDefaultAsync<Servicio>(sqlSelect, transaction: _doTransaction);
 
             if (result == null)
             {
@@ -1162,7 +1164,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codcliente = codclienteInt,
             };
 
-            var result = await _defaultConnection.QueryFirstOrDefaultAsync<dynamic>(sql, parameters, transaction: _defaultTransaction);
+            var result = await _doConnection.QueryFirstOrDefaultAsync<dynamic>(sql, parameters, transaction: _doTransaction);
 
             if (result == null)
             {
@@ -1197,7 +1199,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Usuario = usu, Fecini = fecini, Fecfin = fecfin, Empresa = empresa };
 
-            var results = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             var listaPedidos = results.Select(row => new Pedido
             {
@@ -1303,7 +1305,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codcliente = owner.Codigo };
 
-            var results = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (!results.Any())
             {
@@ -1337,7 +1339,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Fecini = fechaini, Fecfin = fechafin, Usuario = usu };
 
-            var results = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (results == null)
             {
@@ -1423,7 +1425,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Palabra = $"%{palabra}%"}; // ✅ Aquí se añade el %
 
-            var pasajeros = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var pasajeros = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             List<Usuario> listaPasajeros = pasajeros.Select(row => new Usuario
             {
@@ -1461,7 +1463,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codcliente = codcliente, Usuario = usuario, Fechaini = fechaini, Fechafin = fechafin };
 
-            var pasajeros = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var pasajeros = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             List<Servicio> listaPasajerosOb = pasajeros.Select(row => new Servicio
             {
@@ -1561,7 +1563,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<int> AsignarServicio(Servicio servicio)
         {
-            string sql = @"Update servicio set unidad = @Unidad, codconductor = @Codconductor, fechainifin = @Fechainifin , fecasignacion = @Fecasignacion where codservicio = @Codservicio";
+            string sql = @"Update servicio set unidad = @Unidad, codconductor = @Codconductor, fechainifin = @Fechainifin, fecasignacion = @Fecasignacion where codservicio = @Codservicio";
 
             var parameters = new
             {
@@ -1572,7 +1574,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codservicio = servicio.Codservicio
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         private async Task<int> ActualizarUnidadConductorPreplan(Servicio servicio)
@@ -1586,7 +1588,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codservicio = servicio.Codservicio
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         private async Task<Gps> DatosCoordenadas(string codunidad)
@@ -1665,7 +1667,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codservicio = servicio.Codservicio
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         //public async Task<Unidad> PlaybackAsync(Unidad carro, string fechaini, string fechafin)
@@ -1994,7 +1996,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codservicio = codservicio,
             };
 
-            var row = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var row = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (row == null || !row.Any())
             {
@@ -2073,7 +2075,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codservicio = servicio.Codservicio
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         private async Task<int> ActualizarOrden(Pedido pedido)
@@ -2086,7 +2088,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Orden = pedido.Orden
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<int> CancelarAsignacion(string codservicio)
@@ -2095,7 +2097,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codservicio = codservicio };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
         }
 
@@ -2118,7 +2120,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codservicio = codservicio };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         private async Task<int> EliminarSubServicio(Pedido pedido)
@@ -2127,7 +2129,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codpedido = pedido.Codigo };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
 
@@ -2140,7 +2142,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codservicio = codservicio,
             };
 
-            var row = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var row = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (row == null || !row.Any())
             {
@@ -2216,7 +2218,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codigo = pedido.Codigo
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
 
@@ -2339,7 +2341,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Tipo = tipo
             };
 
-            var codservicios = (await _defaultConnection.QueryAsync<int>(subquery, subqueryParams, transaction: _defaultTransaction)).ToList();
+            var codservicios = (await _doConnection.QueryAsync<int>(subquery, subqueryParams, transaction: _doTransaction)).ToList();
 
             if (!codservicios.Any())
             {
@@ -2379,7 +2381,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var mainQueryParams = new { Codservicios = codservicios };
 
-            var results = (await _defaultConnection.QueryAsync(sqlQuery, mainQueryParams, transaction: _defaultTransaction)).ToList();
+            var results = (await _doConnection.QueryAsync(sqlQuery, mainQueryParams, transaction: _doTransaction)).ToList();
 
             if (results.Count == 0)
             {
@@ -2554,7 +2556,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codigo = code
             };
 
-            var results = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (!results.Any())
             {
@@ -2595,7 +2597,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Empresa = aerolinea
             };
 
-            var codservicios = (await _defaultConnection.QueryAsync<int>(subquery, subqueryParams, transaction: _defaultTransaction)).ToList();
+            var codservicios = (await _doConnection.QueryAsync<int>(subquery, subqueryParams, transaction: _doTransaction)).ToList();
 
             if (!codservicios.Any())
             {
@@ -2647,7 +2649,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var mainQueryParams = new { Codservicios = codservicios };
 
-            var results = (await _defaultConnection.QueryAsync(sqlQuery, mainQueryParams, transaction: _defaultTransaction)).ToList();
+            var results = (await _doConnection.QueryAsync(sqlQuery, mainQueryParams, transaction: _doTransaction)).ToList();
 
             if (results.Count == 0)
             {
@@ -2780,7 +2782,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Empresa = aerolinea
             };
 
-            var codservicios = (await _defaultConnection.QueryAsync<int>(subquery, subqueryParams, transaction: _defaultTransaction)).ToList();
+            var codservicios = (await _doConnection.QueryAsync<int>(subquery, subqueryParams, transaction: _doTransaction)).ToList();
 
             if (!codservicios.Any())
             {
@@ -2824,7 +2826,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var mainQueryParams = new { Codservicios = codservicios };
 
-            var results = (await _defaultConnection.QueryAsync(sqlQuery, mainQueryParams, transaction: _defaultTransaction)).ToList();
+            var results = (await _doConnection.QueryAsync(sqlQuery, mainQueryParams, transaction: _doTransaction)).ToList();
 
             if (results.Count == 0)
             {
@@ -2906,7 +2908,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Replanorden = pedido.Orden
             };
 
-            var result = await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            var result = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
             return result;
         }
 
@@ -2918,8 +2920,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Codservicio = codservicio, Fecha = fecha, Fecplan = fecplan };
 
-            var result = await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
-            var resultSubservicio = await _defaultConnection.ExecuteAsync(sqlSubservicio, parameters, transaction: _defaultTransaction);
+            var result = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            var resultSubservicio = await _doConnection.ExecuteAsync(sqlSubservicio, parameters, transaction: _doTransaction);
 
             return result + resultSubservicio;
         }
@@ -2928,11 +2930,11 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             string sql1 = "UPDATE servicio SET destino = @Newcoddestino WHERE codservicio = @Codservicio";
             var parameters1 = new { Codservicio = int.Parse(codservicio), Newcoddestino = newcoddestino };
-            var result1 = await _defaultConnection.ExecuteAsync(sql1, parameters1, transaction: _defaultTransaction);
+            var result1 = await _doConnection.ExecuteAsync(sql1, parameters1, transaction: _doTransaction);
 
             string sql2 = "UPDATE subservicio SET codcliente = @Newcoddestino, codubicli = @Newcodubicli WHERE codservicio = @Codservicio and orden = '0'";
             var parameters2 = new { Codservicio = codservicio, Newcoddestino = newcoddestino, Newcodubicli = newcodubicli };
-            var result2 = await _defaultConnection.ExecuteAsync(sql2, parameters2, transaction: _defaultTransaction);
+            var result2 = await _doConnection.ExecuteAsync(sql2, parameters2, transaction: _doTransaction);
 
             return result1 + result2;
         }
@@ -2943,7 +2945,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Palabra = $"%{palabra}%" }; // ✅ Aquí se añade el %
 
-            var pasajeros = await _defaultConnection.QueryAsync(sql, parameters, transaction: _defaultTransaction);
+            var pasajeros = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             List<Usuario> listaPasajeros = pasajeros.Select(row => new Usuario
             {
@@ -2970,7 +2972,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var parameters = new { Usuario = usuario };
 
-            var result = await _defaultConnection.ExecuteAsync(sql, parameters, _defaultTransaction);
+            var result = await _doConnection.ExecuteAsync(sql, parameters, _doTransaction);
 
             return result;
         }
@@ -3032,7 +3034,7 @@ namespace VelsatBackendAPI.Data.Repositories
            ORDER BY habilitado DESC, apellidos";
 
             var parameters = new { Codusuario = codusuario };
-            var conductores = await _defaultConnection.QueryAsync<Conductor>(sql, parameters, transaction: _defaultTransaction);
+            var conductores = await _doConnection.QueryAsync<Conductor>(sql, parameters, transaction: _doTransaction);
 
             return conductores.ToList();
         }
@@ -3182,7 +3184,7 @@ namespace VelsatBackendAPI.Data.Repositories
             };
 
             // Insertar en tabla taxi
-            await _defaultConnection.ExecuteAsync(sqlTaxi, parametersEdriver, transaction: _defaultTransaction);
+            await _doConnection.ExecuteAsync(sqlTaxi, parametersEdriver, transaction: _doTransaction);
 
             string sqlTotalServer = @"INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@Login, 'https://velsat.pe:2087','c')";
 
@@ -3202,7 +3204,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = @"SELECT codtaxi FROM taxi WHERE codusuario = @Codusuario ORDER BY codtaxi DESC LIMIT 1";
 
             var parameters = new { Codusuario = codusuario };
-            var codigo = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _defaultTransaction);
+            var codigo = await _doConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _doTransaction);
 
             if (codigo != null)
             {
@@ -3271,7 +3273,7 @@ WHERE codtaxi = @Codigo";
             };
 
             // Ejecutar primera actualización
-            int rowsAffected = await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            int rowsAffected = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
             // ✅ Buscar usuario existente
             var usuarioExistente = await BuscarTotalServerAsync(conductor);
@@ -3294,9 +3296,7 @@ WHERE codtaxi = @Codigo";
             else
             {
                 // ➕ CREAR nuevo registro
-                string sqlInsert = @"
-INSERT INTO servermobile (loginusu, servidor, tipo) 
-VALUES (@Login, @Servidor, @Tipo)";
+                string sqlInsert = @"INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@Login, @Servidor, @Tipo)";
 
                 var parametersInsert = new
                 {
@@ -3317,7 +3317,7 @@ VALUES (@Login, @Servidor, @Tipo)";
             string sql = "UPDATE taxi SET habilitado = '1' WHERE codtaxi = @Codigo";
             var parameters = new { Codigo = codigoConductor };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<int> DeshabilitarConductorAsync(int codigoConductor)
@@ -3333,7 +3333,7 @@ VALUES (@Login, @Servidor, @Tipo)";
             string sql = "UPDATE taxi SET servicioactual = NULL WHERE codtaxi = @Codigo";
             var parameters = new { Codigo = codigoConductor };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<int> EliminarConductorAsync(int codigoConductor)
@@ -3341,7 +3341,7 @@ VALUES (@Login, @Servidor, @Tipo)";
             string sql = "UPDATE taxi SET estado = 'E' WHERE codtaxi = @Codigo";
             var parameters = new { Codigo = codigoConductor };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<int> HabilitarUnidadAsync(string placa)
@@ -3373,7 +3373,7 @@ VALUES (@Login, @Servidor, @Tipo)";
             string sql = "UPDATE subservicio SET codubicli = @Codubicli WHERE codpedido = @Codpedido";
             var parameters = new { Codpedido = codpedido, Codubicli = codubicli };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<int> NuevoLugarCliente(LugarCliente lugarCliente)
@@ -3389,7 +3389,7 @@ VALUES (@Login, @Servidor, @Tipo)";
                 Wx = lugarCliente.Wx
             };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<int> EliminarLugarCliente(int codlugar)
@@ -3397,7 +3397,7 @@ VALUES (@Login, @Servidor, @Tipo)";
             string sql = @"DELETE FROM lugarcliente WHERE codlugar = @Codlugar";
             var parameters = new { Codlugar = codlugar };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
     }
 }
