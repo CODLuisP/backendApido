@@ -1061,7 +1061,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private async Task<int> NuevoSubServicio(Pedido pedido)
         {
             string sql = @"INSERT INTO subservicio (codubicli, fecha, estado, codcliente, numero, codservicio, distancia, categorialan, arealan, vuelo, orden, centrocosto, costo, observacion) 
-                   VALUES (@Codubicli, @Fecha, 'P', @Codcliente, @Numero, @Codservicio, @Distancia, @Categorialan, @Arealan, @Vuelo, @Orden, @Centrocosto, @Costo, @Observacion)";
+            VALUES (@Codubicli, @Fecha, 'P', @Codcliente, @Numero, @Codservicio, @Distancia, @Categorialan, @Arealan, @Vuelo, @Orden, @Centrocosto, @Costo, @Observacion)";
 
             var parameters = new
             {
@@ -1082,8 +1082,34 @@ namespace VelsatBackendAPI.Data.Repositories
 
             int filasAfectadas = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
+            //INCREMENTAR TOTALPAX SI SE INSERTÓ EXITOSAMENTE
+            if (filasAfectadas > 0 && !string.IsNullOrEmpty(pedido.Servicio?.Codservicio))
+            {
+                await IncrementarTotalPax(pedido.Servicio.Codservicio);
+            }
+
             return filasAfectadas;
         }
+
+        private async Task<int> IncrementarTotalPax(string codservicio)
+        {
+            // Convertir el string a int de forma segura
+            if (!int.TryParse(codservicio, out int codservicioInt))
+            {
+                throw new ArgumentException("El código de servicio no es válido. Debe ser un número entero.");
+            }
+
+            string sql = @"UPDATE servicio SET totalpax = CAST(CAST(totalpax AS UNSIGNED) + 1 AS CHAR) WHERE codservicio = @Codservicio";
+
+            return await _doConnection.ExecuteAsync(sql,
+                new
+                {
+                    Codservicio = codservicioInt
+                },
+                transaction: _doTransaction
+            );
+        }
+
 
         private async Task<Usuario> LugarPasajero(Usuario pasajero)
         {
@@ -2200,10 +2226,18 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<int> UpdateEstadoServicio(Pedido pedido)
         {
             string fechareg = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
-
             pedido.Feccancelpas = fechareg;
 
+            //SIEMPRE obtener codservicio de la base de datos
+            string codservicio = await ObtenerCodServicioPorPedido(pedido.Codigo);
+
             int rs = await EliminarPedido(pedido);
+
+            // DECREMENTAR TOTALPAX SI LA CANCELACIÓN FUE EXITOSA
+            if (rs > 0 && !string.IsNullOrEmpty(codservicio))
+            {
+                await DecrementarTotalPax(codservicio);
+            }
 
             return rs;
         }
@@ -2211,14 +2245,38 @@ namespace VelsatBackendAPI.Data.Repositories
         private async Task<int> EliminarPedido(Pedido pedido)
         {
             string sql = "UPDATE subservicio SET estado = 'C', feccancelcentral = @Feccancelpas WHERE codpedido = @Codigo";
-
             var parameters = new
             {
                 Feccancelpas = pedido.Feccancelpas,
                 Codigo = pedido.Codigo
             };
-
             return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
+        private async Task<string> ObtenerCodServicioPorPedido(int codpedido)
+        {
+            string sql = "SELECT codservicio FROM subservicio WHERE codpedido = @Codpedido";
+            return await _doConnection.QueryFirstOrDefaultAsync<string>(sql,
+                new { Codpedido = codpedido },
+                transaction: _doTransaction);
+        }
+
+        private async Task<int> DecrementarTotalPax(string codservicio)
+        {
+            if (!int.TryParse(codservicio, out int codservicioInt))
+            {
+                throw new ArgumentException("El código de servicio no es válido. Debe ser un número entero.");
+            }
+
+            string sql = @"UPDATE servicio 
+                   SET totalpax = CAST(CAST(totalpax AS UNSIGNED) - 1 AS CHAR) 
+                   WHERE codservicio = @Codservicio 
+                   AND CAST(totalpax AS UNSIGNED) > 0";
+
+            return await _doConnection.ExecuteAsync(sql,
+                new { Codservicio = codservicioInt },
+                transaction: _doTransaction
+            );
         }
 
 

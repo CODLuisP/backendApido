@@ -740,10 +740,24 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<int> UpdateEstadoServicio(GPedido pedido)
         {
             string fechareg = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
-
             pedido.Feccancelpas = fechareg;
 
+            // Validar que Codigo no sea null
+            if (!pedido.Codigo.HasValue)
+            {
+                throw new ArgumentException("El código del pedido es requerido.");
+            }
+
+            // SIEMPRE obtener codservicio de la base de datos
+            string codservicio = await ObtenerCodServicioPorPedido(pedido.Codigo.Value);
+
             int rs = await EliminarPedido(pedido);
+
+            // DECREMENTAR TOTALPAX SI LA CANCELACIÓN FUE EXITOSA
+            if (rs > 0 && !string.IsNullOrEmpty(codservicio))
+            {
+                await DecrementarTotalPax(codservicio);
+            }
 
             return rs;
         }
@@ -759,6 +773,32 @@ namespace VelsatBackendAPI.Data.Repositories
             };
 
             return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
+        private async Task<string> ObtenerCodServicioPorPedido(int codpedido)
+        {
+            string sql = "SELECT codservicio FROM subservicio WHERE codpedido = @Codpedido";
+            return await _doConnection.QueryFirstOrDefaultAsync<string>(sql,
+                new { Codpedido = codpedido },
+                transaction: _doTransaction);
+        }
+
+        private async Task<int> DecrementarTotalPax(string codservicio)
+        {
+            if (!int.TryParse(codservicio, out int codservicioInt))
+            {
+                throw new ArgumentException("El código de servicio no es válido. Debe ser un número entero.");
+            }
+
+            string sql = @"UPDATE servicio 
+                   SET totalpax = CAST(CAST(totalpax AS UNSIGNED) - 1 AS CHAR) 
+                   WHERE codservicio = @Codservicio 
+                   AND CAST(totalpax AS UNSIGNED) > 0";
+
+            return await _doConnection.ExecuteAsync(sql,
+                new { Codservicio = codservicioInt },
+                transaction: _doTransaction
+            );
         }
 
         public async Task<int> NuevoSubServicioPasajero(GPedido pedido)
@@ -785,7 +825,30 @@ namespace VelsatBackendAPI.Data.Repositories
 
             int filasAfectadas = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
+            //INCREMENTAR TOTALPAX SI SE INSERTÓ EXITOSAMENTE
+            if (filasAfectadas > 0 && !string.IsNullOrEmpty(pedido.Servicio?.Codservicio))
+            {
+                await IncrementarTotalPax(pedido.Servicio.Codservicio);
+            }
+
             return filasAfectadas;
+        }
+
+        private async Task<int> IncrementarTotalPax(string codservicio)
+        {
+            if (!int.TryParse(codservicio, out int codservicioInt))
+            {
+                throw new ArgumentException("El código de servicio no es válido. Debe ser un número entero.");
+            }
+
+            string sql = @"UPDATE servicio 
+                   SET totalpax = CAST(CAST(totalpax AS UNSIGNED) + 1 AS CHAR) 
+                   WHERE codservicio = @Codservicio";
+
+            return await _doConnection.ExecuteAsync(sql,
+                new { Codservicio = codservicioInt },
+                transaction: _doTransaction
+            );
         }
 
         public async Task<int> ReiniciarServicio(int codservicio)
