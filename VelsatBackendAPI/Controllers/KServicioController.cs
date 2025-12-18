@@ -17,6 +17,14 @@ namespace VelsatBackendAPI.Controllers
             _readOnlyUow = readOnlyUow;
         }
 
+        private async Task<byte[]> DownloadImageAsync(string imageUrl)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                return await httpClient.GetByteArrayAsync(imageUrl);
+            }
+        }
+
         // PASO 3: Envolver métodos en using
         [HttpGet("kilometraje")]
         public async Task<IActionResult> GetKmServicios([FromQuery] string fecha)
@@ -47,7 +55,7 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 var resultado = await _readOnlyUow.KmServicioRepository.GetKmServicios(fecha);
-                var excelBytes = ConvertDataExcel(resultado, fecha);
+                var excelBytes = await ConvertDataExcel(resultado, fecha);
 
                 string fileName = $"Kilometros_Servicios_Aremys_{fecha}.xlsx";
                 return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
@@ -59,7 +67,7 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
-        private byte[] ConvertDataExcel(List<KilometrajeServicio> resultado, string fecha)
+        private async Task<byte[]> ConvertDataExcel(List<KilometrajeServicio> resultado, string fecha)
         {
             var fechaInicio = $"{fecha} 00:00";
             var fechaFin = $"{fecha} 23:59";
@@ -124,8 +132,13 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Range("F10:H10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 // Imágenes
-                string logo1 = "C:\\inetpub\\wwwroot\\CarLogo.jpg";
-                worksheet.AddPicture(logo1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                {
+                    var image = worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                }
+
 
                 var mergedRange = worksheet.Range("H4:H7");
                 mergedRange.Merge();
@@ -134,8 +147,12 @@ namespace VelsatBackendAPI.Controllers
                 mergedRange.Merge().Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 mergedRange.Merge().Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-                string logo2 = "C:\\inetpub\\wwwroot\\VelsatLogo.png";
-                worksheet.AddPicture(logo2).MoveTo(worksheet.Cell("H4")).WithSize(240, 80).MoveTo(740, 60);
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                {
+                    var image2 = worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("I4"), new System.Drawing.Point(100, 0)).WithSize(240, 80);
+                }
 
                 // Cabeceras
                 var headers = new[]

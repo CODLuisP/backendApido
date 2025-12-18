@@ -638,7 +638,7 @@ namespace VelsatBackendAPI.Controllers
                     tipo
                 );
 
-                var excelBytes = DataExcelSheet(resultado, fecini, fecfin, aerolinea, usuario, tipo);
+                var excelBytes = await DataExcelSheet(resultado, fecini, fecfin, aerolinea, usuario, tipo);
                 string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}_{tipo}.xlsx";
 
                 return File(
@@ -654,8 +654,15 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
+        private async Task<byte[]> DownloadImageAsync(string imageUrl)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                return await httpClient.GetByteArrayAsync(imageUrl);
+            }
+        }
 
-        private byte[] DataExcelSheet(List<Pedido> resultado, string fecini, string fecfin, string aerolinea, string usuario, string tipo)
+        private async Task<byte[]> DataExcelSheet(List<Pedido> resultado, string fecini, string fecfin, string aerolinea, string usuario, string tipo)
         {
             using (var workbook = new XLWorkbook())
             {
@@ -720,8 +727,12 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Range("F10:L10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 // Imágenes
-                string logo1 = "C:\\inetpub\\wwwroot\\CarLogo.jpg";
-                worksheet.AddPicture(logo1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                {
+                    var image = worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                }
 
                 var mergedRange = worksheet.Range("J4:L7");
                 mergedRange.Merge();
@@ -730,8 +741,12 @@ namespace VelsatBackendAPI.Controllers
                 mergedRange.Merge().Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 mergedRange.Merge().Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-                string logo2 = "C:\\inetpub\\wwwroot\\VelsatLogo.png";
-                worksheet.AddPicture(logo2).MoveTo(worksheet.Cell("K4")).WithSize(240, 80).MoveTo(970, 60); //comprobar pos
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                {
+                    var image2 = worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("I4"), new System.Drawing.Point(100, 0)).WithSize(240, 80);
+                }
 
                 // Cabeceras
                 var headers = new[]
@@ -1048,7 +1063,7 @@ namespace VelsatBackendAPI.Controllers
                 );
 
                 // Generar archivo Excel
-                var excelBytes = ConvertDataExcel(resultado, fecini, fecfin, aerolinea, usuario);
+                var excelBytes = await ConvertDataExcel(resultado, fecini, fecfin, aerolinea, usuario);
                 string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}.xlsx";
 
                 return File(
@@ -1064,8 +1079,7 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
-
-        private byte[] ConvertDataExcel(List<Pedido> resultado, string fecini, string fecfin, string aerolinea, string usuario)
+        private async Task<byte[]> ConvertDataExcel(List<Pedido> resultado, string fecini, string fecfin, string aerolinea, string usuario)
         {
             using (var workbook = new XLWorkbook())
             {
@@ -1130,8 +1144,12 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Range("F10:J10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 // Imágenes
-                string logo1 = "C:\\inetpub\\wwwroot\\CarLogo.jpg";
-                worksheet.AddPicture(logo1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                {
+                    var image = worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                }
 
                 var mergedRange = worksheet.Range("J4:K7");
                 mergedRange.Merge();
@@ -1140,8 +1158,12 @@ namespace VelsatBackendAPI.Controllers
                 mergedRange.Merge().Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 mergedRange.Merge().Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-                string logo2 = "C:\\inetpub\\wwwroot\\VelsatLogo.png";
-                worksheet.AddPicture(logo2).MoveTo(worksheet.Cell("J4")).WithSize(240, 80).MoveTo(820, 60); //comprobar pos
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                {
+                    var image2 = worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("I4"), new System.Drawing.Point(100, 0)).WithSize(240, 80);
+                }
 
                 // Cabeceras
                 var headers = new[]
@@ -1356,7 +1378,7 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 // Generar el archivo Excel
-                var excelBytes = ConvertDataExcelAremys(resultado, fecini, fecfin, aerolinea);
+                var excelBytes = await ConvertDataExcelAremys(resultado, fecini, fecfin, aerolinea);
                 string fileName = $"Resumen_{aerolinea}_{fecini}_a_{fecfin}.xlsx";
 
                 return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
@@ -1372,7 +1394,7 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
-        private byte[] ConvertDataExcelAremys(List<Pedido> resultado, string fecini, string fecfin, string aerolinea)
+        private async Task<byte[]> ConvertDataExcelAremys(List<Pedido> resultado, string fecini, string fecfin, string aerolinea)
         {
             using (var workbook = new XLWorkbook())
             {
@@ -1436,8 +1458,12 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Range("F10:K10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 // Imágenes
-                string logo1 = "C:\\inetpub\\wwwroot\\CarLogo.jpg";
-                worksheet.AddPicture(logo1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                {
+                    var image = worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                }
 
                 var mergedRange = worksheet.Range("L4:M7");
                 mergedRange.Merge();
@@ -1446,8 +1472,12 @@ namespace VelsatBackendAPI.Controllers
                 mergedRange.Merge().Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 mergedRange.Merge().Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-                string logo2 = "C:\\inetpub\\wwwroot\\VelsatLogo.png";
-                worksheet.AddPicture(logo2).MoveTo(worksheet.Cell("L4")).WithSize(240, 80).MoveTo(800, 60);
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                {
+                    var image2 = worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("I4"), new System.Drawing.Point(100, 0)).WithSize(240, 80);
+                }
 
                 // Cabeceras
                 var headers = new[]
