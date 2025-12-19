@@ -436,5 +436,81 @@ namespace VelsatBackendAPI.Controllers
             }
 
         }
+
+        [HttpPost("ActualizarPasajeroExterno/{usuario}")]
+        public async Task<IActionResult> ActualizarPasajeroExterno([FromBody] List<GUsuario> listaClientes, [FromRoute] string usuario)
+        {
+            try
+            {
+                if (listaClientes == null || !listaClientes.Any())
+                    return BadRequest("No se envió información de clientes para actualizar.");
+
+                if (string.IsNullOrWhiteSpace(usuario))
+                    return BadRequest("El usuario es requerido.");
+
+                var resultado = await _uow.GacelaRepository.ActualizarPasajeroExterno(listaClientes, usuario);
+                _uow.SaveChanges();
+
+                // Verificar si todos fueron exitosos
+                var todosExitosos = resultado.All(c => c.Observacion == "Cliente registrado");
+                var algunosExitosos = resultado.Any(c => c.Observacion == "Cliente registrado");
+
+                if (todosExitosos)
+                {
+                    return Ok(new
+                    {
+                        mensaje = "Todos los clientes fueron registrados exitosamente",
+                        totalProcesados = resultado.Count,
+                        clientes = resultado.Select(c => new
+                        {
+                            codlan = c.Codlan,
+                            nombre = c.Nombre,
+                            empresa = c.Empresa,
+                            estado = c.Observacion
+                        })
+                    });
+                }
+                else if (algunosExitosos)
+                {
+                    return Ok(new
+                    {
+                        mensaje = "Algunos clientes fueron registrados con errores",
+                        totalProcesados = resultado.Count,
+                        exitosos = resultado.Count(c => c.Observacion == "Cliente registrado"),
+                        fallidos = resultado.Count(c => c.Observacion != "Cliente registrado"),
+                        clientes = resultado.Select(c => new
+                        {
+                            codlan = c.Codlan,
+                            nombre = c.Nombre,
+                            empresa = c.Empresa,
+                            estado = c.Observacion
+                        })
+                    });
+                }
+                else
+                {
+                    return BadRequest(new
+                    {
+                        mensaje = "Ningún cliente pudo ser registrado",
+                        totalProcesados = resultado.Count,
+                        clientes = resultado.Select(c => new
+                        {
+                            codlan = c.Codlan,
+                            nombre = c.Nombre,
+                            empresa = c.Empresa,
+                            error = c.Observacion
+                        })
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Hubo un error al procesar la solicitud.",
+                    error = ex.Message
+                });
+            }
+        }
     }
 }

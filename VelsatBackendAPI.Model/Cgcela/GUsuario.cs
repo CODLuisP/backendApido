@@ -18,6 +18,8 @@ namespace VelsatBackendAPI.Model.Cgcela
         public string? Sexo { get; set; }
         public string? Telefono { get; set; }
         public string? Empresa { get; set; }
+        public string? Observacion { get; set; }
+
         public LugarCliente? Lugar { get; set; }
         public GServicio? Servicioactual { get; set; }
 

@@ -2026,7 +2026,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 await _doConnection.ExecuteAsync(sql, parametros, transaction: _doTransaction);
 
                 // Registro adicional en totalserver (como en el código Java)
-                var sqlServer = "INSERT INTO totalserver (loginusu, servidor) VALUES (@loginusu, 'http://66.240.210.125:8090/')";
+                var sqlServer = "INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@loginusu, 'https://velsat.pe:2087', 'p')";
                 return await _defaultConnection.ExecuteAsync(sqlServer,
                     new { loginusu = pasajero.Codlan }, transaction: _defaultTransaction);
             }
@@ -2322,6 +2322,117 @@ namespace VelsatBackendAPI.Data.Repositories
                 return "Error al agregar pasajero";
             }
         }
-        
+
+        /////////////////////////////////
+        // Método público para actualizar/guardar pasajero externo
+        public async Task<List<GUsuario>> ActualizarPasajeroExterno(List<GUsuario> listaClientes, string usuario)
+        {
+            var resultado = new List<GUsuario>();
+
+            foreach (var cliente in listaClientes)
+            {
+                string estadoRegistro = await GuardarPasajeroExterno(cliente, usuario);
+                cliente.Observacion = estadoRegistro;
+                resultado.Add(cliente);
+            }
+
+            return resultado;
+        }
+
+        // Método principal para guardar/actualizar pasajero externo
+        private async Task<string> GuardarPasajeroExterno(GUsuario us, string usuario)
+        {
+            // Validaciones
+            if (VerificarNuloVacio(us.Nombre))
+            {
+                return "Error: Debe ingresar nombre";
+            }
+
+            if (VerificarNuloVacio(us.Codlan))
+            {
+                return "Error: Debe ingresar codigo";
+            }
+
+            if (VerificarNuloVacio(us.Empresa))
+            {
+                return "Error: Debe indicar la empresa del cliente";
+            }
+
+            if (us.Lugar == null)
+            {
+                return "Error: Debe indicar la dirección del cliente";
+            }
+            else
+            {
+                if (VerificarNuloVacio(us.Lugar.Direccion))
+                {
+                    return "Error: Debe indicar la dirección del cliente";
+                }
+
+                if (VerificarNuloVacioDouble(us.Lugar.Wx))
+                {
+                    return "Error: Debe indicar coordenadas de la direccion";
+                }
+
+                if (VerificarNuloVacioDouble(us.Lugar.Wy))
+                {
+                    return "Error: Debe indicar coordenadas de la direccion";
+                }
+            }
+
+            // Verificar si el código existe
+            var usuarioEncontrado = await BuscarPorCodlan(us);
+
+            if (usuarioEncontrado == null)
+            {
+                // Guardar el lugar
+                var lugar = us.Lugar;
+                lugar.Codcli = us.Codlan;
+                await GuardarLugar(lugar);
+
+                // Guardar nuevo pasajero
+                await NuevoPasajeroExterno(us, usuario);
+
+                return "Cliente registrado";
+            }
+            else
+            {
+                return "Error: codigo de pasajero ya existe";
+            }
+        }
+
+        // Buscar usuario por código LAN
+        private async Task<GUsuario> BuscarPorCodlan(GUsuario usuario)
+        {
+            var sql = @"SELECT codcliente, nombres, apellidos, login, clave, codlan, sexo 
+                FROM cliente 
+                WHERE codlan = @Codlan";
+
+            try
+            {
+                var resultado = await _doConnection.QueryFirstOrDefaultAsync(sql,
+                    new { Codlan = usuario.Codlan }, transaction: _doTransaction);
+
+                if (resultado != null)
+                {
+                    return new GUsuario
+                    {
+                        Codigo = resultado.codcliente?.ToString(),
+                        Nombre = resultado.nombres?.ToString(),
+                        Apepate = resultado.apellidos?.ToString(),
+                        Login = resultado.login?.ToString(),
+                        Clave = resultado.clave?.ToString(),
+                        Codlan = resultado.codlan?.ToString(),
+                        Sexo = resultado.sexo?.ToString()
+                    };
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
     }
 }
