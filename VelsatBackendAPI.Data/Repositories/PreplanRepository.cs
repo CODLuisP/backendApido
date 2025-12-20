@@ -3232,10 +3232,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<Usuario> BuscarTotalServerAsync(Conductor conductor)
         {
-            string sql = "SELECT loginusu FROM serverprueba WHERE loginusu = @Login";
+            string sql = "SELECT loginusu FROM servermobile WHERE loginusu = @Login";
             var parameters = new { Login = conductor.Login };
 
-            var result = await _defaultConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _defaultTransaction);
+            var result = await _doConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _doTransaction);
 
             if (result != null)
             {
@@ -3271,7 +3271,7 @@ namespace VelsatBackendAPI.Data.Repositories
             // Insertar en tabla taxi
             await _doConnection.ExecuteAsync(sqlTaxi, parametersEdriver, transaction: _doTransaction);
 
-            string sqlTotalServer = @"INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@Login, 'https://velsat.pe:2087','c')";
+            string sqlTotalServer = @"INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@Login, 'https://do.velsat.pe:2053','c')";
 
             var parametersTotalServer = new
             {
