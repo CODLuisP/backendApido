@@ -2065,35 +2065,52 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<int> UpdateControlServicio(Servicio servicio)
         {
+            Console.WriteLine($"[UpdateControlServicio] Iniciando actualización para servicio: {servicio.Codservicio}");
             int resultado = 0;
+
             if (servicio.Listapuntos != null)
             {
+                Console.WriteLine($"[UpdateControlServicio] Procesando {servicio.Listapuntos.Count} puntos");
                 List<Pedido> listaPasajeros = servicio.Listapuntos;
 
                 foreach (var pedido in listaPasajeros)
                 {
+                    Console.WriteLine($"[UpdateControlServicio] Procesando pedido {pedido.Codigo} con estado: {pedido.Estado}");
+
                     // Insertar nuevos pasajeros
                     if (pedido.Estado == "NW")
                     {
+                        Console.WriteLine($"[UpdateControlServicio] Insertando nuevo subservicio para pedido: {pedido.Codigo}");
                         resultado = await NuevoSubServicio(pedido);
+                        Console.WriteLine($"[UpdateControlServicio] Resultado inserción: {resultado}");
                     }
                     // Actualizar orden
                     else
                     {
+                        Console.WriteLine($"[UpdateControlServicio] Actualizando orden para pedido: {pedido.Codigo}");
                         resultado = await ActualizarOrden(pedido);
+                        Console.WriteLine($"[UpdateControlServicio] Resultado actualización orden: {resultado}");
                     }
                 }
             }
+            else
+            {
+                Console.WriteLine("[UpdateControlServicio] No hay puntos para procesar (Listapuntos es null)");
+            }
 
+            Console.WriteLine("[UpdateControlServicio] Modificando hora del servicio");
             resultado = await ModificarHoraServicio(servicio);
+            Console.WriteLine($"[UpdateControlServicio] Finalizado con resultado: {resultado}");
 
             return resultado;
         }
 
         private async Task<int> ModificarHoraServicio(Servicio servicio)
         {
-            string sql = "UPDATE servicio SET fecha = @Fecha, costototal = @Costototal WHERE codservicio = @Codservicio";
+            Console.WriteLine($"[ModificarHoraServicio] Actualizando servicio {servicio.Codservicio}");
+            Console.WriteLine($"[ModificarHoraServicio] Fecha: {servicio.Fecha}, CostoTotal: {servicio.Costototal}");
 
+            string sql = "UPDATE servicio SET fecha = @Fecha, costototal = @Costototal WHERE codservicio = @Codservicio";
             var parameters = new
             {
                 Fecha = servicio.Fecha,
@@ -2101,30 +2118,40 @@ namespace VelsatBackendAPI.Data.Repositories
                 Codservicio = servicio.Codservicio
             };
 
-            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            int resultado = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            Console.WriteLine($"[ModificarHoraServicio] Filas afectadas: {resultado}");
+
+            return resultado;
         }
 
         private async Task<int> ActualizarOrden(Pedido pedido)
         {
-            string sql = "UPDATE subservicio SET orden = @Orden WHERE codpedido = @Codpedido";
+            Console.WriteLine($"[ActualizarOrden] Actualizando pedido {pedido.Codigo} con orden: {pedido.Orden}");
 
+            string sql = "UPDATE subservicio SET orden = @Orden WHERE codpedido = @Codpedido";
             var parameters = new
             {
                 Codpedido = pedido.Codigo,
                 Orden = pedido.Orden
             };
 
-            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            int resultado = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            Console.WriteLine($"[ActualizarOrden] Filas afectadas: {resultado}");
+
+            return resultado;
         }
 
         public async Task<int> CancelarAsignacion(string codservicio)
         {
-            string sql = "UPDATE servicio SET codconductor = NULL, unidad = NULL WHERE codservicio = @Codservicio";
+            Console.WriteLine($"[CancelarAsignacion] Cancelando asignación para servicio: {codservicio}");
 
+            string sql = "UPDATE servicio SET codconductor = NULL, unidad = NULL WHERE codservicio = @Codservicio";
             var parameters = new { Codservicio = codservicio };
 
-            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            int resultado = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            Console.WriteLine($"[CancelarAsignacion] Filas afectadas: {resultado}");
 
+            return resultado;
         }
 
         public async Task<int> CancelarServicio(Servicio servicio)
