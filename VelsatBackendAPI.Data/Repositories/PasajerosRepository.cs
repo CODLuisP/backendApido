@@ -73,7 +73,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             const string sqlDos = @"
                 INSERT INTO servermobile(loginusu, servidor, tipo) 
-                VALUES (@Loginusu, 'https://velsat.pe:2087', 'p')";
+                VALUES (@Loginusu, 'https://do.velsat.pe:2053', 'p')";
 
             const string sqlTres = @"
                 INSERT INTO lugarcliente(codcli, direccion, distrito, wy, wx, estado, zona) 

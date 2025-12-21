@@ -3271,7 +3271,7 @@ namespace VelsatBackendAPI.Data.Repositories
             // Insertar en tabla taxi
             await _doConnection.ExecuteAsync(sqlTaxi, parametersEdriver, transaction: _doTransaction);
 
-            string sqlTotalServer = @"INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@Login, 'https://velsat.pe:2087','c')";
+            string sqlTotalServer = @"INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@Login, 'https://do.velsat.pe:2053','c')";
 
             var parametersTotalServer = new
             {
@@ -3386,7 +3386,7 @@ WHERE codtaxi = @Codigo";
                 var parametersInsert = new
                 {
                     Login = conductor.Login,
-                    Servidor = "https://velsat.pe:2087",
+                    Servidor = "https://do.velsat.pe:2053",
                     Tipo = "c"
                 };
 

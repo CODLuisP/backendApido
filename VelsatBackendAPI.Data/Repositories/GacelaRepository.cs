@@ -2026,7 +2026,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 await _doConnection.ExecuteAsync(sql, parametros, transaction: _doTransaction);
 
                 // Registro adicional en totalserver (como en el código Java)
-                var sqlServer = "INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@loginusu, 'https://velsat.pe:2087', 'p')";
+                var sqlServer = "INSERT INTO servermobile (loginusu, servidor, tipo) VALUES (@loginusu, 'https://do.velsat.pe:2053', 'p')";
                 return await _defaultConnection.ExecuteAsync(sqlServer,
                     new { loginusu = pasajero.Codlan }, transaction: _defaultTransaction);
             }
