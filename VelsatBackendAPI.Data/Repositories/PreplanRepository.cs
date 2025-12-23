@@ -968,7 +968,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             int r = 0;
             List<Pedido> listapuntos = su.Listapuntos ?? new List<Pedido>();
-            su.Numpax = listapuntos.Count.ToString();
+            //su.Numpax = listapuntos.Count.ToString();
 
             Console.WriteLine($"[GrabarServicios] Puntos a procesar: {listapuntos.Count}");
             Console.WriteLine($"[GrabarServicios] Servicio configurado - Empresa: {su.Empresa}, Zona: {su.Zona}, Destino: {su.Destino}");
@@ -1151,7 +1151,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Fecha = servicio.Fecha,
                 Grupo = servicio.Grupo,
                 Empresa = servicio.Empresa,
-                TotalPax = servicio.Numpax,
+                TotalPax = "0",
                 CodUnidad = servicio.Unidad.Codunidad,
                 CodConductor = servicio.Conductor.Codigo,
                 CodZona = servicio.Zona.Codigo,
