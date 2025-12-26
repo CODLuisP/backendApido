@@ -3026,7 +3026,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<List<Usuario>> GetDestinos(string palabra)
         {
-            string sql = @"Select l.codlugar, c.codcliente, c.nombres, c.apellidos, c.codlan, l.wy, l.wx, l.direccion, l.distrito from cliente c, lugarcliente l where l.codcli=c.codlugar and c.estadocuenta='A' and l.estado='A' and apellidos like @Palabra and destino='0' LIMIT 10";
+            string sql = @"Select l.codlugar, c.codcliente, c.nombres, c.apellidos, c.codlan, l.wy, l.wx, l.direccion, l.distrito from cliente c, lugarcliente l where l.codcli=c.codlugar and c.estadocuenta='A' and l.estado='A' and apellidos like @Palabra and destino='1' LIMIT 10";
 
             var parameters = new { Palabra = $"%{palabra}%" }; // ✅ Aquí se añade el %
 
