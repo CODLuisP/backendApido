@@ -1447,7 +1447,7 @@ namespace VelsatBackendAPI.Data.Repositories
         //Agregar filtro por codusuario movilbus o gacela
         public async Task<List<Usuario>> GetPasajeros(string palabra, string codusuario)
         {
-            string sql = @"Select c.codcliente, c.nombres, c.apellidos, c.codlan, l.wy, l.wx, l.direccion, l.distrito, l.zona from cliente c, lugarcliente l where l.codcli=c.codlugar and c.estadocuenta='A' and l.estado='A' and c.apellidos like @Palabra and c.destino='0' LIMIT 10";
+            string sql = @"SELECT DISTINCT c.codcliente, c.nombres, c.apellidos, c.codlan, l.wy, l.wx, l.direccion, l.distrito, l.zona from cliente c, lugarcliente l where l.codcli=c.codlugar and c.estadocuenta='A' and l.estado='A' and c.apellidos like @Palabra and c.destino='0' LIMIT 10";
 
             var parameters = new { Palabra = $"%{palabra}%"}; // ✅ Aquí se añade el %
 
