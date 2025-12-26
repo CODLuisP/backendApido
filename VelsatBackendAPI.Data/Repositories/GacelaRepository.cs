@@ -1603,11 +1603,11 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<GUsuario> LugarPasajeroAvianca(GUsuario pasajero)
         {
-            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @codlan AND c.empresa = 'AVIANCA' AND l.estado = 'A'";
+            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @Codlan AND c.empresa = 'AVIANCA' AND l.estado = 'A'";
 
             try
             {
-                var parametros = new { codlan = pasajero.Codlan };
+                var parametros = new { Codlan = pasajero.Codlan };
                 var resultado = await _doConnection.QueryFirstOrDefaultAsync(sql, parametros, transaction: _doTransaction);
 
                 if (resultado != null)
@@ -1676,11 +1676,11 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<GUsuario> LugarPasajero(GUsuario pasajero, string empresa)
         {
-            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @codlan AND c.empresa = @empresa AND l.estado = 'A'";
+            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @Codlan AND c.empresa = @Empresa AND l.estado = 'A'";
 
             try
             {
-                var parametros = new { codlan = pasajero.Codlan, empresa };
+                var parametros = new { Codlan = pasajero.Codlan, Empresa = empresa};
                 var resultado = await _doConnection.QueryFirstOrDefaultAsync(sql, parametros, transaction: _doTransaction);
 
                 if (resultado != null)
