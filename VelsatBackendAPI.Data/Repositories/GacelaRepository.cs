@@ -1603,7 +1603,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<GUsuario> LugarPasajeroAvianca(GUsuario pasajero)
         {
-            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @Codlan AND c.empresa = 'AVIANCA' AND l.estado = 'A'";
+            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @Codlan AND c.empresa = 'AVIANCA' AND c.estadocuenta = 'A' AND l.estado = 'A'";
 
             try
             {
@@ -1676,7 +1676,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<GUsuario> LugarPasajero(GUsuario pasajero, string empresa)
         {
-            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @Codlan AND c.empresa = @Empresa AND l.estado = 'A'";
+            var sql = @"SELECT l.codlugar, l.wy, l.wx, c.codcliente, c.apellidos, c.codlan FROM cliente c, lugarcliente l WHERE l.codcli = c.codlugar AND codlan = @Codlan AND c.empresa = @Empresa AND c.estadocuenta = 'A' AND l.estado = 'A'";
 
             try
             {
@@ -2406,7 +2406,7 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             var sql = @"SELECT codcliente, nombres, apellidos, login, clave, codlan, sexo 
                 FROM cliente 
-                WHERE codlan = @Codlan";
+                WHERE codlan = @Codlan AND estadocuenta = 'A'";
 
             try
             {

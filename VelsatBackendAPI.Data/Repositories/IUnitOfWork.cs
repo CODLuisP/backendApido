@@ -33,6 +33,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         IGacelaRepository GacelaRepository { get; }
 
+        ITalmaRepository TalmaRepository { get; }
+
         void SaveChanges();
 
     }

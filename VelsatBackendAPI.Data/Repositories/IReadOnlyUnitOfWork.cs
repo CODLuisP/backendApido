@@ -33,5 +33,7 @@ namespace VelsatBackendAPI.Data.Repositories
         IPreplanRepository PreplanRepository { get; }
 
         ITurnosRepository TurnosRepository { get; }
+
+        ITalmaRepository TalmaRepository { get; }
     }
 }

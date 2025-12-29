@@ -34,6 +34,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IRecorridoRepository> _recorridoRepository;
         private readonly Lazy<IKmServicioRepository> _kmServicioRepository;
         private readonly Lazy<IGacelaRepository> _gacelaRepository;
+        private readonly Lazy<ITalmaRepository> _talmaRepository;
 
         private bool _disposed = false;
         private bool _committed = false;
@@ -71,11 +72,12 @@ namespace VelsatBackendAPI.Data.Repositories
             _alertaRepository = new Lazy<IAlertaRepository>(() =>
                 new AlertaRepository(DefaultConnection, _defaultTransaction));
 
-            _recorridoRepository = new Lazy<IRecorridoRepository>(() =>
-                new RecorridoRepository(DOConnection, _doTransaction));
+            _recorridoRepository = new Lazy<IRecorridoRepository>(() => new RecorridoRepository(DOConnection, _doTransaction));
 
             _gacelaRepository = new Lazy<IGacelaRepository>(() =>
                 new GacelaRepository(DefaultConnection, _defaultTransaction, DOConnection, _doTransaction));
+
+            _talmaRepository = new Lazy<ITalmaRepository>(() => new TalmaRepository(DOConnection, _doTransaction));
 
             // Repositorios con ambas conexiones
             _historicosRepository = new Lazy<IHistoricosRepository>(() =>
@@ -338,6 +340,15 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 ValidateNotDisposedOrCommitted();
                 return _recorridoRepository.Value;
+            }
+        }
+
+        public ITalmaRepository TalmaRepository
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+                return _talmaRepository.Value;
             }
         }
 
