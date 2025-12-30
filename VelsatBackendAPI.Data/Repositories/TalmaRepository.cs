@@ -253,14 +253,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 INSERT INTO preplan_talma 
                 (
                     codlan, codcliente, nombre, fecha, hora, tipo, fecreg, 
-                    distancia, horaprog, orden, numero, codconductor, codunidad, 
+                    distancia, horaprog, orden, grupo, codconductor, codunidad, 
                     usuario, empresa, eliminado, cerrado, borrado, 
                     destinocodigo, destinocodlugar, direccionalterna, codservicio
                 ) 
                 VALUES 
                 (
                     @Codlan, @Codcliente, @Nombre, @Fecha, @Hora, @Tipo, @Fecreg,
-                    @Distancia, @Horaprog, @Orden, @Numero, @Codconductor, @Codunidad,
+                    @Distancia, @Horaprog, @Orden, @Grupo, @Codconductor, @Codunidad,
                     @Usuario, @Empresa, @Eliminado, @Cerrado, @Borrado,
                     @Destinocodigo, @Destinocodlugar, @Direccionalterna, @Codservicio
                 )";
@@ -302,14 +302,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 INSERT INTO preplan_talma 
                 (
                     codlan, codcliente, nombre, fecha, hora, tipo, fecreg, 
-                    distancia, horaprog, orden, numero, codconductor, codunidad, 
+                    distancia, horaprog, orden, grupo, codconductor, codunidad, 
                     usuario, empresa, eliminado, cerrado, borrado, 
                     destinocodigo, destinocodlugar, direccionalterna, codservicio
                 ) 
                 VALUES 
                 (
                     @Codlan, @Codcliente, @Nombre, @Fecha, @Hora, @Tipo, @Fecreg,
-                    @Distancia, @Horaprog, @Orden, @Numero, @Codconductor, @Codunidad,
+                    @Distancia, @Horaprog, @Orden, @Grupo, @Codconductor, @Codunidad,
                     @Usuario, @Empresa, @Eliminado, @Cerrado, @Borrado,
                     @Destinocodigo, @Destinocodlugar, @Direccionalterna, @Codservicio
                 )";
@@ -400,7 +400,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalma(string tipo, string fecha, string hora)
         {
-            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, numero, 
+            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, grupo, 
                   cerrado, eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
            FROM preplan_talma 
            WHERE cerrado = '0' AND eliminado = '0' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
@@ -485,7 +485,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     Tipo = row.tipo.ToString(),
                     Horaprog = row.horaprog?.ToString(),
                     Orden = row.orden?.ToString(),
-                    Grupo = row.numero?.ToString(),
+                    Grupo = row.grupo?.ToString(),
                     Codconductor = row.codconductor?.ToString(),
                     Codunidad = row.codunidad?.ToString(),
                     Empresa = row.empresa.ToString()
@@ -514,7 +514,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalmaEliminados(string tipo, string fecha, string hora)
         {
-            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, numero, 
+            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, grupo, 
                   eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
            FROM preplan_talma 
            WHERE eliminado = '1' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
@@ -599,7 +599,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     Tipo = row.tipo.ToString(),
                     Horaprog = row.horaprog?.ToString(),
                     Orden = row.orden?.ToString(),
-                    Grupo = row.numero?.ToString(),
+                    Grupo = row.grupo?.ToString(),
                     Codconductor = row.codconductor?.ToString(),
                     Codunidad = row.codunidad?.ToString(),
                     Empresa = row.empresa.ToString()
@@ -632,7 +632,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = @"UPDATE preplan_talma 
                    SET horaprog = @Horaprog,
                        orden = @Orden,
-                       numero = @Numero,
+                       grupo = @Grupo,
                        codconductor = @Codconductor,
                        codunidad = @Codunidad,
                        destinocodigo = @Destinocodigo,
