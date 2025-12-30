@@ -11,7 +11,13 @@ namespace VelsatBackendAPI.Data.Repositories
     {
         Task<InsertPedidoTalmaResponse> InsertPedido(IEnumerable<RegistroExcel> registro);
 
-        Task<IEnumerable<PedidoTalma>> GetPreplanTalma(string tipo, string fecha, string hora);
+        Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalma(string tipo, string fecha, string hora);
+
+        Task<bool> DeletePreplanTalma(int codigo);
+
+        Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalmaEliminados(string tipo, string fecha, string hora);
+
+        Task<int> SavePreplanTalma(List<UpdatePreplanTalma> pedidos);
 
     }
 }

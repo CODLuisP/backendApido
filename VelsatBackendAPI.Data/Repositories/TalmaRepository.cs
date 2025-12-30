@@ -107,14 +107,13 @@ namespace VelsatBackendAPI.Data.Repositories
                         Distancia = null,
                         Horaprog = null,
                         Orden = null,
-                        Numero = null,
+                        Grupo = null,
                         Codconductor = null,
                         Codunidad = null,
                         Usuario = !string.IsNullOrWhiteSpace(registro.Usuario) ? registro.Usuario : "cgacela",
                         Empresa = "TALMA",
                         Eliminado = "0",
                         Cerrado = "0",
-                        Borrado = "0",
                         Destinocodigo = "4175",
                         Destinocodlugar = datosCliente.Codlugar,
                         Direccionalterna = null,
@@ -399,20 +398,249 @@ namespace VelsatBackendAPI.Data.Repositories
                 System.Globalization.DateTimeStyles.None, out _);
         }
 
-        public async Task<IEnumerable<PedidoTalma>> GetPreplanTalma(string tipo, string fecha, string hora)
+        public async Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalma(string tipo, string fecha, string hora)
         {
-            string sql = @"SELECT * FROM preplan_talma WHERE tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
-
+            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, numero, 
+                  cerrado, eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
+           FROM preplan_talma 
+           WHERE cerrado = '0' AND eliminado = '0' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
             var parameters = new
             {
                 Tipo = tipo,
                 Fecha = fecha,
                 Hora = hora
             };
+            var results = await _doConnection.QueryAsync<dynamic>(sql, parameters, transaction: _doTransaction);
+            if (!results.Any())
+                return new List<PreplanTalmaResponse>();
 
-            var results = await _doConnection.QueryAsync<PedidoTalma>(sql, parameters, transaction: _doTransaction);
+            // Objeto predefinido para el aeropuerto
+            var aeropuertoInfo = new LugarInfo
+            {
+                Direccion = "Destino Nuevo Aeropuerto Internacional Jorge Chávez",
+                Distrito = "Callao",
+                Wy = "-12.034004553836395",
+                Wx = "-77.11457919557617",
+                Referencia = null
+            };
 
-            return results;
+            // Obtener todos los códigos de lugar únicos (excluyendo 4175 para destinocodigo)
+            var todosLosCodigos = new HashSet<string>();
+            foreach (var row in results)
+            {
+                // Solo agregar destinocodigo si es diferente de 4175
+                if (!string.IsNullOrEmpty(row.destinocodigo?.ToString()) && row.destinocodigo.ToString() != "4175")
+                    todosLosCodigos.Add(row.destinocodigo.ToString());
+
+                if (!string.IsNullOrEmpty(row.destinocodlugar?.ToString()))
+                    todosLosCodigos.Add(row.destinocodlugar.ToString());
+            }
+
+            // Una sola consulta para obtener todos los lugares
+            var lugares = new Dictionary<string, LugarInfo>();
+
+            // Agregar el aeropuerto al diccionario
+            lugares["4175"] = aeropuertoInfo;
+
+            if (todosLosCodigos.Any())
+            {
+                // Convertir los strings a int para la consulta
+                var codigosInt = todosLosCodigos
+                    .Select(c => int.TryParse(c, out var num) ? num : (int?)null)
+                    .Where(n => n.HasValue)
+                    .Select(n => n.Value)
+                    .ToList();
+
+                string sqlLugares = @"SELECT codlugar, direccion, distrito, wy, wx, referencia 
+                     FROM lugarcliente 
+                     WHERE estado = 'A' AND codlugar IN @Codigos";
+
+                var lugaresResult = await _doConnection.QueryAsync<dynamic>(sqlLugares,
+                    new { Codigos = codigosInt },
+                    transaction: _doTransaction);
+
+                foreach (var lugar in lugaresResult)
+                {
+                    lugares[lugar.codlugar.ToString()] = new LugarInfo
+                    {
+                        Direccion = lugar.direccion?.ToString(),
+                        Distrito = lugar.distrito?.ToString(),
+                        Wy = lugar.wy?.ToString(),
+                        Wx = lugar.wx?.ToString(),
+                        Referencia = lugar.referencia?.ToString()
+                    };
+                }
+            }
+
+            // Construir la respuesta
+            var responseList = new List<PreplanTalmaResponse>();
+            foreach (var row in results)
+            {
+                var response = new PreplanTalmaResponse
+                {
+                    Codigo = row.codigo.ToString(),
+                    Nombre = row.nombre.ToString(),
+                    Fecha = row.fecha.ToString(),
+                    Hora = row.hora.ToString(),
+                    Tipo = row.tipo.ToString(),
+                    Horaprog = row.horaprog?.ToString(),
+                    Orden = row.orden?.ToString(),
+                    Grupo = row.numero?.ToString(),
+                    Codconductor = row.codconductor?.ToString(),
+                    Codunidad = row.codunidad?.ToString(),
+                    Empresa = row.empresa.ToString()
+                };
+
+                var destinoCodigo = row.destinocodigo?.ToString();
+                var destinoCodLugar = row.destinocodlugar?.ToString();
+
+                if (!string.IsNullOrEmpty(destinoCodigo) && lugares.ContainsKey(destinoCodigo))
+                    response.Destino = lugares[destinoCodigo];
+                if (!string.IsNullOrEmpty(destinoCodLugar) && lugares.ContainsKey(destinoCodLugar))
+                    response.DireccionPasajero = lugares[destinoCodLugar];
+
+                responseList.Add(response);
+            }
+            return responseList;
+        }
+
+        public async Task<bool> DeletePreplanTalma(int codigo)
+        {
+            string sql = @"UPDATE preplan_talma SET eliminado = '1' WHERE codigo = @Codigo";
+
+            var result = await _doConnection.ExecuteAsync(sql, new { Codigo = codigo }, transaction: _doTransaction);
+            return result > 0;
+        }
+
+        public async Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalmaEliminados(string tipo, string fecha, string hora)
+        {
+            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, numero, 
+                  eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
+           FROM preplan_talma 
+           WHERE eliminado = '1' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
+            var parameters = new
+            {
+                Tipo = tipo,
+                Fecha = fecha,
+                Hora = hora
+            };
+            var results = await _doConnection.QueryAsync<dynamic>(sql, parameters, transaction: _doTransaction);
+            if (!results.Any())
+                return new List<PreplanTalmaResponse>();
+
+            // Objeto predefinido para el aeropuerto
+            var aeropuertoInfo = new LugarInfo
+            {
+                Direccion = "Destino Nuevo Aeropuerto Internacional Jorge Chávez",
+                Distrito = "Callao",
+                Wy = "-12.034004553836395",
+                Wx = "-77.11457919557617",
+                Referencia = null
+            };
+
+            // Obtener todos los códigos de lugar únicos (excluyendo 4175 para destinocodigo)
+            var todosLosCodigos = new HashSet<string>();
+            foreach (var row in results)
+            {
+                // Solo agregar destinocodigo si es diferente de 4175
+                if (!string.IsNullOrEmpty(row.destinocodigo?.ToString()) && row.destinocodigo.ToString() != "4175")
+                    todosLosCodigos.Add(row.destinocodigo.ToString());
+
+                if (!string.IsNullOrEmpty(row.destinocodlugar?.ToString()))
+                    todosLosCodigos.Add(row.destinocodlugar.ToString());
+            }
+
+            // Una sola consulta para obtener todos los lugares
+            var lugares = new Dictionary<string, LugarInfo>();
+
+            // Agregar el aeropuerto al diccionario
+            lugares["4175"] = aeropuertoInfo;
+
+            if (todosLosCodigos.Any())
+            {
+                // Convertir los strings a int para la consulta
+                var codigosInt = todosLosCodigos
+                    .Select(c => int.TryParse(c, out var num) ? num : (int?)null)
+                    .Where(n => n.HasValue)
+                    .Select(n => n.Value)
+                    .ToList();
+
+                string sqlLugares = @"SELECT codlugar, direccion, distrito, wy, wx, referencia 
+                     FROM lugarcliente 
+                     WHERE estado = 'A' AND codlugar IN @Codigos";
+
+                var lugaresResult = await _doConnection.QueryAsync<dynamic>(sqlLugares,
+                    new { Codigos = codigosInt },
+                    transaction: _doTransaction);
+
+                foreach (var lugar in lugaresResult)
+                {
+                    lugares[lugar.codlugar.ToString()] = new LugarInfo
+                    {
+                        Direccion = lugar.direccion?.ToString(),
+                        Distrito = lugar.distrito?.ToString(),
+                        Wy = lugar.wy?.ToString(),
+                        Wx = lugar.wx?.ToString(),
+                        Referencia = lugar.referencia?.ToString()
+                    };
+                }
+            }
+
+            // Construir la respuesta
+            var responseList = new List<PreplanTalmaResponse>();
+            foreach (var row in results)
+            {
+                var response = new PreplanTalmaResponse
+                {
+                    Codigo = row.codigo.ToString(),
+                    Nombre = row.nombre.ToString(),
+                    Fecha = row.fecha.ToString(),
+                    Hora = row.hora.ToString(),
+                    Tipo = row.tipo.ToString(),
+                    Horaprog = row.horaprog?.ToString(),
+                    Orden = row.orden?.ToString(),
+                    Grupo = row.numero?.ToString(),
+                    Codconductor = row.codconductor?.ToString(),
+                    Codunidad = row.codunidad?.ToString(),
+                    Empresa = row.empresa.ToString()
+                };
+
+                var destinoCodigo = row.destinocodigo?.ToString();
+                var destinoCodLugar = row.destinocodlugar?.ToString();
+
+                if (!string.IsNullOrEmpty(destinoCodigo) && lugares.ContainsKey(destinoCodigo))
+                    response.Destino = lugares[destinoCodigo];
+                if (!string.IsNullOrEmpty(destinoCodLugar) && lugares.ContainsKey(destinoCodLugar))
+                    response.DireccionPasajero = lugares[destinoCodLugar];
+
+                responseList.Add(response);
+            }
+            return responseList;
+        }
+
+        public async Task<int> SavePreplanTalma(List<UpdatePreplanTalma> pedidos)
+        {
+            // Aplicar valor por defecto para Destinocodigo si es null
+            foreach (var pedido in pedidos)
+            {
+                if (string.IsNullOrEmpty(pedido.Destinocodigo))
+                {
+                    pedido.Destinocodigo = "4175";
+                }
+            }
+
+            string sql = @"UPDATE preplan_talma 
+                   SET horaprog = @Horaprog,
+                       orden = @Orden,
+                       numero = @Numero,
+                       codconductor = @Codconductor,
+                       codunidad = @Codunidad,
+                       destinocodigo = @Destinocodigo,
+                       destinocodlugar = @Destinocodlugar
+                   WHERE codigo = @Codigo";
+
+            var result = await _doConnection.ExecuteAsync(sql, pedidos, transaction: _doTransaction);
+            return result;
         }
     }
 }

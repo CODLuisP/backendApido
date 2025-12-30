@@ -117,5 +117,113 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, "Hubo un error al procesar la solicitud.");
             }
         }
+
+        [HttpDelete("DeletePreplanTalma/{codigo}")]
+        public async Task<IActionResult> DeletePreplanTalma(int codigo)
+        {
+            try
+            {
+                var resultado = await _uow.TalmaRepository.DeletePreplanTalma(codigo);
+
+                if (resultado)
+                {
+                    _uow.SaveChanges();
+                    return Ok(new
+                    {
+                        mensaje = $"Registro {codigo} eliminado correctamente",
+                        exitoso = true
+                    });
+                }
+                else
+                {
+                    return NotFound(new
+                    {
+                        mensaje = $"No se encontró el registro {codigo}",
+                        exitoso = false
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = $"Error interno del servidor: {ex.Message}",
+                    exitoso = false
+                });
+            }
+        }
+
+        [HttpGet("PreplanTalmaEliminados")]
+        public async Task<IActionResult> GetPreplanTalmaEliminados([FromQuery] string tipo, [FromQuery] string fecha, [FromQuery] string hora)
+        {
+            try
+            {
+                var pedidos = await _readOnlyUow.TalmaRepository.GetPreplanTalmaEliminados(tipo, fecha, hora);
+                if (pedidos == null || !pedidos.Any())
+                    return NotFound("No se encontraron registros en preplan_talma.");
+                return Ok(pedidos);
+            }
+            catch
+            {
+                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+            }
+        }
+
+        [HttpPost("SavePreplanTalma")]
+        public async Task<IActionResult> SavePreplanTalma([FromBody] List<UpdatePreplanTalma> pedidos)
+        {
+            try
+            {
+                // Validación inicial
+                if (pedidos == null || !pedidos.Any())
+                    return BadRequest("No se han proporcionado registros para procesar.");
+
+                // Procesar todos los registros
+                var registrosActualizados = await _uow.TalmaRepository.SavePreplanTalma(pedidos);
+
+                // Guardar cambios si hay transacción pendiente
+                _uow.SaveChanges();
+
+                // Determinar el tipo de respuesta según el resultado
+                if (registrosActualizados == pedidos.Count)
+                {
+                    return Ok(new
+                    {
+                        mensaje = "Todos los registros se actualizaron correctamente",
+                        registrosActualizados = registrosActualizados,
+                        exitoso = true
+                    });
+                }
+                else if (registrosActualizados > 0)
+                {
+                    return Ok(new
+                    {
+                        mensaje = $"Proceso completado con errores. {registrosActualizados} de {pedidos.Count} registros actualizados correctamente",
+                        registrosActualizados = registrosActualizados,
+                        registrosConError = pedidos.Count - registrosActualizados,
+                        exitoso = false
+                    });
+                }
+                else
+                {
+                    return BadRequest(new
+                    {
+                        mensaje = "No se pudo actualizar ningún registro",
+                        registrosConError = pedidos.Count,
+                        exitoso = false
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log del error si tienes logger configurado
+                // _logger.LogError(ex, "Error al actualizar pedidos Talma");
+                return StatusCode(500, new
+                {
+                    mensaje = $"Error interno del servidor: {ex.Message}",
+                    exitoso = false
+                });
+            }
+        }
     }
 }
