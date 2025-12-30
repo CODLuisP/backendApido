@@ -642,5 +642,19 @@ namespace VelsatBackendAPI.Data.Repositories
             var result = await _doConnection.ExecuteAsync(sql, pedidos, transaction: _doTransaction);
             return result;
         }
+
+        public async Task<IEnumerable<string>> GetHoras(string fecha)
+        {
+            string sql = @"SELECT DISTINCT hora FROM preplan_talma WHERE fecha = @Fecha AND eliminado = '0' ORDER BY hora";
+
+            var parameters = new
+            {
+                Fecha = fecha
+            };
+
+            var result = await _doConnection.QueryAsync<string>(sql, parameters, transaction: _doTransaction);
+
+            return result;
+        }
     }
 }

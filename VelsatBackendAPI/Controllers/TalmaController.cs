@@ -225,5 +225,28 @@ namespace VelsatBackendAPI.Controllers
                 });
             }
         }
+
+        [HttpGet("GetHoras")]
+        public async Task<IActionResult> GetHoras([FromQuery] string fecha)
+        {
+            try
+            {
+                // Validación del parámetro
+                if (string.IsNullOrWhiteSpace(fecha))
+                    return BadRequest("La fecha es requerida.");
+
+                var horas = await _readOnlyUow.TalmaRepository.GetHoras(fecha);
+
+                if (horas == null || !horas.Any())
+                    return NotFound("No se encontraron horas para la fecha especificada.");
+
+                return Ok(horas);
+            }
+            catch (Exception ex)
+            {
+                // _logger.LogError(ex, "Error al obtener horas");
+                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+            }
+        }
     }
 }

@@ -13,11 +13,13 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalma(string tipo, string fecha, string hora);
 
+        Task<int> SavePreplanTalma(List<UpdatePreplanTalma> pedidos);
+
         Task<bool> DeletePreplanTalma(int codigo);
 
         Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalmaEliminados(string tipo, string fecha, string hora);
 
-        Task<int> SavePreplanTalma(List<UpdatePreplanTalma> pedidos);
+        Task<IEnumerable<string>> GetHoras(string fecha);
 
     }
 }
