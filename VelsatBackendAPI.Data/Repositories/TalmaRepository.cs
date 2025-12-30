@@ -254,14 +254,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 (
                     codlan, codcliente, nombre, fecha, hora, tipo, fecreg, 
                     distancia, horaprog, orden, grupo, codconductor, codunidad, 
-                    usuario, empresa, eliminado, cerrado, borrado, 
+                    usuario, empresa, eliminado, cerrado, 
                     destinocodigo, destinocodlugar, direccionalterna, codservicio
                 ) 
                 VALUES 
                 (
                     @Codlan, @Codcliente, @Nombre, @Fecha, @Hora, @Tipo, @Fecreg,
                     @Distancia, @Horaprog, @Orden, @Grupo, @Codconductor, @Codunidad,
-                    @Usuario, @Empresa, @Eliminado, @Cerrado, @Borrado,
+                    @Usuario, @Empresa, @Eliminado, @Cerrado,
                     @Destinocodigo, @Destinocodlugar, @Direccionalterna, @Codservicio
                 )";
 
@@ -303,14 +303,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 (
                     codlan, codcliente, nombre, fecha, hora, tipo, fecreg, 
                     distancia, horaprog, orden, grupo, codconductor, codunidad, 
-                    usuario, empresa, eliminado, cerrado, borrado, 
+                    usuario, empresa, eliminado, cerrado, 
                     destinocodigo, destinocodlugar, direccionalterna, codservicio
                 ) 
                 VALUES 
                 (
                     @Codlan, @Codcliente, @Nombre, @Fecha, @Hora, @Tipo, @Fecreg,
                     @Distancia, @Horaprog, @Orden, @Grupo, @Codconductor, @Codunidad,
-                    @Usuario, @Empresa, @Eliminado, @Cerrado, @Borrado,
+                    @Usuario, @Empresa, @Eliminado, @Cerrado,
                     @Destinocodigo, @Destinocodlugar, @Direccionalterna, @Codservicio
                 )";
 
