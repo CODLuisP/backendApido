@@ -21,5 +21,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<IEnumerable<string>> GetHoras(string fecha);
 
+        Task<int> CreateServicios(List<ServicioRequest> servicios);
+
     }
 }

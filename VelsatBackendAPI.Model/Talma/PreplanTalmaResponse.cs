@@ -19,7 +19,7 @@ namespace VelsatBackendAPI.Model.Talma
         public string Grupo { get; set; }
         public string Cerrado { get; set; }
         public string Eliminado { get; set; }
-        public string Codconductor { get; set; }
+        public Conductor? Conductor { get; set; }
         public string Codunidad { get; set; }
         public string Empresa { get; set; }
 

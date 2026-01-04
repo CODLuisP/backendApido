@@ -248,5 +248,59 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, "Hubo un error al procesar la solicitud.");
             }
         }
+
+        [HttpPost("CreateServicios")]
+        public async Task<IActionResult> CreateServicios([FromBody] List<ServicioRequest> servicios)
+        {
+            try
+            {
+                // Validación inicial
+                if (servicios == null || !servicios.Any())
+                    return BadRequest("No se han proporcionado servicios para crear.");
+
+                // Crear los servicios
+                var serviciosCreados = await _uow.TalmaRepository.CreateServicios(servicios);
+
+                // Guardar cambios
+                _uow.SaveChanges();
+
+                if (serviciosCreados == servicios.Count)
+                {
+                    return Ok(new
+                    {
+                        mensaje = "Todos los servicios se crearon correctamente",
+                        serviciosCreados = serviciosCreados,
+                        exitoso = true
+                    });
+                }
+                else if (serviciosCreados > 0)
+                {
+                    return Ok(new
+                    {
+                        mensaje = $"Se crearon {serviciosCreados} de {servicios.Count} servicios",
+                        serviciosCreados = serviciosCreados,
+                        serviciosConError = servicios.Count - serviciosCreados,
+                        exitoso = false
+                    });
+                }
+                else
+                {
+                    return BadRequest(new
+                    {
+                        mensaje = "No se pudo crear ningún servicio",
+                        exitoso = false
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                // _logger.LogError(ex, "Error al crear servicios");
+                return StatusCode(500, new
+                {
+                    mensaje = $"Error interno del servidor: {ex.Message}",
+                    exitoso = false
+                });
+            }
+        }
     }
 }

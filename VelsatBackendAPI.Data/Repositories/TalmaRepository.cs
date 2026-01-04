@@ -401,22 +401,26 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalma(string tipo, string fecha, string hora)
         {
             string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, grupo, 
-                  cerrado, eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
-           FROM preplan_talma 
-           WHERE cerrado = '0' AND eliminado = '0' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
+                   cerrado, eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
+                   FROM preplan_talma 
+                   WHERE cerrado = '0' AND eliminado = '0' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
+
             var parameters = new
             {
                 Tipo = tipo,
                 Fecha = fecha,
                 Hora = hora
             };
+
             var results = await _doConnection.QueryAsync<dynamic>(sql, parameters, transaction: _doTransaction);
+
             if (!results.Any())
                 return new List<PreplanTalmaResponse>();
 
             // Objeto predefinido para el aeropuerto
             var aeropuertoInfo = new LugarInfo
             {
+                Codlugar = 4175,
                 Direccion = "Destino Nuevo Aeropuerto Internacional Jorge Chávez",
                 Distrito = "Callao",
                 Wy = "-12.034004553836395",
@@ -446,14 +450,18 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 // Convertir los strings a int para la consulta
                 var codigosInt = todosLosCodigos
-                    .Select(c => int.TryParse(c, out var num) ? num : (int?)null)
+                    .Select(c =>
+                    {
+                        int num;
+                        return int.TryParse(c, out num) ? num : (int?)null;
+                    })
                     .Where(n => n.HasValue)
                     .Select(n => n.Value)
                     .ToList();
 
                 string sqlLugares = @"SELECT codlugar, direccion, distrito, wy, wx, referencia 
-                     FROM lugarcliente 
-                     WHERE estado = 'A' AND codlugar IN @Codigos";
+                             FROM lugarcliente 
+                             WHERE estado = 'A' AND codlugar IN @Codigos";
 
                 var lugaresResult = await _doConnection.QueryAsync<dynamic>(sqlLugares,
                     new { Codigos = codigosInt },
@@ -463,12 +471,47 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     lugares[lugar.codlugar.ToString()] = new LugarInfo
                     {
+                        Codlugar = Convert.ToInt32(lugar.codlugar),
                         Direccion = lugar.direccion?.ToString(),
                         Distrito = lugar.distrito?.ToString(),
                         Wy = lugar.wy?.ToString(),
                         Wx = lugar.wx?.ToString(),
                         Referencia = lugar.referencia?.ToString()
                     };
+                }
+            }
+
+            // Obtener todos los conductores únicos
+            var codigosConductores = new HashSet<int>();
+            foreach (var row in results)
+            {
+                if (!string.IsNullOrEmpty(row.codconductor?.ToString()) && row.codconductor.ToString() != "0")
+                {
+                    int codConductorTemp;
+                    if (int.TryParse(row.codconductor.ToString(), out codConductorTemp))
+                    {
+                        codigosConductores.Add(codConductorTemp);
+                    }
+                }
+            }
+
+            // Obtener todos los conductores de una sola vez
+            var conductores = new Dictionary<int, Conductor>();
+            if (codigosConductores.Any())
+            {
+                string sqlConductores = @"SELECT codtaxi, nombres, apellidos 
+                                 FROM taxi 
+                                 WHERE codtaxi IN @Codigos AND estado = 'A'";
+
+                var conductoresResult = await _doConnection.QueryAsync<Conductor>(
+                    sqlConductores,
+                    new { Codigos = codigosConductores.ToList() },
+                    transaction: _doTransaction
+                );
+
+                foreach (var conductor in conductoresResult)
+                {
+                    conductores[conductor.Codtaxi] = conductor;
                 }
             }
 
@@ -486,21 +529,35 @@ namespace VelsatBackendAPI.Data.Repositories
                     Horaprog = row.horaprog?.ToString(),
                     Orden = row.orden?.ToString(),
                     Grupo = row.grupo?.ToString(),
-                    Codconductor = row.codconductor?.ToString(),
                     Codunidad = row.codunidad?.ToString(),
                     Empresa = row.empresa.ToString()
                 };
 
+                // Asignar conductor si existe
+                if (!string.IsNullOrEmpty(row.codconductor?.ToString()))
+                {
+                    int codConductorInt;
+                    if (int.TryParse(row.codconductor.ToString(), out codConductorInt) &&
+                        codConductorInt != 0 &&
+                        conductores.ContainsKey(codConductorInt))
+                    {
+                        response.Conductor = conductores[codConductorInt];
+                    }
+                }
+
+                // Asignar lugares
                 var destinoCodigo = row.destinocodigo?.ToString();
                 var destinoCodLugar = row.destinocodlugar?.ToString();
 
                 if (!string.IsNullOrEmpty(destinoCodigo) && lugares.ContainsKey(destinoCodigo))
                     response.Destino = lugares[destinoCodigo];
+
                 if (!string.IsNullOrEmpty(destinoCodLugar) && lugares.ContainsKey(destinoCodLugar))
                     response.DireccionPasajero = lugares[destinoCodLugar];
 
                 responseList.Add(response);
             }
+
             return responseList;
         }
 
@@ -531,6 +588,7 @@ namespace VelsatBackendAPI.Data.Repositories
             // Objeto predefinido para el aeropuerto
             var aeropuertoInfo = new LugarInfo
             {
+                Codlugar = 4175,
                 Direccion = "Destino Nuevo Aeropuerto Internacional Jorge Chávez",
                 Distrito = "Callao",
                 Wy = "-12.034004553836395",
@@ -560,10 +618,11 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 // Convertir los strings a int para la consulta
                 var codigosInt = todosLosCodigos
-                    .Select(c => int.TryParse(c, out var num) ? num : (int?)null)
-                    .Where(n => n.HasValue)
-                    .Select(n => n.Value)
-                    .ToList();
+                    .Select(c =>
+                    {
+                        int num;
+                        return int.TryParse(c, out num) ? num : (int?)null;
+                    }).Where(n => n.HasValue).Select(n => n.Value).ToList();
 
                 string sqlLugares = @"SELECT codlugar, direccion, distrito, wy, wx, referencia 
                      FROM lugarcliente 
@@ -577,12 +636,47 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     lugares[lugar.codlugar.ToString()] = new LugarInfo
                     {
+                        Codlugar = Convert.ToInt32(lugar.codlugar),
                         Direccion = lugar.direccion?.ToString(),
                         Distrito = lugar.distrito?.ToString(),
                         Wy = lugar.wy?.ToString(),
                         Wx = lugar.wx?.ToString(),
                         Referencia = lugar.referencia?.ToString()
                     };
+                }
+            }
+
+            // Obtener todos los conductores únicos
+            var codigosConductores = new HashSet<int>();
+            foreach (var row in results)
+            {
+                if (!string.IsNullOrEmpty(row.codconductor?.ToString()) && row.codconductor.ToString() != "0")
+                {
+                    int codConductorTemp;
+                    if (int.TryParse(row.codconductor.ToString(), out codConductorTemp))
+                    {
+                        codigosConductores.Add(codConductorTemp);
+                    }
+                }
+            }
+
+            // Obtener todos los conductores de una sola vez
+            var conductores = new Dictionary<int, Conductor>();
+            if (codigosConductores.Any())
+            {
+                string sqlConductores = @"SELECT codtaxi, nombres, apellidos 
+                             FROM taxi 
+                             WHERE codtaxi IN @Codigos AND estado = 'A'";
+
+                var conductoresResult = await _doConnection.QueryAsync<Conductor>(
+                    sqlConductores,
+                    new { Codigos = codigosConductores.ToList() },
+                    transaction: _doTransaction
+                );
+
+                foreach (var conductor in conductoresResult)
+                {
+                    conductores[conductor.Codtaxi] = conductor;
                 }
             }
 
@@ -600,10 +694,21 @@ namespace VelsatBackendAPI.Data.Repositories
                     Horaprog = row.horaprog?.ToString(),
                     Orden = row.orden?.ToString(),
                     Grupo = row.grupo?.ToString(),
-                    Codconductor = row.codconductor?.ToString(),
                     Codunidad = row.codunidad?.ToString(),
                     Empresa = row.empresa.ToString()
                 };
+
+                // Asignar conductor si existe
+                if (!string.IsNullOrEmpty(row.codconductor?.ToString()))
+                {
+                    int codConductorInt;
+                    if (int.TryParse(row.codconductor.ToString(), out codConductorInt) &&
+                        codConductorInt != 0 &&
+                        conductores.ContainsKey(codConductorInt))
+                    {
+                        response.Conductor = conductores[codConductorInt];
+                    }
+                }
 
                 var destinoCodigo = row.destinocodigo?.ToString();
                 var destinoCodLugar = row.destinocodlugar?.ToString();
@@ -656,5 +761,165 @@ namespace VelsatBackendAPI.Data.Repositories
 
             return result;
         }
+
+        public async Task<int> CreateServicios(List<ServicioRequest> servicios)
+        {
+            int serviciosCreados = 0;
+
+            Console.WriteLine("==== INICIO CreateServicios ====");
+            Console.WriteLine($"Servicios recibidos: {servicios?.Count ?? 0}");
+
+            // Obtener el número máximo del día actual filtrando por empresa TALMA
+            string fechaHoy = DateTime.Now.ToString("dd/MM/yyyy");
+
+            Console.WriteLine($"Fecha de proceso: {fechaHoy}");
+
+            string sqlMaxNumero = @"SELECT COALESCE(MAX(CAST(numero AS UNSIGNED)), 0) 
+                    FROM servicio 
+                    WHERE DATE(STR_TO_DATE(SUBSTRING_INDEX(fecha, ' ', 1), '%d/%m/%Y')) = 
+                          DATE(STR_TO_DATE(@FechaHoy, '%d/%m/%Y'))
+                    AND UPPER(empresa) = 'TALMA'";
+
+            var maxNumero = await _doConnection.QueryFirstOrDefaultAsync<int>(
+                sqlMaxNumero,
+                new { FechaHoy = fechaHoy },
+                transaction: _doTransaction
+            );
+
+            Console.WriteLine($"Máximo número encontrado hoy para TALMA: {maxNumero}");
+
+            int numeroActual = maxNumero;
+
+            foreach (var servicio in servicios)
+            {
+                numeroActual++;
+                string numeroServicio = numeroActual.ToString();
+
+                Console.WriteLine("--------------------------------------------------");
+                Console.WriteLine($"Creando servicio Nº {numeroServicio}");
+                Console.WriteLine($"Tipo: {servicio.Tipo}, Unidad: {servicio.Unidad}, Empresa: {servicio.Empresa}");
+                Console.WriteLine($"Fecha servicio: {servicio.Fecha}");
+                Console.WriteLine($"Subservicios: {servicio.Subservicios?.Count ?? 0}");
+
+                string sqlInsertServicio = @"INSERT INTO servicio 
+                    (numero, tipo, unidad, codconductor, codusuario, estado, 
+                     fecha, grupo, empresa, totalpax, numeromovil,
+                     numeroguia, fechaini, fechafin, fechainifin, fechaprog, 
+                     actpedido, codzona, fecplan, atolatam, gourmetlatam,
+                     parqueolatam, lcclatam, alertcancelpas, fecasignacion,
+                     usuasignacion, tipoarea, retraso, enviollegadasimon,
+                     envioretrasosimon, copiloto, tipoturismo, fecretorno,
+                     origen, destino, numdias, grupoturismo, owner,
+                     costototal, codigoexterno, status)
+                    VALUES 
+                    (@Numero, @Tipo, @Unidad, @Codconductor, @Codusuario, @Estado,
+                     @Fecha, @Grupo, @Empresa, @TotalPax, @NumeroMovil,
+                     null, null, null, null, null,
+                     null, null, null, null, null,
+                     null, null, null, null,
+                     null, null, null, null,
+                     null, null, null, null,
+                     null, null, null, null, null,
+                     null, null, null)";
+
+                var parametersServicio = new
+                {
+                    Numero = numeroServicio,
+                    Tipo = servicio.Tipo,
+                    Unidad = servicio.Unidad,
+                    Codconductor = servicio.Codconductor,
+                    Codusuario = servicio.Codusuario ?? "SYSTEM",
+                    Estado = string.IsNullOrEmpty(servicio.Estado) ? "P" : servicio.Estado,
+                    Fecha = servicio.Fecha,
+                    Grupo = string.IsNullOrEmpty(servicio.Grupo) ? "T" : servicio.Grupo,
+                    Empresa = string.IsNullOrEmpty(servicio.Empresa) ? "TALMA" : servicio.Empresa,
+                    TotalPax = servicio.Totalpax ?? servicio.Subservicios?.Count.ToString() ?? "0",
+                    NumeroMovil = numeroServicio
+                };
+
+                try
+                {
+                    Console.WriteLine("Insertando servicio...");
+                    var result = await _doConnection.ExecuteAsync(
+                        sqlInsertServicio,
+                        parametersServicio,
+                        transaction: _doTransaction
+                    );
+
+                    Console.WriteLine($"Resultado INSERT servicio: {result}");
+
+                    if (result > 0)
+                    {
+                        var codServicio = await _doConnection.QuerySingleAsync<int>(
+                            "SELECT LAST_INSERT_ID()",
+                            transaction: _doTransaction
+                        );
+
+                        Console.WriteLine($"Servicio creado con codservicio: {codServicio}");
+
+                        if (servicio.Subservicios != null && servicio.Subservicios.Any())
+                        {
+                            Console.WriteLine("Insertando subservicios...");
+                            int ordenPasajero = 1;
+
+                            foreach (var pasajero in servicio.Subservicios)
+                            {
+                                Console.WriteLine($"  Pasajero orden {ordenPasajero} | Codcliente: {pasajero.Codcliente}");
+
+                                string sqlInsertSubservicio = @"INSERT INTO subservicio 
+                                       (codubicli, fecha, estado, fechaaten, codcliente, 
+                                        numero, codservicio, costo, observacion, calificacion,
+                                        distancia, categorialan, arealan, vuelo, fechainicio,
+                                        fechafin, msjestado, msjcercaunireg, msjcercauniaten, orden,
+                                        feccancelpas, feccancelcentral, nomguia, nomgrupo, descripcion,
+                                        fecgeocontrol, moneda, centrocosto, enviosimon)
+                                       VALUES 
+                                       (@Codubicli, @Fecha, @Estado, null, @Codcliente,
+                                        @Numero, @Codservicio, null, null, null,
+                                        null, null, null, null, null,
+                                        null, null, null, null, @Orden,
+                                        null, null, null, null, null,
+                                        null, null, null, null)";
+
+                                var parametersSubservicio = new
+                                {
+                                    Codubicli = pasajero.Codubicli,
+                                    Fecha = pasajero.Fecha ?? servicio.Fecha,
+                                    Estado = pasajero.Estado ?? "P",
+                                    Codcliente = pasajero.Codcliente,
+                                    Numero = numeroServicio,
+                                    Codservicio = codServicio.ToString(),
+                                    Orden = pasajero.Orden
+                                };
+
+                                await _doConnection.ExecuteAsync(
+                                    sqlInsertSubservicio,
+                                    parametersSubservicio,
+                                    transaction: _doTransaction
+                                );
+
+                                ordenPasajero++;
+                            }
+                        }
+
+                        serviciosCreados++;
+                        Console.WriteLine($"Servicio Nº {numeroServicio} creado correctamente");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("❌ ERROR AL INSERTAR SERVICIO");
+                    Console.WriteLine($"Número: {numeroServicio}");
+                    Console.WriteLine($"Mensaje: {ex.Message}");
+                    Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                }
+            }
+
+            Console.WriteLine("==== FIN CreateServicios ====");
+            Console.WriteLine($"Total servicios creados: {serviciosCreados}");
+
+            return serviciosCreados;
+        }
+
     }
 }

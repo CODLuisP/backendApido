@@ -8,6 +8,7 @@ namespace VelsatBackendAPI.Model.Talma
 {
     public class LugarInfo
     {
+        public int Codlugar {  get; set; }
         public string Direccion { get; set; }
         public string Distrito { get; set; }
         public string Wy { get; set; }
