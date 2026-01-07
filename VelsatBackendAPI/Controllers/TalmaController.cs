@@ -302,5 +302,33 @@ namespace VelsatBackendAPI.Controllers
                 });
             }
         }
+
+        [HttpPost("AgregarPasajero")]
+        public async Task<IActionResult> RegistrarPasajeroGrupo([FromBody] PedidoTalma pedido, [FromQuery] string usuario)
+        {
+            if (pedido == null)
+                return BadRequest(new { mensaje = "El pedido no puede ser nulo." });
+
+            try
+            {
+                int result = await _uow.TalmaRepository.RegistrarPasajeroGrupo(pedido, usuario);
+
+                _uow.SaveChanges(); // ✅ Solo en POST, PUT, DELETE
+
+                if (result > 0)
+                    return Ok(new { mensaje = "Pasajero registrado correctamente", filasAfectadas = result });
+
+                return BadRequest(new { mensaje = "No se pudo registrar el pasajero." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno al registrar el pasajero.",
+                    detalle = ex.Message
+                });
+            }
+
+        }
     }
 }

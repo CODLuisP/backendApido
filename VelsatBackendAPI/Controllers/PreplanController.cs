@@ -296,6 +296,31 @@ namespace VelsatBackendAPI.Controllers
             }
 
         }
+        [HttpGet("GetPasajerosEmpresa")]
+        public async Task<IActionResult> GetPasajerosEmpresa([FromQuery] string palabra, [FromQuery] string codusuario, [FromQuery] string empresa)
+        {
+            if (string.IsNullOrEmpty(palabra) || string.IsNullOrEmpty(codusuario) || string.IsNullOrEmpty(empresa))
+            {
+                return BadRequest(new { message = "Los parámetros palabra y codusuario son requeridos" });
+            }
+
+            try
+            {
+                var pasajeros = await _readOnlyUow.PreplanRepository.GetPasajerosEmpresa(palabra, codusuario, empresa);
+
+                if (pasajeros == null || !pasajeros.Any())
+                {
+                    return NotFound(new { message = "No se encontraron pasajeros." });
+                }
+
+                return Ok(pasajeros);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener pasajeros", error = ex.Message });
+            }
+
+        }
 
         [HttpGet("GetServicioPasajero")]
         public async Task<IActionResult> GetServicioPasajero([FromQuery] string usuario, [FromQuery] string fec, [FromQuery] string codcliente)

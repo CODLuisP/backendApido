@@ -1473,6 +1473,35 @@ namespace VelsatBackendAPI.Data.Repositories
             return listaPasajeros;
         }
 
+        //Agregar filtro por empresa a  movilbus
+        public async Task<List<Usuario>> GetPasajerosEmpresa(string palabra, string codusuario, string empresa)
+        {
+            string sql = @"SELECT DISTINCT l.codlugar, c.codcliente, c.nombres, c.apellidos, c.codlan, l.wy, l.wx, l.direccion, l.distrito, l.zona from cliente c, lugarcliente l where l.codcli=c.codlugar and c.estadocuenta='A' and l.estado='A' and c.codusuario = @Codusuario and c.empresa = @Empresa and c.apellidos like @Palabra and c.destino='0' LIMIT 10";
+
+            var parameters = new { Codusuario = codusuario, Empresa = empresa, Palabra = $"%{palabra}%" }; // ✅ Aquí se añade el %
+
+            var pasajeros = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
+
+            List<Usuario> listaPasajeros = pasajeros.Select(row => new Usuario
+            {
+                Codigo = row.codcliente.ToString(),
+                Codlan = row.codlan,
+                Nombre = row.nombres,
+                Apepate = row.apellidos,
+                Lugar = new LugarCliente
+                {
+                    Codlugar = row.codlugar,
+                    Direccion = row.direccion,
+                    Distrito = row.distrito,
+                    Wx = row.wx,
+                    Wy = row.wy,
+                    Zona = row.zona
+                }
+            }).ToList();
+
+            return listaPasajeros;
+        }
+
         public async Task<List<Servicio>> GetServicioPasajero(string usuario, string fec, string codcliente)
         {
             // Parsear la fecha

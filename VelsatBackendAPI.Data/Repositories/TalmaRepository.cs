@@ -400,7 +400,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalma(string tipo, string fecha, string hora)
         {
-            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, grupo, 
+            string sql = @"SELECT codigo, codcliente, codlan, nombre, fecha, hora, tipo, horaprog, orden, grupo, 
                    cerrado, eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
                    FROM preplan_talma 
                    WHERE cerrado = '0' AND eliminado = '0' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
@@ -522,6 +522,8 @@ namespace VelsatBackendAPI.Data.Repositories
                 var response = new PreplanTalmaResponse
                 {
                     Codigo = row.codigo.ToString(),
+                    Codcliente = row.codcliente.ToString(),
+                    Codlan = row.codlan.ToString(),
                     Nombre = row.nombre.ToString(),
                     Fecha = row.fecha.ToString(),
                     Hora = row.hora.ToString(),
@@ -571,7 +573,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<IEnumerable<PreplanTalmaResponse>> GetPreplanTalmaEliminados(string tipo, string fecha, string hora)
         {
-            string sql = @"SELECT codigo, nombre, fecha, hora, tipo, horaprog, orden, grupo, 
+            string sql = @"SELECT codigo, codcliente, codlan, nombre, fecha, hora, tipo, horaprog, orden, grupo, 
                   eliminado, codconductor, codunidad, empresa, destinocodigo, destinocodlugar 
            FROM preplan_talma 
            WHERE eliminado = '1' AND tipo = @Tipo AND fecha = @Fecha AND hora = @Hora";
@@ -687,6 +689,8 @@ namespace VelsatBackendAPI.Data.Repositories
                 var response = new PreplanTalmaResponse
                 {
                     Codigo = row.codigo.ToString(),
+                    Codcliente = row.codcliente.ToString(),
+                    Codlan = row.codlan.ToString(),
                     Nombre = row.nombre.ToString(),
                     Fecha = row.fecha.ToString(),
                     Hora = row.hora.ToString(),
@@ -775,10 +779,10 @@ namespace VelsatBackendAPI.Data.Repositories
             Console.WriteLine($"Fecha de proceso: {fechaHoy}");
 
             string sqlMaxNumero = @"SELECT COALESCE(MAX(CAST(numero AS UNSIGNED)), 0) 
-                    FROM servicio 
-                    WHERE DATE(STR_TO_DATE(SUBSTRING_INDEX(fecha, ' ', 1), '%d/%m/%Y')) = 
-                          DATE(STR_TO_DATE(@FechaHoy, '%d/%m/%Y'))
-                    AND UPPER(empresa) = 'TALMA'";
+            FROM servicio 
+            WHERE DATE(STR_TO_DATE(SUBSTRING_INDEX(fecha, ' ', 1), '%d/%m/%Y')) = 
+                  DATE(STR_TO_DATE(@FechaHoy, '%d/%m/%Y'))
+            AND UPPER(empresa) = 'TALMA'";
 
             var maxNumero = await _doConnection.QueryFirstOrDefaultAsync<int>(
                 sqlMaxNumero,
@@ -862,24 +866,27 @@ namespace VelsatBackendAPI.Data.Repositories
                             Console.WriteLine("Insertando subservicios...");
                             int ordenPasajero = 1;
 
+                            // Lista para almacenar los códigos y codservicio
+                            var codigosPreplanActualizar = new List<string>();
+
                             foreach (var pasajero in servicio.Subservicios)
                             {
                                 Console.WriteLine($"  Pasajero orden {ordenPasajero} | Codcliente: {pasajero.Codcliente}");
 
                                 string sqlInsertSubservicio = @"INSERT INTO subservicio 
-                                       (codubicli, fecha, estado, fechaaten, codcliente, 
-                                        numero, codservicio, costo, observacion, calificacion,
-                                        distancia, categorialan, arealan, vuelo, fechainicio,
-                                        fechafin, msjestado, msjcercaunireg, msjcercauniaten, orden,
-                                        feccancelpas, feccancelcentral, nomguia, nomgrupo, descripcion,
-                                        fecgeocontrol, moneda, centrocosto, enviosimon)
-                                       VALUES 
-                                       (@Codubicli, @Fecha, @Estado, null, @Codcliente,
-                                        @Numero, @Codservicio, null, null, null,
-                                        null, null, null, null, null,
-                                        null, null, null, null, @Orden,
-                                        null, null, null, null, null,
-                                        null, null, null, null)";
+                                   (codubicli, fecha, estado, fechaaten, codcliente, 
+                                    numero, codservicio, costo, observacion, calificacion,
+                                    distancia, categorialan, arealan, vuelo, fechainicio,
+                                    fechafin, msjestado, msjcercaunireg, msjcercauniaten, orden,
+                                    feccancelpas, feccancelcentral, nomguia, nomgrupo, descripcion,
+                                    fecgeocontrol, moneda, centrocosto, enviosimon)
+                                   VALUES 
+                                   (@Codubicli, @Fecha, @Estado, null, @Codcliente,
+                                    @Numero, @Codservicio, null, null, null,
+                                    null, null, null, null, null,
+                                    null, null, null, null, @Orden,
+                                    null, null, null, null, null,
+                                    null, null, null, null)";
 
                                 var parametersSubservicio = new
                                 {
@@ -898,7 +905,38 @@ namespace VelsatBackendAPI.Data.Repositories
                                     transaction: _doTransaction
                                 );
 
+                                // Agregar código de preplan_talma si existe
+                                if (!string.IsNullOrEmpty(pasajero.Codigo))
+                                {
+                                    codigosPreplanActualizar.Add(pasajero.Codigo);
+                                    Console.WriteLine($"  Código preplan_talma a actualizar: {pasajero.Codigo}");
+                                }
+
                                 ordenPasajero++;
+                            }
+
+                            // Actualizar registros en preplan_talma con cerrado = 1 y codservicio
+                            if (codigosPreplanActualizar.Any())
+                            {
+                                Console.WriteLine($"Actualizando {codigosPreplanActualizar.Count} registros en preplan_talma...");
+
+                                string sqlUpdatePreplan = @"UPDATE preplan_talma 
+                                   SET cerrado = 1,
+                                       codservicio = @Codservicio
+                                   WHERE codigo IN @Codigos";
+
+                                var registrosActualizados = await _doConnection.ExecuteAsync(
+                                    sqlUpdatePreplan,
+                                    new
+                                    {
+                                        Codservicio = codServicio.ToString(),
+                                        Codigos = codigosPreplanActualizar
+                                    },
+                                    transaction: _doTransaction
+                                );
+
+                                Console.WriteLine($"Registros de preplan_talma actualizados: {registrosActualizados}");
+                                Console.WriteLine($"Codservicio asignado: {codServicio}");
                             }
                         }
 
@@ -921,5 +959,39 @@ namespace VelsatBackendAPI.Data.Repositories
             return serviciosCreados;
         }
 
+        public async Task<int> RegistrarPasajeroGrupo(PedidoTalma pedido, string usuario)
+        {
+            string fechaActual = DateTime.Now.ToString("yyyy-MM-dd");
+
+            pedido.Usuario = usuario;
+            pedido.Fecreg = fechaActual;
+
+            return await RegistroPreplandos(pedido);
+        }
+
+        private async Task<int> RegistroPreplandos(PedidoTalma pedido)
+        {
+            var sql = @"INSERT INTO preplan (codcliente, codlan, nombre, fecha, hora, tipo, horaprog, usuario, fecreg, orden, grupo, empresa, destinocodlugar) VALUES (@Codcliente, @Codlan, @Nombre, @Fecha, @Hora, @Tipo, @Horaprog, @Usuario, @Fecreg, @Orden, @Grupo, @Empresa, @Destinocodlugar)";
+
+            var parameters = new
+            {
+                Codcliente = pedido.Codcliente,
+                Codlan = pedido.Codlan,
+                Nombre = pedido.Nombre,
+                Fecha = pedido.Fecha,
+                Hora = pedido.Hora,
+                Tipo = pedido.Tipo,
+                Horaprog = pedido.Horaprog,
+                Usuario = pedido.Usuario,
+                Fecreg = pedido.Fecreg,
+                Orden = pedido.Orden,
+                Grupo = pedido.Grupo,
+                Empresa = pedido.Empresa,
+                Destinocodlugar = pedido.Destinocodlugar
+            };
+
+            var result = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            return result;
+        }
     }
 }

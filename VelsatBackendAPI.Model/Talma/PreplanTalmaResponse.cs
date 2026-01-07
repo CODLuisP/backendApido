@@ -10,6 +10,8 @@ namespace VelsatBackendAPI.Model.Talma
     {
         // Campos que vienen directamente del SELECT
         public string Codigo { get; set; }
+        public string Codcliente { get; set; }
+        public string Codlan { get; set; }
         public string Nombre { get; set; }
         public string Fecha { get; set; }
         public string Hora { get; set; }

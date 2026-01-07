@@ -32,6 +32,8 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<List<Servicio>> GetServicios(string fecha, string usuario);
 
         Task<List<Usuario>> GetPasajeros(string palabra, string codusuario);
+        Task<List<Usuario>> GetPasajerosEmpresa(string palabra, string codusuario, string empresa);
+
 
         Task<List<Servicio>> GetServicioPasajero(string usuario, string fec, string codcliente);
 
