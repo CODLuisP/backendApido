@@ -745,7 +745,8 @@ namespace VelsatBackendAPI.Data.Repositories
                        codconductor = @Codconductor,
                        codunidad = @Codunidad,
                        destinocodigo = @Destinocodigo,
-                       destinocodlugar = @Destinocodlugar
+                       destinocodlugar = @Destinocodlugar,
+                       eliminado = '0'
                    WHERE codigo = @Codigo";
 
             var result = await _doConnection.ExecuteAsync(sql, pedidos, transaction: _doTransaction);
