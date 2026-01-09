@@ -24,7 +24,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> CreateServicios(List<ServicioRequest> servicios);
 
-        Task<int> RegistrarPasajeroGrupo(PedidoTalma pedido, string usuario);
+        Task<int> RegistrarPasajeroGrupo(List<PedidoTalma> pedidos, string usuario);
 
         Task<int> UpdateDirec(string coddire, string codigo);
 

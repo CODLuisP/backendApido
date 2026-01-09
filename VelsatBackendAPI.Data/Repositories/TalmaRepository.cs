@@ -960,38 +960,27 @@ namespace VelsatBackendAPI.Data.Repositories
             return serviciosCreados;
         }
 
-        public async Task<int> RegistrarPasajeroGrupo(PedidoTalma pedido, string usuario)
+        public async Task<int> RegistrarPasajeroGrupo(List<PedidoTalma> pedidos, string usuario)
         {
             string fechaActual = DateTime.Now.ToString("yyyy-MM-dd");
 
-            pedido.Usuario = usuario;
-            pedido.Fecreg = fechaActual;
+            foreach (var pedido in pedidos)
+            {
+                pedido.Usuario = usuario;
+                pedido.Fecreg = fechaActual;
+            }
 
-            return await RegistroPreplandos(pedido);
+            return await RegistroPreplandos(pedidos);
         }
 
-        private async Task<int> RegistroPreplandos(PedidoTalma pedido)
+        private async Task<int> RegistroPreplandos(List<PedidoTalma> pedidos)
         {
-            var sql = @"INSERT INTO preplan_talma (codcliente, codlan, nombre, fecha, hora, tipo, horaprog, usuario, fecreg, orden, grupo, empresa, destinocodlugar) VALUES (@Codcliente, @Codlan, @Nombre, @Fecha, @Hora, @Tipo, @Horaprog, @Usuario, @Fecreg, @Orden, @Grupo, @Empresa, @Destinocodlugar)";
+            var sql = @"INSERT INTO preplan_talma 
+                (codcliente, codlan, nombre, fecha, hora, tipo, horaprog, usuario, fecreg, orden, grupo, empresa, destinocodigo, destinocodlugar) 
+                VALUES 
+                (@Codcliente, @Codlan, @Nombre, @Fecha, @Hora, @Tipo, @Horaprog, @Usuario, @Fecreg, @Orden, @Grupo, @Empresa, @Destinocodigo, @Destinocodlugar)";
 
-            var parameters = new
-            {
-                Codcliente = pedido.Codcliente,
-                Codlan = pedido.Codlan,
-                Nombre = pedido.Nombre,
-                Fecha = pedido.Fecha,
-                Hora = pedido.Hora,
-                Tipo = pedido.Tipo,
-                Horaprog = pedido.Horaprog,
-                Usuario = pedido.Usuario,
-                Fecreg = pedido.Fecreg,
-                Orden = pedido.Orden,
-                Grupo = pedido.Grupo,
-                Empresa = pedido.Empresa,
-                Destinocodlugar = pedido.Destinocodlugar
-            };
-
-            var result = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            var result = await _doConnection.ExecuteAsync(sql, pedidos, transaction: _doTransaction);
             return result;
         }
 

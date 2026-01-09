@@ -304,31 +304,29 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpPost("AgregarPasajero")]
-        public async Task<IActionResult> RegistrarPasajeroGrupo([FromBody] PedidoTalma pedido, [FromQuery] string usuario)
+        public async Task<IActionResult> RegistrarPasajeroGrupo([FromBody] List<PedidoTalma> pedidos, [FromQuery] string usuario)
         {
-            if (pedido == null)
-                return BadRequest(new { mensaje = "El pedido no puede ser nulo." });
+            if (pedidos == null || !pedidos.Any())
+                return BadRequest(new { mensaje = "La lista de pedidos no puede ser nula o vacía." });
 
             try
             {
-                int result = await _uow.TalmaRepository.RegistrarPasajeroGrupo(pedido, usuario);
-
+                int result = await _uow.TalmaRepository.RegistrarPasajeroGrupo(pedidos, usuario);
                 _uow.SaveChanges(); // ✅ Solo en POST, PUT, DELETE
 
                 if (result > 0)
-                    return Ok(new { mensaje = "Pasajero registrado correctamente", filasAfectadas = result });
+                    return Ok(new { mensaje = "Pasajeros registrados correctamente", filasAfectadas = result });
 
-                return BadRequest(new { mensaje = "No se pudo registrar el pasajero." });
+                return BadRequest(new { mensaje = "No se pudo registrar ningún pasajero." });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new
                 {
-                    mensaje = "Error interno al registrar el pasajero.",
+                    mensaje = "Error interno al registrar los pasajeros.",
                     detalle = ex.Message
                 });
             }
-
         }
 
         [HttpPut("direccion/{coddire}/{codigo}")]
