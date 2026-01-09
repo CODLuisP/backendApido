@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Talma;
 
 namespace VelsatBackendAPI.Data.Repositories
@@ -25,6 +26,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> RegistrarPasajeroGrupo(PedidoTalma pedido, string usuario);
 
+        Task<int> UpdateDirec(string coddire, string codigo);
 
     }
 }

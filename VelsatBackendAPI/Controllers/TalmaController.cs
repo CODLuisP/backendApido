@@ -330,5 +330,35 @@ namespace VelsatBackendAPI.Controllers
             }
 
         }
+
+        [HttpPut("direccion/{coddire}/{codigo}")]
+        public async Task<IActionResult> UpdateDirec([FromRoute] string coddire, [FromRoute] string codigo)
+        {
+            if (string.IsNullOrEmpty(coddire) || string.IsNullOrEmpty(codigo))
+            {
+                return BadRequest(new { message = "Datos inválidos. Se requiere código de cliente y dirección." });
+            }
+
+            try
+            {
+                int filasAfectadas = await _uow.TalmaRepository.UpdateDirec(coddire, codigo);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new { message = "Dirección actualizada correctamente" });
+                }
+                else
+                {
+                    return NotFound(new { message = "No se encontró el registro para actualizar" });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar dirección", error = ex.Message });
+            }
+
+        }
+
     }
 }

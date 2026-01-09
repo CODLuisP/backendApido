@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Talma;
 
 namespace VelsatBackendAPI.Data.Repositories
@@ -972,7 +973,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<int> RegistroPreplandos(PedidoTalma pedido)
         {
-            var sql = @"INSERT INTO preplan (codcliente, codlan, nombre, fecha, hora, tipo, horaprog, usuario, fecreg, orden, grupo, empresa, destinocodlugar) VALUES (@Codcliente, @Codlan, @Nombre, @Fecha, @Hora, @Tipo, @Horaprog, @Usuario, @Fecreg, @Orden, @Grupo, @Empresa, @Destinocodlugar)";
+            var sql = @"INSERT INTO preplan_talma (codcliente, codlan, nombre, fecha, hora, tipo, horaprog, usuario, fecreg, orden, grupo, empresa, destinocodlugar) VALUES (@Codcliente, @Codlan, @Nombre, @Fecha, @Hora, @Tipo, @Horaprog, @Usuario, @Fecreg, @Orden, @Grupo, @Empresa, @Destinocodlugar)";
 
             var parameters = new
             {
@@ -994,5 +995,19 @@ namespace VelsatBackendAPI.Data.Repositories
             var result = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
             return result;
         }
+
+        public async Task<int> UpdateDirec(string coddire, string codigo)
+        {
+            string sql = "UPDATE preplan_talma SET destinocodlugar = @CodDire WHERE codigo = @Codigo";
+
+            var parameters = new
+            {
+                CodDire = coddire,
+                Codigo = codigo
+            };
+
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
     }
 }
