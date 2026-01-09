@@ -461,8 +461,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     .ToList();
 
                 string sqlLugares = @"SELECT codlugar, direccion, distrito, wy, wx, referencia 
-                             FROM lugarcliente 
-                             WHERE estado = 'A' AND codlugar IN @Codigos";
+                             FROM lugarcliente WHERE codlugar IN @Codigos";
 
                 var lugaresResult = await _doConnection.QueryAsync<dynamic>(sqlLugares,
                     new { Codigos = codigosInt },
