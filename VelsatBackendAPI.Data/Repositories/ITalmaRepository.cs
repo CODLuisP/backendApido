@@ -28,5 +28,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> UpdateDirec(string coddire, string codigo);
 
+        Task<int> DeleteLoad(string fecha, string usuario, string empresa);
     }
 }

@@ -422,7 +422,7 @@ namespace VelsatBackendAPI.Data.Repositories
             var aeropuertoInfo = new LugarInfo
             {
                 Codlugar = 4175,
-                Direccion = "Destino Nuevo Aeropuerto Internacional Jorge Chávez",
+                Direccion = "Nuevo Aeropuerto Internacional Jorge Chávez",
                 Distrito = "Callao",
                 Wy = "-12.034004553836395",
                 Wx = "-77.11457919557617",
@@ -591,7 +591,7 @@ namespace VelsatBackendAPI.Data.Repositories
             var aeropuertoInfo = new LugarInfo
             {
                 Codlugar = 4175,
-                Direccion = "Destino Nuevo Aeropuerto Internacional Jorge Chávez",
+                Direccion = "Nuevo Aeropuerto Internacional Jorge Chávez",
                 Distrito = "Callao",
                 Wy = "-12.034004553836395",
                 Wx = "-77.11457919557617",
@@ -997,5 +997,18 @@ namespace VelsatBackendAPI.Data.Repositories
             return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
+        public async Task<int> DeleteLoad(string fecha, string usuario, string empresa)
+        {
+            string sql = "UPDATE preplan_talma SET eliminado = '1' WHERE fecha = @Fecha AND usuario = @Usuario AND empresa = @Empresa";
+
+            var parameters = new
+            {
+                Fecha = fecha,
+                Usuario = usuario,
+                Empresa = empresa
+            };
+
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
     }
 }

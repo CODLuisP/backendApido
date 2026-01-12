@@ -358,5 +358,32 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
+        [HttpDelete("eliminarCarga")]
+        public async Task<IActionResult> DeleteLoad([FromQuery] string fecha, [FromQuery] string usuario, [FromQuery] string empresa)
+        {
+            if (string.IsNullOrEmpty(fecha) || string.IsNullOrEmpty(usuario) || string.IsNullOrEmpty(empresa))
+            {
+                return BadRequest(new { message = "Datos inválidos. Se requiere fecha, usuario y empresa." });
+            }
+
+            try
+            {
+                int filasAfectadas = await _uow.TalmaRepository.DeleteLoad(fecha, usuario, empresa);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new { message = "Registro eliminado correctamente", filasAfectadas = filasAfectadas });
+                }
+                else
+                {
+                    return NotFound(new { message = "No se encontró el registro para eliminar" });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al eliminar registro", error = ex.Message });
+            }
+        }
     }
 }
