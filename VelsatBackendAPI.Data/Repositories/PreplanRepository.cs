@@ -3701,7 +3701,7 @@ WHERE codtaxi = @Codigo";
                     Console.WriteLine($"   → Insertando servicio: {servicio.Idunico}");
 
                     // Insertar servicio
-                    string sqlServicio = @"INSERT INTO servicio (numero, tipo, codusuario, estado, fecha, grupo, empresa, depot, totalpax, numeromovil, owner) VALUES (@Numero, @Tipo, @Codusuario, 'P', @Fecha, 'N', @Empresa, @Depot, @Totalpax, @Numeromovil, @Owner)";
+                    string sqlServicio = @"INSERT INTO servicio (numero, tipo, codusuario, estado, fecha, grupo, empresa, depot, totalpax, numeromovil, destino, owner) VALUES (@Numero, @Tipo, @Codusuario, 'P', @Fecha, 'N', @Empresa, @Depot, @Totalpax, @Numeromovil, '4175', @Owner)";
 
                     var parametersServicio = new
                     {
