@@ -21,6 +21,7 @@ using System.Threading.Tasks;
 using System.Transactions;
 using VelsatBackendAPI.Model;
 using VelsatBackendAPI.Model.GestionPasajeros;
+using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
 using VelsatBackendAPI.Model.Turnos;
 
@@ -1449,7 +1450,7 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             string sql = @"SELECT DISTINCT l.codlugar, c.codcliente, c.nombres, c.apellidos, c.codlan, l.wy, l.wx, l.direccion, l.distrito, l.zona from cliente c, lugarcliente l where l.codcli=c.codlugar and c.estadocuenta='A' and l.estado='A' and c.apellidos like @Palabra and c.destino='0' LIMIT 10";
 
-            var parameters = new { Palabra = $"%{palabra}%"}; // ✅ Aquí se añade el %
+            var parameters = new { Palabra = $"%{palabra}%" }; // ✅ Aquí se añade el %
 
             var pasajeros = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
@@ -3512,6 +3513,430 @@ WHERE codtaxi = @Codigo";
             var parameters = new { Codlugar = codlugar };
 
             return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
+        public async Task<List<ServicioLatam>> InsertPedidoLatam(List<List<RegistroExcelLatam>> gruposRegistros, string usuario)
+        {
+            var listaServicios = new List<ServicioLatam>();
+
+            try
+            {
+                if (gruposRegistros == null || !gruposRegistros.Any())
+                {
+                    Console.WriteLine("No se recibieron grupos de registros para procesar");
+                    return listaServicios;
+                }
+
+                Console.WriteLine($"========== Iniciando procesamiento ==========");
+                Console.WriteLine($"Usuario: {usuario}");
+                Console.WriteLine($"Total de grupos (servicios): {gruposRegistros.Count}");
+
+                // OPTIMIZACIÓN 1: Obtener todos los BPs únicos
+                var todosLosRegistros = gruposRegistros.SelectMany(g => g).ToList();
+                var bpsUnicos = todosLosRegistros.Select(r => r.Bp).Distinct().ToList();
+
+                Console.WriteLine($"Total registros a procesar: {todosLosRegistros.Count}");
+                Console.WriteLine($"BPs únicos: {bpsUnicos.Count}\n");
+
+                // OPTIMIZACIÓN 2: Obtener todos los pasajeros existentes en UNA SOLA consulta
+                Console.WriteLine("→ Obteniendo pasajeros existentes en batch...");
+                var pasajerosExistentes = await ObtenerPasajerosBatch(bpsUnicos);
+                Console.WriteLine($"✓ Pasajeros encontrados: {pasajerosExistentes.Count} de {bpsUnicos.Count}\n");
+
+                // OPTIMIZACIÓN 3: Identificar BPs que necesitan ser creados
+                var bpsExistentes = pasajerosExistentes.Keys.ToHashSet();
+                var bpsACrear = todosLosRegistros
+                    .Where(r => !bpsExistentes.Contains(r.Bp))
+                    .GroupBy(r => r.Bp)
+                    .Select(g => g.First()) // Un registro por BP único
+                    .ToList();
+
+                // OPTIMIZACIÓN 4: Crear pasajeros nuevos en batch
+                if (bpsACrear.Any())
+                {
+                    Console.WriteLine($"→ Creando {bpsACrear.Count} pasajeros nuevos en batch...");
+                    await CrearPasajerosBatch(bpsACrear);
+
+                    // Obtener los pasajeros recién creados
+                    var bpsNuevos = bpsACrear.Select(r => r.Bp).ToList();
+                    var pasajerosNuevos = await ObtenerPasajerosBatch(bpsNuevos);
+
+                    // Agregar al diccionario principal
+                    foreach (var kvp in pasajerosNuevos)
+                    {
+                        pasajerosExistentes[kvp.Key] = kvp.Value;
+                    }
+
+                    Console.WriteLine($"✓ Pasajeros creados: {pasajerosNuevos.Count}\n");
+                }
+
+                // OPTIMIZACIÓN 5: Verificar y actualizar coordenadas si es necesario
+                Console.WriteLine("→ Verificando coordenadas de pasajeros existentes...");
+                await VerificarYActualizarCoordenadas(todosLosRegistros, pasajerosExistentes);
+                Console.WriteLine("✓ Verificación de coordenadas completada\n");
+
+                // MAPEO: Crear servicios con sus subservicios
+                Console.WriteLine("→ Iniciando mapeo e inserción de servicios...\n");
+                int grupoContador = 1;
+
+                foreach (var grupo in gruposRegistros)
+                {
+                    Console.WriteLine($"╔════════════════════════════════════════");
+                    Console.WriteLine($"║ PROCESANDO GRUPO/SERVICIO {grupoContador}");
+                    Console.WriteLine($"║ Total registros en este grupo: {grupo.Count}");
+                    Console.WriteLine($"╠════════════════════════════════════════");
+
+                    // Obtener el primer registro para datos del servicio principal
+                    var primerRegistro = grupo.First();
+
+                    // Crear el ServicioLatam
+                    var servicio = new ServicioLatam
+                    {
+                        Idunico = primerRegistro.Idunico,
+                        Tipo = primerRegistro.Accion,
+                        Codusuario = usuario,
+                        Estado = "P",
+                        Fecha = $"{primerRegistro.Fecha} {primerRegistro.Hora_llegada}",
+                        Grupo = primerRegistro.Depot,
+                        Empresa = "LATAM",
+                        Pasajeros = primerRegistro.Pasajeros,
+                        Subservicios = new List<SubservicioLatam>()
+                    };
+
+                    Console.WriteLine($"║ → Servicio creado:");
+                    Console.WriteLine($"║   Idunico: {servicio.Idunico}");
+                    Console.WriteLine($"║   Tipo: {servicio.Tipo}");
+                    Console.WriteLine($"║   Usuario: {servicio.Codusuario}");
+                    Console.WriteLine($"║   Estado: {servicio.Estado}");
+                    Console.WriteLine($"║   Fecha: {servicio.Fecha}");
+                    Console.WriteLine($"║   Grupo: {servicio.Grupo}");
+                    Console.WriteLine($"║   Empresa: {servicio.Empresa}");
+                    Console.WriteLine($"║   Pasajeros: {servicio.Pasajeros}");
+                    Console.WriteLine($"║");
+
+                    // Crear subservicios para cada registro del grupo
+                    int subContador = 1;
+                    foreach (var reg in grupo)
+                    {
+                        Console.WriteLine($"║   ╔══ SUBSERVICIO {subContador} ══");
+                        Console.WriteLine($"║   ║ BP: {reg.Bp}");
+                        Console.WriteLine($"║   ║ Nombre: {reg.Nombre}");
+
+                        // Buscar el pasajero en el diccionario
+                        if (pasajerosExistentes.TryGetValue(reg.Bp, out var pasajero))
+                        {
+                            var subservicio = new SubservicioLatam
+                            {
+                                Codubicli = pasajero.Codlugar,
+                                Fecha = $"{reg.Fecha} {reg.Hora_parada}",
+                                Codcliente = pasajero.Codcliente,
+                                Numero = reg.Idunico,
+                                Arealan = reg.Depot,
+                                Vuelo = string.IsNullOrWhiteSpace(reg.Numero_vuelo) ? null : reg.Numero_vuelo,
+                                Orden = reg.Orden
+                            };
+
+                            servicio.Subservicios.Add(subservicio);
+
+                            Console.WriteLine($"║   ║ ✓ Subservicio creado:");
+                            Console.WriteLine($"║   ║   Codubicli: {subservicio.Codubicli}");
+                            Console.WriteLine($"║   ║   Fecha: {subservicio.Fecha}");
+                            Console.WriteLine($"║   ║   Codcliente: {subservicio.Codcliente}");
+                            Console.WriteLine($"║   ║   Numero: {subservicio.Numero}");
+                            Console.WriteLine($"║   ║   Arealan: {subservicio.Arealan}");
+                            Console.WriteLine($"║   ║   Vuelo: {subservicio.Vuelo ?? "N/A"}");
+                            Console.WriteLine($"║   ║   Orden: {subservicio.Orden}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"║   ║ ✗ ERROR: Pasajero no encontrado, subservicio no creado");
+                        }
+
+                        Console.WriteLine($"║   ╚════════════════════════");
+                        subContador++;
+                    }
+
+                    // Agregar el servicio completo a la lista
+                    listaServicios.Add(servicio);
+
+                    Console.WriteLine($"║");
+                    Console.WriteLine($"║ ✓ Servicio completado con {servicio.Subservicios.Count} subservicios");
+                    Console.WriteLine($"╚════════════════════════════════════════\n");
+                    grupoContador++;
+                }
+
+                // INSERCIÓN EN BD: Insertar servicios y subservicios
+                if (listaServicios.Any())
+                {
+                    Console.WriteLine("→ Insertando servicios y subservicios en la base de datos...");
+                    await InsertarServiciosYSubserviciosBatch(listaServicios);
+                    Console.WriteLine("✓ Inserción completada\n");
+                }
+
+                Console.WriteLine($"========== Resumen Final ==========");
+                Console.WriteLine($"Total grupos procesados: {gruposRegistros.Count}");
+                Console.WriteLine($"Total servicios creados: {listaServicios.Count}");
+                Console.WriteLine($"Total subservicios: {listaServicios.Sum(s => s.Subservicios.Count)}");
+                Console.WriteLine($"Total registros: {todosLosRegistros.Count}");
+                Console.WriteLine($"Pasajeros procesados: {pasajerosExistentes.Count}");
+                Console.WriteLine($"===================================\n");
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+            }
+
+            return listaServicios;
+        }
+
+        // MÉTODO: Insertar servicios y subservicios en batch
+        private async Task InsertarServiciosYSubserviciosBatch(List<ServicioLatam> servicios)
+        {
+            try
+            {
+                foreach (var servicio in servicios)
+                {
+                    Console.WriteLine($"   → Insertando servicio: {servicio.Idunico}");
+
+                    // Insertar servicio
+                    string sqlServicio = @"INSERT INTO servicio (numero, tipo, codusuario, estado, fecha, grupo, empresa, depot, totalpax, numeromovil, owner) VALUES (@Numero, @Tipo, @Codusuario, 'P', @Fecha, 'N', @Empresa, @Depot, @Totalpax, @Numeromovil, @Owner)";
+
+                    var parametersServicio = new
+                    {
+                        Numero = servicio.Idunico,
+                        Tipo = servicio.Tipo,
+                        Codusuario = servicio.Codusuario,
+                        Fecha = servicio.Fecha,
+                        Empresa = servicio.Empresa,
+                        Depot = servicio.Grupo,
+                        Totalpax = servicio.Pasajeros,
+                        Numeromovil = servicio.Idunico,
+                        Owner = servicio.Codusuario
+                    };
+
+                    await _doConnection.ExecuteAsync(sqlServicio, parametersServicio, transaction: _doTransaction);
+
+                    // Obtener el último ID
+                    var codservicio = await _doConnection.ExecuteScalarAsync<int>("SELECT LAST_INSERT_ID()", transaction: _doTransaction);
+
+                    Console.WriteLine($"   ✓ Servicio insertado con codservicio: {codservicio}");
+
+                    // INSERTAR SUBSERVICIO POR DEFECTO (ORDEN 0) - SQL DIRECTO
+                    Console.WriteLine($"   → Insertando subservicio por defecto (orden 0)...");
+
+                    string sqlSubservicioPorDefecto = $@"INSERT INTO subservicio (codubicli, fecha, estado, codcliente, numero, codservicio, arealan, vuelo, orden) VALUES ('4175', '{servicio.Fecha}', 'P', '4175', '{servicio.Idunico}', {codservicio}, '{servicio.Grupo}', '', '0')";
+
+                    Console.WriteLine($"      SQL POR DEFECTO: {sqlSubservicioPorDefecto}");
+                    await _doConnection.ExecuteAsync(sqlSubservicioPorDefecto, transaction: _doTransaction);
+                    Console.WriteLine($"      ✓ Subservicio por defecto insertado");
+
+                    // INSERTAR SUBSERVICIOS NORMALES
+                    if (servicio.Subservicios != null && servicio.Subservicios.Any())
+                    {
+                        Console.WriteLine($"   → Insertando {servicio.Subservicios.Count} subservicios normales...");
+
+                        foreach (var sub in servicio.Subservicios)
+                        {
+                            string sqlDirecto = $@"INSERT INTO subservicio (codubicli, fecha, estado, codcliente, numero, codservicio, arealan, vuelo, orden) VALUES ('{sub.Codubicli}', '{sub.Fecha}', 'P', '{sub.Codcliente}', '{sub.Numero}', {codservicio}, '{sub.Arealan}', {(sub.Vuelo == null ? "NULL" : $"'{sub.Vuelo}'")}, '{sub.Orden}')";
+
+                            Console.WriteLine($"      SQL DIRECTO: {sqlDirecto}");
+
+                            try
+                            {
+                                await _doConnection.ExecuteAsync(sqlDirecto, transaction: _doTransaction);
+                                Console.WriteLine($"      ✓ Subservicio insertado");
+                            }
+                            catch (Exception exSub)
+                            {
+                                Console.WriteLine($"      ✗ Error: {exSub.Message}");
+                                throw;
+                            }
+                        }
+
+                        Console.WriteLine($"   ✓ {servicio.Subservicios.Count} subservicios normales insertados");
+                    }
+
+                    int totalSubservicios = 1 + (servicio.Subservicios?.Count ?? 0);
+                    Console.WriteLine($"   ✓ Servicio {servicio.Idunico} completado ({totalSubservicios} subservicios en total: 1 por defecto + {servicio.Subservicios?.Count ?? 0} normales)\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   ✗ Error al insertar servicios: {ex.Message}");
+                throw;
+            }
+        }
+
+        // MÉTODO: Verificar y actualizar coordenadas
+        private async Task VerificarYActualizarCoordenadas(List<RegistroExcelLatam> registros, Dictionary<string, PasajeroLatam> pasajerosExistentes)
+        {
+            try
+            {
+                var registrosPorBp = registros
+                    .GroupBy(r => r.Bp)
+                    .Select(g => g.First())
+                    .ToList();
+
+                var direccionesAActualizar = new List<(string Codlan, string Direccion, string Distrito, string Wy, string Wx)>();
+
+                foreach (var reg in registrosPorBp)
+                {
+                    if (pasajerosExistentes.TryGetValue(reg.Bp, out var pasajero))
+                    {
+                        bool coordenadasDiferentes = pasajero.Wy != reg.Lat || pasajero.Wx != reg.Long;
+
+                        if (coordenadasDiferentes)
+                        {
+                            Console.WriteLine($"   ⚠ Coordenadas diferentes para BP {reg.Bp}:");
+                            Console.WriteLine($"     DB: ({pasajero.Wy}, {pasajero.Wx})");
+                            Console.WriteLine($"     Excel: ({reg.Lat}, {reg.Long})");
+                            Console.WriteLine($"     → Se actualizará la dirección");
+
+                            direccionesAActualizar.Add((reg.Bp, reg.Direccion, reg.Comuna, reg.Lat, reg.Long));
+                        }
+                    }
+                }
+
+                if (direccionesAActualizar.Any())
+                {
+                    Console.WriteLine($"   → Actualizando {direccionesAActualizar.Count} direcciones...");
+
+                    string sqlUpdate = @"UPDATE lugarcliente SET estado = 'E' WHERE codcli = @Codlan";
+                    var parametersUpdate = direccionesAActualizar.Select(d => new { Codlan = d.Codlan });
+                    await _doConnection.ExecuteAsync(sqlUpdate, parametersUpdate, transaction: _doTransaction);
+
+                    string sqlInsert = @"INSERT INTO lugarcliente (codcli, direccion, distrito, wy, wx, estado) 
+                                VALUES (@Codlan, @Direccion, @Distrito, @Wy, @Wx, 'A')";
+
+                    var parametersInsert = direccionesAActualizar.Select(d => new
+                    {
+                        Codlan = d.Codlan,
+                        Direccion = d.Direccion,
+                        Distrito = d.Distrito,
+                        Wy = d.Wy,
+                        Wx = d.Wx
+                    });
+
+                    await _doConnection.ExecuteAsync(sqlInsert, parametersInsert, transaction: _doTransaction);
+                    Console.WriteLine($"   ✓ Direcciones actualizadas exitosamente");
+
+                    foreach (var direccion in direccionesAActualizar)
+                    {
+                        if (pasajerosExistentes.ContainsKey(direccion.Codlan))
+                        {
+                            pasajerosExistentes[direccion.Codlan].Direccion = direccion.Direccion;
+                            pasajerosExistentes[direccion.Codlan].Distrito = direccion.Distrito;
+                            pasajerosExistentes[direccion.Codlan].Wy = direccion.Wy;
+                            pasajerosExistentes[direccion.Codlan].Wx = direccion.Wx;
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"   ✓ No hay coordenadas para actualizar");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   ✗ Error al verificar/actualizar coordenadas: {ex.Message}");
+                throw;
+            }
+        }
+
+        // MÉTODO BATCH: Obtener múltiples pasajeros en una sola consulta
+        private async Task<Dictionary<string, PasajeroLatam>> ObtenerPasajerosBatch(List<string> codlans)
+        {
+            var diccionario = new Dictionary<string, PasajeroLatam>();
+
+            if (!codlans.Any())
+                return diccionario;
+
+            try
+            {
+                string sql = @"
+            SELECT 
+                c.codcliente AS Codcliente, 
+                c.apellidos AS Apellidos, 
+                c.codusuario AS Codusuario, 
+                c.codlan AS Codlan, 
+                c.empresa AS Empresa, 
+                c.telefono AS Telefono, 
+                l.codlugar AS Codlugar, 
+                l.direccion AS Direccion, 
+                l.distrito AS Distrito, 
+                l.wy AS Wy, 
+                l.wx AS Wx
+            FROM cliente c, lugarcliente l 
+            WHERE c.codlugar = l.codcli 
+                AND c.estadocuenta = 'A' 
+                AND l.estado = 'A' 
+                AND c.codlan IN @Codlans";
+
+                var parameters = new { Codlans = codlans };
+                var pasajeros = await _doConnection.QueryAsync<PasajeroLatam>(sql, parameters, transaction: _doTransaction);
+
+                foreach (var pasajero in pasajeros)
+                {
+                    diccionario[pasajero.Codlan] = pasajero;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al obtener pasajeros en batch: {ex.Message}");
+            }
+
+            return diccionario;
+        }
+
+        // MÉTODO BATCH: Crear múltiples pasajeros
+        private async Task CrearPasajerosBatch(List<RegistroExcelLatam> registros)
+        {
+            try
+            {
+                string sqlClientes = @"INSERT INTO cliente (codlugar, apellidos, clave, codusuario, codlan, empresa, telefono, estadocuenta) 
+                              VALUES (@Codlan, @Apellidos, '123', @Codusuario, @Codlan, 'LATAM', @Telefono, 'A')";
+
+                var parametersClientes = registros.Select(r => new
+                {
+                    Codlan = r.Bp,
+                    Apellidos = r.Nombre,
+                    Codusuario = r.Bp,
+                    Telefono = r.Celular
+                });
+
+                await _doConnection.ExecuteAsync(sqlClientes, parametersClientes, transaction: _doTransaction);
+
+                string sqlLugares = @"INSERT INTO lugarcliente (codcli, direccion, distrito, wy, wx, estado) 
+                             VALUES (@Codlan, @Direccion, @Distrito, @Wy, @Wx, 'A')";
+
+                var parametersLugares = registros.Select(r => new
+                {
+                    Codlan = r.Bp,
+                    Direccion = r.Direccion,
+                    Distrito = r.Comuna,
+                    Wy = r.Lat,
+                    Wx = r.Long
+                });
+
+                await _doConnection.ExecuteAsync(sqlLugares, parametersLugares, transaction: _doTransaction);
+
+                string sqlServer = @"INSERT INTO servermobile (loginusu, servidor, tipo) 
+                            VALUES (@loginusu, 'https://do.velsat.pe:2053', 'p')";
+
+                var parametersServer = registros.Select(r => new
+                {
+                    loginusu = r.Bp
+                });
+
+                await _doConnection.ExecuteAsync(sqlServer, parametersServer, transaction: _doTransaction);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al crear pasajeros en batch: {ex.Message}");
+                throw;
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using VelsatBackendAPI.Model.GestionPasajeros;
+using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
 
 namespace VelsatBackendAPI.Data.Repositories
@@ -98,5 +99,7 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> NuevoLugarCliente(LugarCliente lugarCliente);
 
         Task<int> EliminarLugarCliente(int codlugar);
+
+        Task<List<ServicioLatam>> InsertPedidoLatam(List<List<RegistroExcelLatam>> gruposRegistros, string usuario);
     }
 }

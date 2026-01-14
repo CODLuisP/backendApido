@@ -1,9 +1,11 @@
 ﻿using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Win32;
 using Newtonsoft.Json;
 using System.Globalization;
 using VelsatBackendAPI.Data.Repositories;
 using VelsatBackendAPI.Model.GestionPasajeros;
+using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
 
 namespace VelsatBackendAPI.Controllers
@@ -2199,5 +2201,30 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
+        // POST api/latam/insert
+        [HttpPost("insertLatam")]
+        public async Task<IActionResult> InsertPedidoLatam([FromBody] List<List<RegistroExcelLatam>> gruposRegistros, [FromQuery] string usuario)
+        {
+            if (gruposRegistros == null || !gruposRegistros.Any())
+            {
+                return BadRequest("El arreglo de grupos está vacío.");
+            }
+
+            if (string.IsNullOrWhiteSpace(usuario))
+            {
+                return BadRequest("El usuario es requerido.");
+            }
+
+            try
+            {
+                var result = await _uow.PreplanRepository.InsertPedidoLatam(gruposRegistros, usuario);
+                _uow.SaveChanges();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al insertar servicios Latam", error = ex.Message });
+            }
+        }
     }
 }
