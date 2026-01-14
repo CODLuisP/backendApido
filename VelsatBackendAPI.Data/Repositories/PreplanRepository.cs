@@ -3711,7 +3711,7 @@ WHERE codtaxi = @Codigo";
                         Fecha = servicio.Fecha,
                         Empresa = servicio.Empresa,
                         Depot = servicio.Grupo,
-                        Totalpax = servicio.Pasajeros,
+                        Totalpax = (int.Parse(servicio.Pasajeros) + 1),
                         Numeromovil = servicio.Idunico,
                         Owner = servicio.Codusuario
                     };
