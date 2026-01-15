@@ -3138,6 +3138,7 @@ namespace VelsatBackendAPI.Data.Repositories
                   email as Email,
                   turno as Turno,
                   horainicio as Horainicio,
+                  unidadasig as Unidadasig,
                   brevete as Brevete, 
                   sctr as Sctr, 
                   direccion as Direccion, 
@@ -4029,5 +4030,7 @@ WHERE codtaxi = @Codigo";
                 throw;
             }
         }
+
+        //Reporte de servicios por conductor
     }
 }
