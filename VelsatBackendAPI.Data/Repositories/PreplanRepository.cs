@@ -3756,9 +3756,52 @@ WHERE codtaxi = @Codigo";
                     Console.WriteLine($"   ✓ fecha: {servicio.Fecha}");
                     Console.WriteLine($"   ✓ fecplan: {fechaPlan}");
 
-            // ... resto del código sin cambios ...
+                    // INSERTAR SUBSERVICIO POR DEFECTO (ORDEN 0) - SQL DIRECTO
+                    Console.WriteLine($"   → Insertando subservicio por defecto (orden 0)...");
 
-                    // MÉTODO: Verificar y actualizar coordenadas
+                    string sqlSubservicioPorDefecto = $@"INSERT INTO subservicio (codubicli, fecha, estado, codcliente, numero, codservicio, arealan, vuelo, orden) VALUES ('4175', '{servicio.Fecha}', 'P', '4175', '{servicio.Idunico}', {codservicio}, '{servicio.Grupo}', '', '0')";
+
+                    Console.WriteLine($"      SQL POR DEFECTO: {sqlSubservicioPorDefecto}");
+                    await _doConnection.ExecuteAsync(sqlSubservicioPorDefecto, transaction: _doTransaction);
+                    Console.WriteLine($"      ✓ Subservicio por defecto insertado");
+
+                    // INSERTAR SUBSERVICIOS NORMALES
+                    if (servicio.Subservicios != null && servicio.Subservicios.Any())
+                    {
+                        Console.WriteLine($"   → Insertando {servicio.Subservicios.Count} subservicios normales...");
+
+                        foreach (var sub in servicio.Subservicios)
+                        {
+                            string sqlDirecto = $@"INSERT INTO subservicio (codubicli, fecha, estado, codcliente, numero, codservicio, arealan, vuelo, orden) VALUES ('{sub.Codubicli}', '{sub.Fecha}', 'P', '{sub.Codcliente}', '{sub.Numero}', {codservicio}, '{sub.Arealan}', {(sub.Vuelo == null ? "NULL" : $"'{sub.Vuelo}'")}, '{sub.Orden}')";
+
+                            Console.WriteLine($"      SQL DIRECTO: {sqlDirecto}");
+
+                            try
+                            {
+                                await _doConnection.ExecuteAsync(sqlDirecto, transaction: _doTransaction);
+                                Console.WriteLine($"      ✓ Subservicio insertado");
+                            }
+                            catch (Exception exSub)
+                            {
+                                Console.WriteLine($"      ✗ Error: {exSub.Message}");
+                                throw;
+                            }
+                        }
+
+                        Console.WriteLine($"   ✓ {servicio.Subservicios.Count} subservicios normales insertados");
+                    }
+
+                    int totalSubservicios = 1 + (servicio.Subservicios?.Count ?? 0);
+                    Console.WriteLine($"   ✓ Servicio {servicio.Idunico} completado ({totalSubservicios} subservicios en total: 1 por defecto + {servicio.Subservicios?.Count ?? 0} normales)\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   ✗ Error al insertar servicios: {ex.Message}");
+                throw;
+            }
+        }
+
         private async Task VerificarYActualizarCoordenadas(List<RegistroExcelLatam> registros, Dictionary<string, PasajeroLatam> pasajerosExistentes)
         {
             try
