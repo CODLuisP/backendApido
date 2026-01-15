@@ -2045,7 +2045,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<List<Pedido>> ListaPasajeroServicio(string codservicio)
         {
-            string sql = @"Select su.observacion, su.costo, su.codpedido, su.estado, su.fecha as fecpedido, su.vuelo, su.arealan, su.codcliente, su.fechafin as feclectura, su.feccancelpas, su.orden, c.apellidos, c.codlugar, l.wx, l.wy, l.direccion, l.distrito from subservicio su, cliente c, lugarcliente l where su.codcliente = c.codcliente and su.codubicli = l.codlugar and su.orden != '0' and su.estado != 'C' and su.codservicio = @Codservicio order by orden";
+            string sql = @"Select su.observacion, su.costo, su.codpedido, su.estado, su.fecha as fecpedido, su.vuelo, su.arealan, su.codcliente, su.fechafin as feclectura, su.feccancelpas, su.orden, c.apellidos, c.codlugar, c.telefono, l.wx, l.wy, l.direccion, l.distrito from subservicio su, cliente c, lugarcliente l where su.codcliente = c.codcliente and su.codubicli = l.codlugar and su.orden != '0' and su.estado != 'C' and su.codservicio = @Codservicio order by orden";
 
             var parameters = new
             {
@@ -2076,7 +2076,8 @@ namespace VelsatBackendAPI.Data.Repositories
                 Pasajero = new Usuario
                 {
                     Codigo = row.codcliente,
-                    Nombre = row.apellidos
+                    Nombre = row.apellidos,
+                    Telefono = row.telefono
                 },
                 Lugar = new LugarCliente
                 {
@@ -3577,6 +3578,11 @@ WHERE codtaxi = @Codigo";
                 await VerificarYActualizarCoordenadas(todosLosRegistros, pasajerosExistentes);
                 Console.WriteLine("✓ Verificación de coordenadas completada\n");
 
+                // Actualizar nombre y teléfono de pasajeros existentes
+                Console.WriteLine("→ Verificando y actualizando datos de pasajeros existentes...");
+                await ActualizarDatosPasajeros(todosLosRegistros, pasajerosExistentes);
+                Console.WriteLine("✓ Verificación de datos de pasajeros completada\n");
+
                 // MAPEO: Crear servicios con sus subservicios
                 Console.WriteLine("→ Iniciando mapeo e inserción de servicios...\n");
                 int grupoContador = 1;
@@ -3937,6 +3943,89 @@ WHERE codtaxi = @Codigo";
             catch (Exception ex)
             {
                 Console.WriteLine($"Error al crear pasajeros en batch: {ex.Message}");
+                throw;
+            }
+        }
+
+        // MÉTODO: Actualizar nombre y teléfono de pasajeros existentes
+        private async Task ActualizarDatosPasajeros(List<RegistroExcelLatam> registros, Dictionary<string, PasajeroLatam> pasajerosExistentes)
+        {
+            try
+            {
+                var registrosPorBp = registros
+                    .GroupBy(r => r.Bp)
+                    .Select(g => g.First())
+                    .ToList();
+
+                var pasajerosAActualizar = new List<(string Codlan, string Nombre, string Telefono)>();
+
+                foreach (var reg in registrosPorBp)
+                {
+                    if (pasajerosExistentes.TryGetValue(reg.Bp, out var pasajero))
+                    {
+                        bool nombreDiferente = pasajero.Apellidos != reg.Nombre;
+                        bool telefonoDiferente = pasajero.Telefono != reg.Celular;
+
+                        if (nombreDiferente || telefonoDiferente)
+                        {
+                            Console.WriteLine($"   ⚠ Datos diferentes para BP {reg.Bp}:");
+
+                            if (nombreDiferente)
+                            {
+                                Console.WriteLine($"     Nombre DB: {pasajero.Apellidos}");
+                                Console.WriteLine($"     Nombre Excel: {reg.Nombre}");
+                            }
+
+                            if (telefonoDiferente)
+                            {
+                                Console.WriteLine($"     Teléfono DB: {pasajero.Telefono}");
+                                Console.WriteLine($"     Teléfono Excel: {reg.Celular}");
+                            }
+
+                            Console.WriteLine($"     → Se actualizarán los datos");
+
+                            pasajerosAActualizar.Add((reg.Bp, reg.Nombre, reg.Celular));
+                        }
+                    }
+                }
+
+                if (pasajerosAActualizar.Any())
+                {
+                    Console.WriteLine($"   → Actualizando {pasajerosAActualizar.Count} pasajeros...");
+
+                    string sqlUpdate = @"UPDATE cliente 
+                                SET apellidos = @Nombre, 
+                                    telefono = @Telefono 
+                                WHERE codlan = @Codlan";
+
+                    var parametersUpdate = pasajerosAActualizar.Select(p => new
+                    {
+                        Codlan = p.Codlan,
+                        Nombre = p.Nombre,
+                        Telefono = p.Telefono
+                    });
+
+                    await _doConnection.ExecuteAsync(sqlUpdate, parametersUpdate, transaction: _doTransaction);
+                    Console.WriteLine($"   ✓ Datos de pasajeros actualizados exitosamente");
+
+                    // Actualizar el diccionario en memoria
+                    foreach (var pasajero in pasajerosAActualizar)
+                    {
+                        if (pasajerosExistentes.ContainsKey(pasajero.Codlan))
+                        {
+                            pasajerosExistentes[pasajero.Codlan].Apellidos = pasajero.Nombre;
+                            pasajerosExistentes[pasajero.Codlan].Telefono = pasajero.Telefono;
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"   ✓ No hay datos de pasajeros para actualizar");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   ✗ Error al actualizar datos de pasajeros: {ex.Message}");
                 throw;
             }
         }
