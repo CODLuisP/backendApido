@@ -3302,7 +3302,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Fecvalidbrevete = conductor.FecValidBrevete,
                 Turno = conductor.Turno,
                 Horainicio = conductor.Horainicio,
-                Unidadasig = conductor.Unidadasig        
+                Unidadasig = conductor.Unidadasig
             };
 
             // Insertar en tabla taxi
@@ -3712,8 +3712,26 @@ WHERE codtaxi = @Codigo";
                 {
                     Console.WriteLine($"   → Insertando servicio: {servicio.Idunico}");
 
-                    // Insertar servicio
-                    string sqlServicio = @"INSERT INTO servicio (numero, tipo, codusuario, estado, fecha, grupo, empresa, depot, totalpax, numeromovil, destino, owner) VALUES (@Numero, @Tipo, @Codusuario, 'P', @Fecha, 'N', @Empresa, @Depot, @Totalpax, @Numeromovil, '4175', @Owner)";
+                    // ✅ OBTENER LA FECHA DEL SUBSERVICIO CON ORDEN "1"
+                    string fechaPlan = servicio.Fecha; // Por defecto usa la fecha del servicio
+                    var subservicioOrden1 = servicio.Subservicios?.FirstOrDefault(s => s.Orden == "1");
+
+                    if (subservicioOrden1 != null)
+                    {
+                        fechaPlan = subservicioOrden1.Fecha;
+                        Console.WriteLine($"   → fecplan tomado del subservicio orden 1: {fechaPlan}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"   → No hay subservicio con orden 1, usando fecha del servicio: {fechaPlan}");
+                    }
+
+                    // Insertar servicio CON fecplan
+                    string sqlServicio = @"
+                INSERT INTO servicio 
+                (numero, tipo, codusuario, estado, fecha, fecplan, grupo, empresa, depot, totalpax, numeromovil, destino, owner) 
+                VALUES 
+                (@Numero, @Tipo, @Codusuario, 'P', @Fecha, @Fecplan, 'N', @Empresa, @Depot, @Totalpax, @Numeromovil, '4175', @Owner)";
 
                     var parametersServicio = new
                     {
@@ -3721,6 +3739,7 @@ WHERE codtaxi = @Codigo";
                         Tipo = servicio.Tipo,
                         Codusuario = servicio.Codusuario,
                         Fecha = servicio.Fecha,
+                        Fecplan = fechaPlan, // ✅ AQUÍ VA EL fecplan
                         Empresa = servicio.Empresa,
                         Depot = servicio.Grupo,
                         Totalpax = (int.Parse(servicio.Pasajeros) + 1),
@@ -3734,54 +3753,12 @@ WHERE codtaxi = @Codigo";
                     var codservicio = await _doConnection.ExecuteScalarAsync<int>("SELECT LAST_INSERT_ID()", transaction: _doTransaction);
 
                     Console.WriteLine($"   ✓ Servicio insertado con codservicio: {codservicio}");
+                    Console.WriteLine($"   ✓ fecha: {servicio.Fecha}");
+                    Console.WriteLine($"   ✓ fecplan: {fechaPlan}");
 
-                    // INSERTAR SUBSERVICIO POR DEFECTO (ORDEN 0) - SQL DIRECTO
-                    Console.WriteLine($"   → Insertando subservicio por defecto (orden 0)...");
+            // ... resto del código sin cambios ...
 
-                    string sqlSubservicioPorDefecto = $@"INSERT INTO subservicio (codubicli, fecha, estado, codcliente, numero, codservicio, arealan, vuelo, orden) VALUES ('4175', '{servicio.Fecha}', 'P', '4175', '{servicio.Idunico}', {codservicio}, '{servicio.Grupo}', '', '0')";
-
-                    Console.WriteLine($"      SQL POR DEFECTO: {sqlSubservicioPorDefecto}");
-                    await _doConnection.ExecuteAsync(sqlSubservicioPorDefecto, transaction: _doTransaction);
-                    Console.WriteLine($"      ✓ Subservicio por defecto insertado");
-
-                    // INSERTAR SUBSERVICIOS NORMALES
-                    if (servicio.Subservicios != null && servicio.Subservicios.Any())
-                    {
-                        Console.WriteLine($"   → Insertando {servicio.Subservicios.Count} subservicios normales...");
-
-                        foreach (var sub in servicio.Subservicios)
-                        {
-                            string sqlDirecto = $@"INSERT INTO subservicio (codubicli, fecha, estado, codcliente, numero, codservicio, arealan, vuelo, orden) VALUES ('{sub.Codubicli}', '{sub.Fecha}', 'P', '{sub.Codcliente}', '{sub.Numero}', {codservicio}, '{sub.Arealan}', {(sub.Vuelo == null ? "NULL" : $"'{sub.Vuelo}'")}, '{sub.Orden}')";
-
-                            Console.WriteLine($"      SQL DIRECTO: {sqlDirecto}");
-
-                            try
-                            {
-                                await _doConnection.ExecuteAsync(sqlDirecto, transaction: _doTransaction);
-                                Console.WriteLine($"      ✓ Subservicio insertado");
-                            }
-                            catch (Exception exSub)
-                            {
-                                Console.WriteLine($"      ✗ Error: {exSub.Message}");
-                                throw;
-                            }
-                        }
-
-                        Console.WriteLine($"   ✓ {servicio.Subservicios.Count} subservicios normales insertados");
-                    }
-
-                    int totalSubservicios = 1 + (servicio.Subservicios?.Count ?? 0);
-                    Console.WriteLine($"   ✓ Servicio {servicio.Idunico} completado ({totalSubservicios} subservicios en total: 1 por defecto + {servicio.Subservicios?.Count ?? 0} normales)\n");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"   ✗ Error al insertar servicios: {ex.Message}");
-                throw;
-            }
-        }
-
-        // MÉTODO: Verificar y actualizar coordenadas
+                    // MÉTODO: Verificar y actualizar coordenadas
         private async Task VerificarYActualizarCoordenadas(List<RegistroExcelLatam> registros, Dictionary<string, PasajeroLatam> pasajerosExistentes)
         {
             try
