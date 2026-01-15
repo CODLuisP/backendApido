@@ -3281,8 +3281,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<int> NuevoConductorAsync(Conductor conductor, string usuario)
         {
-            string sqlTaxi = @"INSERT INTO taxi (nombres, apellidos, login, clave, estado, codusuario, telefono, email, brevete, dni, direccion, sctr, catbrevete, estbrevete, fecvalidbrevete) 
-                      VALUES (@Nombres, @Apellidos, @Login, @Clave, 'A', @Codusuario, @Telefono, @Email, @Brevete, @Dni, @Direccion, @Sctr, @Catbrevete, @Estbrevete, @Fecvalidbrevete)";
+            string sqlTaxi = @"INSERT INTO taxi (nombres, apellidos, login, clave, estado, codusuario, telefono, email, turno, horainicio, unidadasig, brevete, dni, direccion, sctr, catbrevete, estbrevete, fecvalidbrevete) 
+                      VALUES (@Nombres, @Apellidos, @Login, @Clave, 'A', @Codusuario, @Telefono, @Email, @Turno, @Horainicio, @Unidadasig, @Brevete, @Dni, @Direccion, @Sctr, @Catbrevete, @Estbrevete, @Fecvalidbrevete)";
 
             var parametersEdriver = new
             {
@@ -3299,7 +3299,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 Sctr = conductor.Sctr,
                 Catbrevete = conductor.CatBrevete,
                 Estbrevete = conductor.EstBrevete,
-                Fecvalidbrevete = conductor.FecValidBrevete
+                Fecvalidbrevete = conductor.FecValidBrevete,
+                Turno = conductor.Turno,
+                Horainicio = conductor.Horainicio,
+                Unidadasig = conductor.Unidadasig        
             };
 
             // Insertar en tabla taxi
