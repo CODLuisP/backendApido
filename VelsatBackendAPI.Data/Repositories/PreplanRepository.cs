@@ -8,6 +8,7 @@ using MySql.Data.MySqlClient;
 using MySqlX.XDevAPI.Common;
 using MySqlX.XDevAPI.Relational;
 using Newtonsoft.Json;
+using Org.BouncyCastle.Asn1.Ocsp;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -4054,6 +4055,45 @@ WHERE codtaxi = @Codigo";
             }
         }
 
+        //Link para rastreo de vehículo
+
+        public async Task<int> Generarlink(ControlTrack registro)
+        {
+            string sql = @"INSERT INTO controltrack (token, deviceID, username, creationdate, expirationdate) VALUES (@Token, @DeviceID, @Username, @Creationdate, @Expirationdate)";
+
+            // Zona horaria Perú
+            TimeZoneInfo peruTimeZone =
+                TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time");
+
+            DateTime creationDate =
+                TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, peruTimeZone);
+
+            DateTime expirationDate = creationDate.AddMinutes(registro.DuracionMinutos);
+
+            var parameters = new
+            {
+                Token = registro.Token,
+                DeviceID = registro.DeviceId,
+                Username = registro.Username,
+                Creationdate = creationDate,
+                Expirationdate = expirationDate
+            };
+
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
+        public async Task<ControlTrack> ObtenerPorToken(string token)
+        {
+            string sql = @"SELECT token, deviceID, username, creationdate, expirationdate FROM controltrack WHERE token = @Token";
+
+            var parameters = new { Token = token };
+
+            return await _doConnection.QueryFirstOrDefaultAsync<ControlTrack>(sql, parameters, transaction: _doTransaction);
+        }
+
+
+
         //Reporte de servicios por conductor
+
     }
 }

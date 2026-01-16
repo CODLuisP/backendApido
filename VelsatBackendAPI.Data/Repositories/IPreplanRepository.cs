@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using VelsatBackendAPI.Model;
 using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
@@ -101,5 +102,11 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> EliminarLugarCliente(int codlugar);
 
         Task<List<ServicioLatam>> InsertPedidoLatam(List<List<RegistroExcelLatam>> gruposRegistros, string usuario);
+
+        Task<int> Generarlink(ControlTrack registro);
+
+        Task<ControlTrack> ObtenerPorToken(string token);
+
+
     }
 }

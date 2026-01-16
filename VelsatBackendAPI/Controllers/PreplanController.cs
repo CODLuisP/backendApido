@@ -4,6 +4,7 @@ using Microsoft.Win32;
 using Newtonsoft.Json;
 using System.Globalization;
 using VelsatBackendAPI.Data.Repositories;
+using VelsatBackendAPI.Model;
 using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
@@ -2226,5 +2227,67 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, new { message = "Error al insertar servicios Latam", error = ex.Message });
             }
         }
+
+        [HttpPost("Generarlink")]
+        public async Task<IActionResult> GenerarLink([FromBody] ControlTrack registro)
+        {
+            if (registro == null)
+                return BadRequest(new { mensaje = "Los datos enviados son inválidos." });
+
+            try
+            {
+                int filasAfectadas = await _uow.PreplanRepository.Generarlink(registro);
+
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new
+                    {
+                        mensaje = "Link generado exitosamente.",
+                        filasAfectadas
+                    });
+                }
+
+                return BadRequest(new { mensaje = "No se pudo generar el link." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor al generar el link.",
+                    detalle = ex.Message
+                });
+            }
+        }
+
+        [HttpGet("ObtenerPorToken/{token}")]
+        public async Task<IActionResult> ObtenerPorToken(string token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return BadRequest(new { mensaje = "El token es obligatorio." });
+
+            try
+            {
+                var resultado = await _uow.PreplanRepository.ObtenerPorToken(token);
+
+                if (resultado == null)
+                {
+                    return NotFound(new { mensaje = "No se encontró información para el token proporcionado." });
+                }
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor al obtener el registro.",
+                    detalle = ex.Message
+                });
+            }
+        }
+
+
     }
 }
