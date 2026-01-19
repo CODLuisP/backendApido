@@ -21,5 +21,8 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string Distrito { get; set; }
         public string Unidad { get; set; }
         public string ApellidosConductor { get; set; }
+        public string HoraInicioTurno { get; set; }
+        public string Turno { get; set; }
+
     }
 }

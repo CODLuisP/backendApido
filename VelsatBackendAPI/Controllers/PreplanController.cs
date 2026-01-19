@@ -1784,7 +1784,6 @@ namespace VelsatBackendAPI.Controllers
                     detalle = ex.Message
                 });
             }
-
         }
 
         [HttpGet("carros/{usuario}")]
@@ -2292,8 +2291,6 @@ namespace VelsatBackendAPI.Controllers
         public async Task<IActionResult> ExcelServiciosConductor(
     [FromQuery] string codConductor,
     [FromQuery] string fecha,
-    [FromQuery] string hora,
-    [FromQuery] string turno,
     [FromQuery] string usuario)
         {
             // Validaciones
@@ -2303,16 +2300,11 @@ namespace VelsatBackendAPI.Controllers
             if (string.IsNullOrEmpty(fecha))
                 return BadRequest(new { mensaje = "La fecha es obligatoria." });
 
-            if (string.IsNullOrEmpty(hora))
-                return BadRequest(new { mensaje = "La hora es obligatoria." });
-
             try
             {
                 var resultado = await _readOnlyUow.PreplanRepository.ReporteConductorServicio(
                     codConductor,
-                    fecha,
-                    hora,
-                    turno
+                    fecha
                 );
 
                 if (resultado == null || !resultado.Any())
@@ -2320,8 +2312,8 @@ namespace VelsatBackendAPI.Controllers
                     return NotFound(new { mensaje = "No se encontraron servicios para los parámetros proporcionados." });
                 }
 
-                var excelBytes = await GenerarExcelServiciosConductor(resultado, codConductor, fecha, hora, turno, usuario);
-                string fileName = $"Servicios_Conductor_{codConductor}_{fecha.Replace("/", "-")}_{hora.Replace(":", "-")}.xlsx";
+                var excelBytes = await GenerarExcelServiciosConductor(resultado, codConductor, fecha, usuario);
+                string fileName = $"Servicios_Conductor_{codConductor}_{fecha.Replace("/", "-")}.xlsx";
 
                 return File(
                     excelBytes,
@@ -2343,9 +2335,8 @@ namespace VelsatBackendAPI.Controllers
     List<ServicioDetalle> resultado,
     string codConductor,
     string fecha,
-    string hora,
-    string turno,
     string usuario)
+
         {
             using (var workbook = new XLWorkbook())
             {
@@ -2396,11 +2387,20 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 // CALCULAR PERIODO Y TURNOS TRABAJADOS
+                // Obtener turno y hora de inicio del primer resultado
+                string turnoRaw = resultado.FirstOrDefault()?.Turno ?? "D";
+                string turno = turnoRaw.ToUpper() == "D" ? "Día" :
+                               turnoRaw.ToUpper() == "N" ? "Noche" :
+                               turnoRaw;
+
+                string hora = resultado.FirstOrDefault()?.HoraInicioTurno ?? "00:00";
+
                 DateTime fechaInicio = DateTime.ParseExact($"{fecha} {hora}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
                 DateTime fechaFin = fechaInicio.AddHours(12);
 
                 int turnosTrabajados = 1;
                 string periodo;
+
 
                 if (fechaInicio.Date == fechaFin.Date)
                 {
