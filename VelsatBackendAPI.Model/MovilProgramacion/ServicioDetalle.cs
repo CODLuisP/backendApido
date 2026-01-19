@@ -23,6 +23,7 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string ApellidosConductor { get; set; }
         public string HoraInicioTurno { get; set; }
         public string Turno { get; set; }
+        public string Unidadasig { get; set; }
 
     }
 }

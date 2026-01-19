@@ -4105,6 +4105,25 @@ WHERE codtaxi = @Codigo;
         //Reporte de servicios por conductor
         public async Task<List<ServicioDetalle>> ReporteConductorServicio(string codConductor, string fecha)
         {
+
+            // Validación previa: verificar si el conductor tiene turno y hora de inicio
+            string sqlValidacion = @"SELECT turno, horainicio FROM taxi WHERE codtaxi = @CodConductor";
+
+            var conductor = await _doConnection.QueryFirstOrDefaultAsync<dynamic>(
+                sqlValidacion,
+                new { CodConductor = codConductor },
+                transaction: _doTransaction
+            );
+
+            // Lanzar excepción si turno u horainicio son nulos
+            if (conductor == null || conductor.turno == null || conductor.horainicio == null)
+            {
+                throw new InvalidOperationException(
+                    $"El conductor no tiene turno u hora de inicio configurados."
+                );
+            }
+
+            // Consulta principal
             string sql = @"
 SELECT 
     s.codservicio,
@@ -4121,7 +4140,8 @@ SELECT
     s.unidad AS Unidad, 
     t.apellidos AS ApellidosConductor,
     t.turno AS Turno,
-    t.horainicio AS HoraInicioTurno
+    t.horainicio AS HoraInicioTurno,
+    t.unidadasig AS Unidadasig
 FROM servicio s
 INNER JOIN subservicio su ON s.codservicio = su.codservicio
 INNER JOIN cliente c ON su.codcliente = c.codcliente

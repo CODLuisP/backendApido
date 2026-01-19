@@ -2288,15 +2288,10 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpGet("ExcelServiciosConductor")]
-        public async Task<IActionResult> ExcelServiciosConductor(
-    [FromQuery] string codConductor,
-    [FromQuery] string fecha,
-    [FromQuery] string usuario)
+        public async Task<IActionResult> ExcelServiciosConductor([FromQuery] string codConductor, [FromQuery] string fecha, [FromQuery] string usuario)
         {
-            // Validaciones
             if (string.IsNullOrEmpty(codConductor))
                 return BadRequest(new { mensaje = "El código de conductor es obligatorio." });
-
             if (string.IsNullOrEmpty(fecha))
                 return BadRequest(new { mensaje = "La fecha es obligatoria." });
 
@@ -2321,6 +2316,11 @@ namespace VelsatBackendAPI.Controllers
                     fileName
                 );
             }
+            catch (InvalidOperationException ex)
+            {
+                // Excepción específica para conductor sin turno
+                return BadRequest(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, new
@@ -2331,11 +2331,7 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        private async Task<byte[]> GenerarExcelServiciosConductor(
-    List<ServicioDetalle> resultado,
-    string codConductor,
-    string fecha,
-    string usuario)
+        private async Task<byte[]> GenerarExcelServiciosConductor(List<ServicioDetalle> resultado, string codConductor, string fecha, string usuario)
 
         {
             using (var workbook = new XLWorkbook())
@@ -2423,6 +2419,7 @@ namespace VelsatBackendAPI.Controllers
                 decimal promedioServicios = turnosTrabajados > 0 ? (decimal)cantidadServicios / turnosTrabajados : 0;
 
                 string nombreConductor = resultado.FirstOrDefault()?.ApellidosConductor ?? "";
+                string unidadAsignada = resultado.FirstOrDefault()?.Unidadasig ?? "";
 
                 // Calcular horas de manejo (agrupado por servicio)
                 var serviciosUnicos = resultado
@@ -2478,7 +2475,7 @@ namespace VelsatBackendAPI.Controllers
                 rangoCondutor.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 rangoCondutor.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
-                worksheet.Cell(filaDetalles, 4).Value = nombreConductor;
+                worksheet.Cell(filaDetalles, 4).Value = nombreConductor + " - " + unidadAsignada;
                 worksheet.Cell(filaDetalles, 4).Style.Font.FontName = "Calibri";
                 worksheet.Cell(filaDetalles, 4).Style.Font.FontSize = 10;
                 worksheet.Cell(filaDetalles, 4).Style.Font.SetBold();
