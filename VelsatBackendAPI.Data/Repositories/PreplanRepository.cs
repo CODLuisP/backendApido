@@ -3148,7 +3148,10 @@ namespace VelsatBackendAPI.Data.Repositories
                   fecvalidbrevete as FecValidBrevete, 
                   estbrevete as EstBrevete, 
                   sexo as Sexo, 
-                  habilitado as Habilitado 
+                  habilitado as Habilitado,
+                  turno as Turno,
+                  horainicio as Horainicio,
+                  unidadasig as Unidadasig
            FROM taxi 
            WHERE codusuario = @Codusuario AND estado = 'A' 
            ORDER BY habilitado DESC, apellidos";
@@ -3360,8 +3363,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 throw new ArgumentException("El código del conductor es inválido", nameof(conductor.Codigo));
 
             // Primera actualización en la tabla taxi
-            string sql = @"
-UPDATE taxi 
+            string sql = @"UPDATE taxi 
 SET nombres = @Nombres, 
     apellidos = @Apellidos, 
     login = @Login, 
@@ -3374,8 +3376,13 @@ SET nombres = @Nombres,
     sctr = @Sctr, 
     catbrevete = @CatBrevete, 
     estbrevete = @EstBrevete, 
-    fecvalidbrevete = @FecValidBrevete 
-WHERE codtaxi = @Codigo";
+    fecvalidbrevete = @FecValidBrevete,
+    sexo = @Sexo,
+    turno = @Turno,
+    horainicio = @Horainicio,
+    unidadasig = @Unidadasig
+WHERE codtaxi = @Codigo;
+";
 
             var parameters = new
             {
@@ -3392,6 +3399,9 @@ WHERE codtaxi = @Codigo";
                 CatBrevete = conductor.CatBrevete,
                 EstBrevete = conductor.EstBrevete,
                 FecValidBrevete = conductor.FecValidBrevete,
+                Turno = conductor.Turno,
+                Horainicio = conductor.Horainicio,
+                Unidadasig = conductor.Unidadasig,
                 Codigo = conductor.Codigo
             };
 
@@ -4092,8 +4102,57 @@ WHERE codtaxi = @Codigo";
         }
 
 
-
         //Reporte de servicios por conductor
+        public async Task<List<ServicioDetalle>> ReporteConductorServicio(string codConductor, string fecha, string hora, string turno)
+        {
+            string sql = @"
+            SELECT 
+                s.codservicio,
+                DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+                s.empresa AS Empresa, 
+                s.tipo AS Tipo, 
+                s.numero AS Numero, 
+                DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+                DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+                DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+                c.apellidos AS Apellidos, 
+                l.direccion AS Direccion, 
+                l.distrito AS Distrito, 
+                s.unidad AS Unidad, 
+                t.apellidos AS ApellidosConductor
+            FROM servicio s
+            INNER JOIN subservicio su ON s.codservicio = su.codservicio
+            INNER JOIN cliente c ON su.codcliente = c.codcliente
+            INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+            INNER JOIN taxi t ON s.codconductor = t.codtaxi
+            CROSS JOIN (
+                SELECT 
+                    STR_TO_DATE(CONCAT(@Fecha, ' ', @Hora), '%d/%m/%Y %H:%i') AS fecha_inicio,
+                    DATE_ADD(STR_TO_DATE(CONCAT(@Fecha, ' ', @Hora), '%d/%m/%Y %H:%i'), INTERVAL 12 HOUR) AS fecha_fin
+            ) AS params
+            CROSS JOIN LATERAL (
+                SELECT 
+                    STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                    STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                    STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+            ) AS dates
+            WHERE dates.fecha_dt >= params.fecha_inicio
+              AND dates.fecha_dt <= params.fecha_fin
+              AND s.codconductor = @CodConductor
+              AND su.codcliente NOT IN (39953, 4175)
+              AND su.orden > 0
+            ORDER BY dates.fecha_dt";
 
+            var parameters = new
+            {
+                CodConductor = codConductor,
+                Fecha = fecha,
+                Hora = hora,
+                Turno = turno
+            };
+
+            var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
+            return resultado.ToList();
+        }
     }
 }

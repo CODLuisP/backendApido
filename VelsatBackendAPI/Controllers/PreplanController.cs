@@ -715,7 +715,7 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Cell(9, 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                 worksheet.Cell(9, 2).Style.Font.FontColor = XLColor.White;
                 worksheet.Cell(9, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
-                worksheet.Cell(9, 2).Style.Font.FontName = "Cambria";
+                worksheet.Cell(9, 2).Style.Font.FontName = "Calibri";
                 worksheet.Cell(9, 2).Style.Font.FontSize = 10;
                 worksheet.Cell(9, 2).Style.Font.SetBold();
 
@@ -738,13 +738,13 @@ namespace VelsatBackendAPI.Controllers
 
                 // Fecha y usuario - CORREGIDO: Usar CultureInfo.InvariantCulture
                 worksheet.Cell("L9").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-                worksheet.Cell("L9").Style.Font.FontName = "Cambria";
+                worksheet.Cell("L9").Style.Font.FontName = "Calibri";
                 worksheet.Cell("L9").Style.Font.FontSize = 10;
                 worksheet.Cell("L9").Style.Font.SetBold();
                 worksheet.Cell("L9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
                 worksheet.Cell("L10").Value = "USUARIO : " + usuario.ToUpper();
-                worksheet.Cell("L10").Style.Font.FontName = "Cambria";
+                worksheet.Cell("L10").Style.Font.FontName = "Calibri";
                 worksheet.Cell("L10").Style.Font.FontSize = 10;
                 worksheet.Cell("L10").Style.Font.SetBold();
                 worksheet.Cell("L10").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
@@ -778,7 +778,7 @@ namespace VelsatBackendAPI.Controllers
 
                 // Cabeceras
                 var headers = new[]
-                {"ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV", "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO", "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO", "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR"};
+                {"ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV", "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO", "DIFERENCIA TIEMPO", "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR"};
 
                 worksheet.Row(12).Height = 40;
 
@@ -1132,7 +1132,7 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Cell(9, 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                 worksheet.Cell(9, 2).Style.Font.FontColor = XLColor.White;
                 worksheet.Cell(9, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
-                worksheet.Cell(9, 2).Style.Font.FontName = "Cambria";
+                worksheet.Cell(9, 2).Style.Font.FontName = "Calibri";
                 worksheet.Cell(9, 2).Style.Font.FontSize = 10;
                 worksheet.Cell(9, 2).Style.Font.SetBold();
 
@@ -1155,13 +1155,13 @@ namespace VelsatBackendAPI.Controllers
 
                 // Fecha y usuario - CORREGIDO: Usar CultureInfo.InvariantCulture
                 worksheet.Cell("J9").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-                worksheet.Cell("J9").Style.Font.FontName = "Cambria";
+                worksheet.Cell("J9").Style.Font.FontName = "Calibri";
                 worksheet.Cell("J9").Style.Font.FontSize = 10;
                 worksheet.Cell("J9").Style.Font.SetBold();
                 worksheet.Cell("J9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
                 worksheet.Cell("J10").Value = "USUARIO : " + usuario.ToUpper();
-                worksheet.Cell("J10").Style.Font.FontName = "Cambria";
+                worksheet.Cell("J10").Style.Font.FontName = "Calibri";
                 worksheet.Cell("J10").Style.Font.FontSize = 10;
                 worksheet.Cell("J10").Style.Font.SetBold();
                 worksheet.Cell("J10").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
@@ -1448,7 +1448,7 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Cell(9, 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                 worksheet.Cell(9, 2).Style.Font.FontColor = XLColor.White;
                 worksheet.Cell(9, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
-                worksheet.Cell(9, 2).Style.Font.FontName = "Cambria";
+                worksheet.Cell(9, 2).Style.Font.FontName = "Calibri";
                 worksheet.Cell(9, 2).Style.Font.FontSize = 10;
                 worksheet.Cell(9, 2).Style.Font.SetBold();
 
@@ -1469,13 +1469,13 @@ namespace VelsatBackendAPI.Controllers
 
                 // Fecha y usuario
                 worksheet.Cell("K9").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-                worksheet.Cell("K9").Style.Font.FontName = "Cambria";
+                worksheet.Cell("K9").Style.Font.FontName = "Calibri";
                 worksheet.Cell("K9").Style.Font.FontSize = 10;
                 worksheet.Cell("K9").Style.Font.SetBold();
                 worksheet.Cell("K9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
                 worksheet.Cell("K10").Value = "USUARIO : " + usuario;
-                worksheet.Cell("K10").Style.Font.FontName = "Cambria";
+                worksheet.Cell("K10").Style.Font.FontName = "Calibri";
                 worksheet.Cell("K10").Style.Font.FontSize = 10;
                 worksheet.Cell("K10").Style.Font.SetBold();
                 worksheet.Cell("K10").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
@@ -2288,6 +2288,564 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        [HttpGet("ExcelServiciosConductor")]
+        public async Task<IActionResult> ExcelServiciosConductor(
+    [FromQuery] string codConductor,
+    [FromQuery] string fecha,
+    [FromQuery] string hora,
+    [FromQuery] string turno,
+    [FromQuery] string usuario)
+        {
+            // Validaciones
+            if (string.IsNullOrEmpty(codConductor))
+                return BadRequest(new { mensaje = "El código de conductor es obligatorio." });
 
+            if (string.IsNullOrEmpty(fecha))
+                return BadRequest(new { mensaje = "La fecha es obligatoria." });
+
+            if (string.IsNullOrEmpty(hora))
+                return BadRequest(new { mensaje = "La hora es obligatoria." });
+
+            try
+            {
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteConductorServicio(
+                    codConductor,
+                    fecha,
+                    hora,
+                    turno
+                );
+
+                if (resultado == null || !resultado.Any())
+                {
+                    return NotFound(new { mensaje = "No se encontraron servicios para los parámetros proporcionados." });
+                }
+
+                var excelBytes = await GenerarExcelServiciosConductor(resultado, codConductor, fecha, hora, turno, usuario);
+                string fileName = $"Servicios_Conductor_{codConductor}_{fecha.Replace("/", "-")}_{hora.Replace(":", "-")}.xlsx";
+
+                return File(
+                    excelBytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fileName
+                );
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al generar el reporte de servicios del conductor.",
+                    detalle = ex.Message
+                });
+            }
+        }
+
+        private async Task<byte[]> GenerarExcelServiciosConductor(
+    List<ServicioDetalle> resultado,
+    string codConductor,
+    string fecha,
+    string hora,
+    string turno,
+    string usuario)
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Servicios Conductor");
+
+                // Título principal
+                var rangoTitulo = worksheet.Range("C2:H5");
+                rangoTitulo.Merge();
+                rangoTitulo.Value = "REPORTE DE SERVICIOS POR CONDUCTOR";
+                rangoTitulo.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoTitulo.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                rangoTitulo.Style.Font.FontColor = XLColor.White;
+                rangoTitulo.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoTitulo.Style.Font.FontName = "Calibri";
+                rangoTitulo.Style.Font.FontSize = 16;
+                rangoTitulo.Style.Font.SetBold();
+
+                // Fecha de generación
+                worksheet.Cell("J7").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                worksheet.Cell("J7").Style.Font.FontName = "Calibri";
+                worksheet.Cell("J7").Style.Font.FontSize = 10;
+                worksheet.Cell("J7").Style.Font.SetBold();
+                worksheet.Cell("J7").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                worksheet.Cell("J8").Value = "USUARIO : " + (usuario?.ToUpper() ?? "N/A");
+                worksheet.Cell("J8").Style.Font.FontName = "Calibri";
+                worksheet.Cell("J8").Style.Font.FontSize = 10;
+                worksheet.Cell("J8").Style.Font.SetBold();
+                worksheet.Cell("J8").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                // Línea azul de separación
+                worksheet.Range("B8:J8").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("B8:J8").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+
+                // Imágenes
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                {
+                    var image = worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B2")).WithSize(81, 81);
+                }
+
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                {
+                    var image2 = worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("I2")).WithSize(240, 80);
+                }
+
+                // CALCULAR PERIODO Y TURNOS TRABAJADOS
+                DateTime fechaInicio = DateTime.ParseExact($"{fecha} {hora}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                DateTime fechaFin = fechaInicio.AddHours(12);
+
+                int turnosTrabajados = 1;
+                string periodo;
+
+                if (fechaInicio.Date == fechaFin.Date)
+                {
+                    periodo = fechaInicio.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+                    turnosTrabajados = 1;
+                }
+                else
+                {
+                    periodo = $"{fechaInicio.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)} - {fechaFin.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}";
+                    turnosTrabajados = 2;
+                }
+
+                // CALCULAR MÉTRICAS
+                int cantidadServicios = resultado
+                    .Where(s => !string.IsNullOrEmpty(s.Numero))
+                    .Select(s => s.Numero)
+                    .Distinct()
+                    .Count();
+
+                decimal promedioServicios = turnosTrabajados > 0 ? (decimal)cantidadServicios / turnosTrabajados : 0;
+
+                string nombreConductor = resultado.FirstOrDefault()?.ApellidosConductor ?? "";
+
+                // Calcular horas de manejo (agrupado por servicio)
+                var serviciosUnicos = resultado
+                    .Where(s => !string.IsNullOrEmpty(s.Numero))
+                    .GroupBy(s => s.Numero)
+                    .Select(g => g.First())
+                    .ToList();
+
+                TimeSpan totalHorasManejo = SumarDiferenciasTiempo(serviciosUnicos);
+                string horasmanejo = FormatearHoras(totalHorasManejo);
+
+                // Calcular horas de manejo promedio
+                TimeSpan horasManejoPromTs = turnosTrabajados > 0
+                    ? TimeSpan.FromMinutes(totalHorasManejo.TotalMinutes / turnosTrabajados)
+                    : TimeSpan.Zero;
+                string horasmanejoprom = FormatearHoras(horasManejoPromTs);
+
+                // Calcular puntualidad (% de servicios únicos con diferencia tiempo verde para Recojo)
+                int totalRecojoServicios = 0;
+                int recojosPuntuales = 0;
+
+                var serviciosRecojoUnicos = resultado
+                    .Where(s => !string.IsNullOrEmpty(s.Numero) && s.Tipo?.ToUpper() == "I")
+                    .GroupBy(s => s.Numero)
+                    .Select(g => g.First())
+                    .ToList();
+
+                foreach (var servicio in serviciosRecojoUnicos)
+                {
+                    totalRecojoServicios++;
+                    string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
+
+                    if (!string.IsNullOrEmpty(diferenciaTiempo) && !diferenciaTiempo.StartsWith("-"))
+                    {
+                        recojosPuntuales++;
+                    }
+                }
+
+                int puntualidad = totalRecojoServicios > 0 ? (int)Math.Round((decimal)recojosPuntuales / totalRecojoServicios * 100) : 0;
+
+                // DETALLES DEBAJO DE LA LÍNEA AZUL - Fila 10
+                int filaDetalles = 10;
+
+                // FILA 10 - CONDUCTOR y TURNOS.TRAB y HORAS MANEJO
+                var rangoCondutor = worksheet.Range("B10:C10");
+                rangoCondutor.Merge();
+                rangoCondutor.Value = "CONDUCTOR";
+                rangoCondutor.Style.Font.FontName = "Calibri";
+                rangoCondutor.Style.Font.FontSize = 10;
+                rangoCondutor.Style.Font.SetBold();
+                rangoCondutor.Style.Font.FontColor = XLColor.White;
+                rangoCondutor.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoCondutor.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoCondutor.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 4).Value = nombreConductor;
+                worksheet.Cell(filaDetalles, 4).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 4).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 4).Style.Font.SetBold();
+                worksheet.Cell(filaDetalles, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                worksheet.Cell(filaDetalles, 4).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                var rangoturnos = worksheet.Range("F10:G10");
+                rangoturnos.Merge();
+                rangoturnos.Value = "TURNOS TRABAJADOS";
+                rangoturnos.Style.Font.FontName = "Calibri";
+                rangoturnos.Style.Font.FontSize = 10;
+                rangoturnos.Style.Font.SetBold();
+                rangoturnos.Style.Font.FontColor = XLColor.White;
+                rangoturnos.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoturnos.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoturnos.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 8).Value = turnosTrabajados.ToString("D2");
+                worksheet.Cell(filaDetalles, 8).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 8).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(filaDetalles, 8).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                var rangohorasman = worksheet.Range("J10:K10");
+                rangohorasman.Merge();
+                rangohorasman.Value = "HORAS MANEJO";
+                rangohorasman.Style.Font.FontName = "Calibri";
+                rangohorasman.Style.Font.FontSize = 10;
+                rangohorasman.Style.Font.SetBold();
+                rangohorasman.Style.Font.FontColor = XLColor.White;
+                rangohorasman.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangohorasman.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangohorasman.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 12).Value = horasmanejo;
+                worksheet.Cell(filaDetalles, 12).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 12).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 12).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(filaDetalles, 12).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                filaDetalles++; // Fila 11
+
+                // FILA 11 - PERIODO y CANT. SER y HORMANPROM
+                var rangoperiodo = worksheet.Range("B11:C11");
+                rangoperiodo.Merge();
+                rangoperiodo.Value = "PERIODO";
+                rangoperiodo.Style.Font.FontName = "Calibri";
+                rangoperiodo.Style.Font.FontSize = 10;
+                rangoperiodo.Style.Font.SetBold();
+                rangoperiodo.Style.Font.FontColor = XLColor.White;
+                rangoperiodo.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoperiodo.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoperiodo.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 4).Value = periodo;
+                worksheet.Cell(filaDetalles, 4).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 4).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 4).Style.Font.SetBold();
+                worksheet.Cell(filaDetalles, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                worksheet.Cell(filaDetalles, 4).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                var rangocantser = worksheet.Range("F11:G11");
+                rangocantser.Merge();
+                rangocantser.Value = "CANTIDAD SERVICIOS";
+                rangocantser.Style.Font.FontName = "Calibri";
+                rangocantser.Style.Font.FontSize = 10;
+                rangocantser.Style.Font.SetBold();
+                rangocantser.Style.Font.FontColor = XLColor.White;
+                rangocantser.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangocantser.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangocantser.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 8).Value = cantidadServicios.ToString("D2");
+                worksheet.Cell(filaDetalles, 8).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 8).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(filaDetalles, 8).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                var rangohorasprom = worksheet.Range("J11:K11");
+                rangohorasprom.Merge();
+                rangohorasprom.Value = "HORAS MANEJO PROMEDIO";
+                rangohorasprom.Style.Font.FontName = "Calibri";
+                rangohorasprom.Style.Font.FontSize = 10;
+                rangohorasprom.Style.Font.SetBold();
+                rangohorasprom.Style.Font.FontColor = XLColor.White;
+                rangohorasprom.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangohorasprom.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangohorasprom.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 12).Value = horasmanejoprom;
+                worksheet.Cell(filaDetalles, 12).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 12).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 12).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(filaDetalles, 12).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                filaDetalles++; // Fila 12
+
+                // FILA 12 - TURNO y PROM. SER y PUNTUALIDAD
+                var rangoturno = worksheet.Range("B12:C12");
+                rangoturno.Merge();
+                rangoturno.Value = "TURNO";
+                rangoturno.Style.Font.FontName = "Calibri";
+                rangoturno.Style.Font.FontSize = 10;
+                rangoturno.Style.Font.SetBold();
+                rangoturno.Style.Font.FontColor = XLColor.White;
+                rangoturno.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoturno.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoturno.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 4).Value = turno;
+                worksheet.Cell(filaDetalles, 4).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 4).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 4).Style.Font.SetBold();
+                worksheet.Cell(filaDetalles, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                worksheet.Cell(filaDetalles, 4).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                var rangoprom = worksheet.Range("F12:G12");
+                rangoprom.Merge();
+                rangoprom.Value = "PROMEDIO SERVICIOS";
+                rangoprom.Style.Font.FontName = "Calibri";
+                rangoprom.Style.Font.FontSize = 10;
+                rangoprom.Style.Font.SetBold();
+                rangoprom.Style.Font.FontColor = XLColor.White;
+                rangoprom.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoprom.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoprom.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 8).Value = Math.Round(promedioServicios).ToString("00");
+                worksheet.Cell(filaDetalles, 8).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 8).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(filaDetalles, 8).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                var rangopuntual = worksheet.Range("J12:K12");
+                rangopuntual.Merge();
+                rangopuntual.Value = "PUNTUALIDAD";
+                rangopuntual.Style.Font.FontName = "Calibri";
+                rangopuntual.Style.Font.FontSize = 10;
+                rangopuntual.Style.Font.SetBold();
+                rangopuntual.Style.Font.FontColor = XLColor.White;
+                rangopuntual.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangopuntual.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangopuntual.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell(filaDetalles, 12).Value = puntualidad.ToString() + "%";
+                worksheet.Cell(filaDetalles, 12).Style.Font.FontName = "Calibri";
+                worksheet.Cell(filaDetalles, 12).Style.Font.FontSize = 10;
+                worksheet.Cell(filaDetalles, 12).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(filaDetalles, 12).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                filaDetalles++; // Fila 13
+                filaDetalles++; // Fila 14 - Espacio
+
+                // Cabeceras de la tabla - Fila 15
+                var headers = new[]{"ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV", "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO", "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO", "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR"};
+
+                int filaHeaders = filaDetalles;
+                worksheet.Row(filaHeaders).Height = 40;
+
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    worksheet.Cell(filaHeaders, i + 2).Value = headers[i];
+                    worksheet.Cell(filaHeaders, i + 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                    worksheet.Cell(filaHeaders, i + 2).Style.Font.Bold = true;
+                    worksheet.Cell(filaHeaders, i + 2).Style.Font.FontColor = XLColor.White;
+                    worksheet.Cell(filaHeaders, i + 2).Style.Font.FontName = "Calibri";
+                    worksheet.Cell(filaHeaders, i + 2).Style.Font.FontSize = 10;
+                    worksheet.Cell(filaHeaders, i + 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(filaHeaders, i + 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    worksheet.Cell(filaHeaders, i + 2).Style.Alignment.WrapText = true;
+                }
+
+                // Ancho de columnas
+                worksheet.Column(2).Width = 7;   // ITEM
+                worksheet.Column(3).Width = 12;  // FECHA
+                worksheet.Column(4).Width = 25;  // CLIENTE
+                worksheet.Column(5).Width = 18;  // RECOJO/REPARTO
+                worksheet.Column(6).Width = 10;  // N/SERV
+                worksheet.Column(7).Width = 14;  // HORA ACTIVO TURNO
+                worksheet.Column(8).Width = 12;  // HORA DE INICIO
+                worksheet.Column(9).Width = 15;  // HORA LLEGADA ATO
+                worksheet.Column(10).Width = 14; // DIFERENCIA TIEMPO
+                worksheet.Column(11).Width = 14; // TIEMPO PROGRAMADO
+                worksheet.Column(12).Width = 35; // NOMBRES
+                worksheet.Column(13).Width = 60; // DIRECCIÓN
+                worksheet.Column(14).Width = 20; // DISTRITO
+                worksheet.Column(15).Width = 12; // PLACA
+                worksheet.Column(16).Width = 35; // CONDUCTOR
+
+                worksheet.ShowGridLines = false;
+
+                int fila = filaHeaders + 1;
+                int item = 1;
+
+                string numeroServicioAnterior = "";
+                bool colorAlternativo = false;
+
+                var colorGrupo1 = XLColor.FromHtml("#EBF1DE");
+                var colorGrupo2 = XLColor.White;
+
+                foreach (var servicio in resultado)
+                {
+                    string numeroServicioActual = servicio.Numero ?? "";
+
+                    if (numeroServicioActual != numeroServicioAnterior)
+                    {
+                        if (numeroServicioAnterior != "")
+                        {
+                            colorAlternativo = !colorAlternativo;
+                        }
+                        numeroServicioAnterior = numeroServicioActual;
+                    }
+
+                    string tipoTexto = servicio.Tipo?.ToUpper() == "I" ? "Recojo" :
+                                       servicio.Tipo?.ToUpper() == "S" ? "Reparto" :
+                                       servicio.Tipo ?? "";
+
+                    worksheet.Cell(fila, 2).Value = item++;
+                    worksheet.Cell(fila, 3).Value = servicio.Fecha ?? "";
+                    worksheet.Cell(fila, 4).Value = servicio.Empresa ?? ""; // CLIENTE es EMPRESA
+                    worksheet.Cell(fila, 5).Value = tipoTexto;
+                    worksheet.Cell(fila, 6).Value = numeroServicioActual;
+                    worksheet.Cell(fila, 7).Value = servicio.HoraTurno ?? "";
+                    worksheet.Cell(fila, 8).Value = servicio.HoraInicio ?? "";
+                    worksheet.Cell(fila, 9).Value = servicio.HoraAto ?? "";
+
+                    // DIFERENCIA TIEMPO = HORA LLEGADA ATO - HORA ACTIVO TURNO
+                    string diferenciaTiempo = CalcularDiffTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
+                    worksheet.Cell(fila, 10).Value = diferenciaTiempo;
+
+                    // TIEMPO PROGRAMADO = HORA ACTIVO TURNO - HORA DE INICIO
+                    string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "");
+                    tiempoProgramado = tiempoProgramado.Replace("-", ""); // Quitar signo negativo
+                    worksheet.Cell(fila, 11).Value = tiempoProgramado;
+
+                    worksheet.Cell(fila, 12).Value = servicio.Apellidos ?? ""; // NOMBRES son APELLIDOS
+                    worksheet.Cell(fila, 13).Value = servicio.Direccion ?? "";
+                    worksheet.Cell(fila, 14).Value = servicio.Distrito ?? "";
+                    worksheet.Cell(fila, 15).Value = servicio.Unidad ?? "";
+                    worksheet.Cell(fila, 16).Value = servicio.ApellidosConductor ?? "";
+
+                    int colInicio = 2;
+                    int colFin = 16;
+
+                    var rango = worksheet.Range(fila, colInicio, fila, colFin);
+
+                    rango.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    rango.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    rango.Style.Font.FontName = "Calibri";
+                    rango.Style.Font.FontSize = 10;
+
+                    var colorFondo = colorAlternativo ? colorGrupo2 : colorGrupo1;
+                    rango.Style.Fill.BackgroundColor = colorFondo;
+
+                    // COLOR AMARILLO para HORA LLEGADA ATO
+                    worksheet.Cell(fila, 9).Style.Fill.BackgroundColor = XLColor.FromHtml("#ffe246");
+
+                    // Aplicar color a DIFERENCIA TIEMPO solo para Recojo
+                    if (tipoTexto == "Recojo" && !string.IsNullOrEmpty(diferenciaTiempo))
+                    {
+                        if (diferenciaTiempo.StartsWith("-"))
+                        {
+                            worksheet.Cell(fila, 10).Style.Font.FontColor = XLColor.Red;
+                        }
+                        else
+                        {
+                            worksheet.Cell(fila, 10).Style.Font.FontColor = XLColor.FromHtml("#228b22");
+                        }
+                    }
+
+                    fila++;
+                }
+
+                int ultimaFila = fila - 1;
+                if (ultimaFila >= filaHeaders)
+                {
+                    var rangoWrapText = worksheet.Range(filaHeaders, 7, ultimaFila, 16);
+                    rangoWrapText.Style.Alignment.WrapText = true;
+                }
+
+                if (ultimaFila >= filaHeaders + 1)
+                {
+                    var rangoConBordes = worksheet.Range(filaHeaders + 1, 2, ultimaFila, 16);
+
+                    rangoConBordes.Style.Border.TopBorder = XLBorderStyleValues.Thin;
+                    rangoConBordes.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                    rangoConBordes.Style.Border.LeftBorder = XLBorderStyleValues.Thin;
+                    rangoConBordes.Style.Border.RightBorder = XLBorderStyleValues.Thin;
+                    rangoConBordes.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                    rangoConBordes.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+                    rangoConBordes.Style.Border.TopBorderColor = XLColor.Gray;
+                    rangoConBordes.Style.Border.BottomBorderColor = XLColor.Gray;
+                    rangoConBordes.Style.Border.LeftBorderColor = XLColor.Gray;
+                    rangoConBordes.Style.Border.RightBorderColor = XLColor.Gray;
+                    rangoConBordes.Style.Border.InsideBorderColor = XLColor.Gray;
+                    rangoConBordes.Style.Border.OutsideBorderColor = XLColor.Gray;
+                }
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    return stream.ToArray();
+                }
+            }
+        }
+
+        private string CalcularDiffTiempo(string horaFin, string horaInicio)
+        {
+            if (string.IsNullOrEmpty(horaFin) || string.IsNullOrEmpty(horaInicio))
+                return "";
+
+            try
+            {
+                var timeInicio = TimeSpan.Parse(horaInicio);
+                var timeFin = TimeSpan.Parse(horaFin);
+                var diferencia = timeFin - timeInicio;
+
+                int horas = (int)diferencia.TotalHours;
+                int minutos = Math.Abs(diferencia.Minutes);
+
+                if (diferencia.TotalMinutes < 0)
+                {
+                    return $"-{Math.Abs(horas):D2}:{minutos:D2}";
+                }
+                else
+                {
+                    return $"{horas:D2}:{minutos:D2}";
+                }
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private TimeSpan SumarDiferenciasTiempo(List<ServicioDetalle> servicios)
+        {
+            TimeSpan totalTiempo = TimeSpan.Zero;
+
+            foreach (var servicio in servicios)
+            {
+                if (string.IsNullOrEmpty(servicio.HoraInicio) || string.IsNullOrEmpty(servicio.HoraAto))
+                    continue;
+
+                try
+                {
+                    var timeInicio = TimeSpan.Parse(servicio.HoraInicio);
+                    var timeFin = TimeSpan.Parse(servicio.HoraAto);
+                    var diferencia = timeFin - timeInicio;
+
+                    if (diferencia.TotalMinutes > 0) // Solo sumar si es positivo
+                    {
+                        totalTiempo = totalTiempo.Add(diferencia);
+                    }
+                }
+                catch { }
+            }
+
+            return totalTiempo;
+        }
+
+        private string FormatearHoras(TimeSpan tiempo)
+        {
+            int horas = (int)tiempo.TotalHours;
+            int minutos = tiempo.Minutes;
+            return $"{horas:D2}:{minutos:D2}";
+        }
     }
 }

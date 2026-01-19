@@ -107,6 +107,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<ControlTrack> ObtenerPorToken(string token);
 
-
+        Task<List<ServicioDetalle>> ReporteConductorServicio(string codConductor, string fecha, string hora, string turno);
     }
 }
