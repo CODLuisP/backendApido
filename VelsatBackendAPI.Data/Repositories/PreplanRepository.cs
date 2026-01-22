@@ -4182,5 +4182,61 @@ ORDER BY dates.fecha_dt";
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
             return resultado.ToList();
         }
+
+        //Reporte de servicios por conductor rangos
+        public async Task<List<ServicioDetalle>> ReporteConductorServicioRango(string codConductor, string fechaini, string fechafin)
+        {
+            // SIEMPRE completar las fechas con horas
+            string fechaIniCompleta = $"{fechaini} 00:00";
+            string fechaFinCompleta = $"{fechafin} 23:59";
+
+            // Consulta principal
+            string sql = @"
+SELECT 
+    s.codservicio,
+    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+    s.empresa AS Empresa, 
+    s.tipo AS Tipo, 
+    s.numero AS Numero, 
+    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+    c.apellidos AS Apellidos, 
+    l.direccion AS Direccion, 
+    l.distrito AS Distrito, 
+    s.unidad AS Unidad, 
+    t.apellidos AS ApellidosConductor,
+    t.turno AS Turno,
+    t.horainicio AS HoraInicioTurno,
+    t.unidadasig AS Unidadasig
+FROM servicio s
+INNER JOIN subservicio su ON s.codservicio = su.codservicio
+INNER JOIN cliente c ON su.codcliente = c.codcliente
+INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+INNER JOIN taxi t ON s.codconductor = t.codtaxi
+CROSS JOIN LATERAL (
+    SELECT 
+        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+) dates
+WHERE s.codconductor = @CodConductor
+  AND dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+  AND su.codcliente NOT IN (39953, 4175)
+  AND su.orden > 0
+ORDER BY dates.fecha_dt";
+
+            var parameters = new
+            {
+                CodConductor = codConductor,
+                FechaIni = fechaIniCompleta,
+                FechaFin = fechaFinCompleta
+            };
+
+            var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
+            return resultado.ToList();
+        }
+
     }
 }

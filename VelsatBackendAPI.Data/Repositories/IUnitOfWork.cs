@@ -35,6 +35,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         ITalmaRepository TalmaRepository { get; }
 
+        IAdminRepository AdminRepository { get; }
+
         void SaveChanges();
 
     }

@@ -1,0 +1,225 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using VelsatBackendAPI.Data.Repositories;
+using VelsatBackendAPI.Model.Administracion;
+
+namespace VelsatBackendAPI.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    //[Authorize]
+    public class AdminController : ControllerBase
+    {
+        private readonly IReadOnlyUnitOfWork _readOnlyUow;  // ✅ Para GET
+        private readonly IUnitOfWork _uow;
+
+        public AdminController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow)
+        {
+            _readOnlyUow = readOnlyUow;
+            _uow = uow;
+        }
+
+        [HttpGet("Usuarios")]
+        public async Task<IActionResult> GetAllUsers()
+        {
+            try
+            {
+                var users = await _readOnlyUow.AdminRepository.GetAllUsers();
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener los usuarios", error = ex.Message });
+            }
+        }
+
+        [HttpPut("UpdateUser")]
+        public async Task<IActionResult> UpdateUser([FromBody] Usuarioadmin usuario)
+        {
+            try
+            {
+                if (usuario == null)
+                {
+                    return BadRequest(new { message = "El usuario no puede ser nulo" });
+                }
+
+                var rowsAffected = await _uow.AdminRepository.UpdateUser(usuario);
+
+                if (rowsAffected == 0)
+                {
+                    return NotFound(new { message = "Usuario no encontrado" });
+                }
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Usuario actualizado correctamente", rowsAffected });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar el usuario", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("DeleteUsuario/{accountID}")]
+        public async Task<IActionResult> DeleteUser(string accountID)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(accountID))
+                {
+                    return BadRequest(new { message = "El accountID no puede ser nulo o vacío" });
+                }
+
+                var rowsAffected = await _uow.AdminRepository.DeleteUser(accountID);
+
+                if (rowsAffected == 0)
+                {
+                    return NotFound(new { message = "Usuario no encontrado" });
+                }
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Usuario eliminado correctamente", accountID });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al eliminar el usuario", error = ex.Message });
+            }
+        }
+
+        [HttpPost("InsertUsuario")]
+        public async Task<IActionResult> InsertUser([FromBody] Usuarioadmin usuario)
+        {
+            try
+            {
+                if (usuario == null)
+                {
+                    return BadRequest(new { message = "El usuario no puede ser nulo" });
+                }
+
+                if (string.IsNullOrEmpty(usuario.AccountID) || string.IsNullOrEmpty(usuario.Password))
+                {
+                    return BadRequest(new { message = "AccountID y Password son obligatorios" });
+                }
+
+                var rowsAffected = await _uow.AdminRepository.InsertUser(usuario);
+
+                if (rowsAffected == 0)
+                {
+                    return StatusCode(500, new { message = "No se pudo insertar el usuario" });
+                }
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Usuario creado correctamente", accountID = usuario.AccountID });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al crear el usuario", error = ex.Message });
+            }
+        }
+
+        [HttpGet("SubUsuarios")]
+        public async Task<IActionResult> GetSubUsers()
+        {
+            try
+            {
+                var users = await _readOnlyUow.AdminRepository.GetSubUsers();
+                return Ok(users);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener los subusuarios", error = ex.Message });
+            }
+        }
+
+        [HttpPost("InsertDeviceUser")]
+        public async Task<IActionResult> InsertSubUser([FromBody] Deviceuser usuario)
+        {
+            try
+            {
+                if (usuario == null)
+                {
+                    return BadRequest(new { message = "El device user no puede ser nulo" });
+                }
+
+                if (string.IsNullOrEmpty(usuario.Id))
+                {
+                    return BadRequest(new { message = "El Id es obligatorio" });
+                }
+
+                var rowsAffected = await _uow.AdminRepository.InsertSubUser(usuario);
+
+                if (rowsAffected == 0)
+                {
+                    return StatusCode(500, new { message = "No se pudo insertar el device user" });
+                }
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Device user creado correctamente", id = usuario.Id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al crear el device user", error = ex.Message });
+            }
+        }
+
+        [HttpPut("UpdateDeviceUser")]
+        public async Task<IActionResult> UpdateSubUser([FromBody] Deviceuser usuario)
+        {
+            try
+            {
+                if (usuario == null)
+                {
+                    return BadRequest(new { message = "El device user no puede ser nulo" });
+                }
+
+                if (string.IsNullOrEmpty(usuario.Id))
+                {
+                    return BadRequest(new { message = "El Id es obligatorio" });
+                }
+
+                var rowsAffected = await _uow.AdminRepository.UpdateSubUser(usuario);
+
+                if (rowsAffected == 0)
+                {
+                    return NotFound(new { message = "Device user no encontrado" });
+                }
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Device user actualizado correctamente", rowsAffected });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar el device user", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("DeleteDeviceUser/{id}")]
+        public async Task<IActionResult> DeleteSubUser(string id)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(id))
+                {
+                    return BadRequest(new { message = "El id no puede ser nulo o vacío" });
+                }
+
+                var rowsAffected = await _uow.AdminRepository.DeleteSubUser(id);
+
+                if (rowsAffected == 0)
+                {
+                    return NotFound(new { message = "Device user no encontrado" });
+                }
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Device user eliminado correctamente", id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al eliminar el device user", error = ex.Message });
+            }
+        }
+    }
+}

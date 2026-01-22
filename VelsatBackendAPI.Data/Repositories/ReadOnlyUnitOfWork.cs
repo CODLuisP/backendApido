@@ -32,6 +32,8 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IPreplanRepository> _preplanRepository;
         private readonly Lazy<ITurnosRepository> _turnosRepository;
         private readonly Lazy<ITalmaRepository> _talmaRepository;
+        private readonly Lazy<IAdminRepository> _adminRepository;
+
 
         private bool _disposed = false;
         private readonly object _lockObject = new object();
@@ -61,6 +63,9 @@ namespace VelsatBackendAPI.Data.Repositories
             _preplanRepository = new Lazy<IPreplanRepository>(() => new PreplanRepository(DefaultConnection, null, DOConnection, null));
             _turnosRepository = new Lazy<ITurnosRepository>(() => new TurnosRepository(DOConnection, null));
             _talmaRepository = new Lazy<ITalmaRepository> (() => new TalmaRepository(DOConnection, null));
+
+            //ADMIN
+            _adminRepository = new Lazy<IAdminRepository>(() => new AdminRepository(DefaultConnection, null));
         }
 
         private MySqlConnection DefaultConnection
@@ -252,6 +257,16 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (_disposed)
                     throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
                 return _talmaRepository.Value;
+            }
+        }
+
+        public IAdminRepository AdminRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _adminRepository.Value;
             }
         }
 
