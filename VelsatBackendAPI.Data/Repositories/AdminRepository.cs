@@ -109,5 +109,44 @@ namespace VelsatBackendAPI.Data.Repositories
             var resultado = await _defaultConnection.ExecuteAsync(sql, parametros, transaction: _defaultTransaction);
             return resultado;
         }
+
+        public async Task<IEnumerable<DeviceAdmin>> GetDevices()
+        {
+            var sql = @"SELECT deviceID, accountID, equipmentType, uniqueID, deviceCode, simPhoneNumber, imeiNumber, habilitada from device order by accountID";
+
+            var resultado = await _defaultConnection.QueryAsync<DeviceAdmin>(sql, transaction: _defaultTransaction);
+
+            return resultado;
+        }
+
+        public async Task<int> UpdateDevice(DeviceAdmin device, string oldDeviceID, string oldAccountID)
+        {
+            var sql = @"UPDATE device SET deviceID = @DeviceID, accountID = @AccountID, equipmentType = @EquipmentType, uniqueID = @UniqueID, deviceCode = @DeviceCode, simPhoneNumber = @SimPhoneNumber, imeiNumber = @ImeiNumber, habilitada = @Habilitada WHERE deviceID = @OldDeviceID AND accountID = @OldAccountID";
+
+            var resultado = await _defaultConnection.ExecuteAsync(sql, new
+            {
+                device.DeviceID,
+                device.AccountID,
+                device.EquipmentType,
+                device.UniqueID,
+                device.DeviceCode,
+                device.SimPhoneNumber,
+                device.ImeiNumber,
+                device.Habilitada,
+                OldDeviceID = oldDeviceID,
+                OldAccountID = oldAccountID
+            }, transaction: _defaultTransaction);
+
+            return resultado;
+        }
+
+        public async Task<int> InsertDevice(DeviceAdmin device)
+        {
+            var sql = @"INSERT INTO device (deviceID, accountID, equipmentType, uniqueID, deviceCode, simPhoneNumber, imeiNumber, habilitada) 
+                VALUES (@DeviceID, @AccountID, @EquipmentType, @UniqueID, @DeviceCode, @SimPhoneNumber, @ImeiNumber, @Habilitada)";
+
+            var resultado = await _defaultConnection.ExecuteAsync(sql, device, transaction: _defaultTransaction);
+            return resultado;
+        }
     }
 }

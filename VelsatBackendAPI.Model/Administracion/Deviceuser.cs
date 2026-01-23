@@ -8,7 +8,7 @@ namespace VelsatBackendAPI.Model.Administracion
 {
     public class Deviceuser
     {
-        public string Id { get; set; }
+        public int Id { get; set; }
         public string? UserId { get; set; }
         public string? DeviceName { get; set; }
         public string? Status { get; set; }

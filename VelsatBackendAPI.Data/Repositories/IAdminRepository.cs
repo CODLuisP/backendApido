@@ -25,5 +25,11 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> InsertSubUser(Deviceuser usuario);
 
+        Task<IEnumerable<DeviceAdmin>> GetDevices();
+
+        Task<int> UpdateDevice(DeviceAdmin device, string oldDeviceID, string oldAccountID);
+
+        Task<int> InsertDevice(DeviceAdmin device);
+
     }
 }

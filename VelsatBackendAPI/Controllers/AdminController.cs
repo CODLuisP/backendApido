@@ -141,11 +141,6 @@ namespace VelsatBackendAPI.Controllers
                     return BadRequest(new { message = "El device user no puede ser nulo" });
                 }
 
-                if (string.IsNullOrEmpty(usuario.Id))
-                {
-                    return BadRequest(new { message = "El Id es obligatorio" });
-                }
-
                 var rowsAffected = await _uow.AdminRepository.InsertSubUser(usuario);
 
                 if (rowsAffected == 0)
@@ -171,11 +166,6 @@ namespace VelsatBackendAPI.Controllers
                 if (usuario == null)
                 {
                     return BadRequest(new { message = "El device user no puede ser nulo" });
-                }
-
-                if (string.IsNullOrEmpty(usuario.Id))
-                {
-                    return BadRequest(new { message = "El Id es obligatorio" });
                 }
 
                 var rowsAffected = await _uow.AdminRepository.UpdateSubUser(usuario);
@@ -219,6 +209,60 @@ namespace VelsatBackendAPI.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error al eliminar el device user", error = ex.Message });
+            }
+        }
+
+        [HttpGet("GetDevices")]
+        public async Task<IActionResult> GetDevices()
+        {
+            try
+            {
+                var devices = await _readOnlyUow.AdminRepository.GetDevices();
+                return Ok(devices);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener las unidades", error = ex.Message });
+            }
+        }
+
+        [HttpPut("UpdateDevice")]
+        public async Task<IActionResult> UpdateDevice([FromBody] DeviceAdmin device, string oldDeviceID, string oldAccountID)
+        {
+            try
+            {
+                var resultado = await _readOnlyUow.AdminRepository.UpdateDevice(device, oldDeviceID, oldAccountID);
+
+                if (resultado == 0)
+                {
+                    return NotFound(new { message = "Dispositivo no encontrado" });
+                }
+
+                return Ok(new { message = "Dispositivo actualizado correctamente", rowsAffected = resultado });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar el dispositivo", error = ex.Message });
+            }
+        }
+
+        [HttpPost("InsertDevice")]
+        public async Task<IActionResult> InsertDevice([FromBody] DeviceAdmin device)
+        {
+            try
+            {
+                var resultado = await _readOnlyUow.AdminRepository.InsertDevice(device);
+
+                if (resultado == 0)
+                {
+                    return BadRequest(new { message = "No se pudo crear el dispositivo" });
+                }
+
+                return Ok(new { message = "Dispositivo creado correctamente", rowsAffected = resultado });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al crear el dispositivo", error = ex.Message });
             }
         }
     }
