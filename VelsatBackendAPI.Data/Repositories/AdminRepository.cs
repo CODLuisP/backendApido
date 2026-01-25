@@ -121,7 +121,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<int> UpdateDevice(DeviceAdmin device, string oldDeviceID, string oldAccountID)
         {
-            var sql = @"UPDATE device SET deviceID = @DeviceID, accountID = @AccountID, equipmentType = @EquipmentType, uniqueID = @UniqueID, deviceCode = @DeviceCode, simPhoneNumber = @SimPhoneNumber, imeiNumber = @ImeiNumber, habilitada = @Habilitada WHERE deviceID = @OldDeviceID AND accountID = @OldAccountID";
+            var sql = @"UPDATE device SET deviceID = @DeviceID, accountID = @AccountID, equipmentType = @EquipmentType, uniqueID = @UniqueID, deviceCode = @DeviceCode, simPhoneNumber = @SimPhoneNumber, imeiNumber = @ImeiNumber WHERE deviceID = @OldDeviceID AND accountID = @OldAccountID";
 
             var resultado = await _defaultConnection.ExecuteAsync(sql, new
             {
@@ -132,7 +132,6 @@ namespace VelsatBackendAPI.Data.Repositories
                 device.DeviceCode,
                 device.SimPhoneNumber,
                 device.ImeiNumber,
-                device.Habilitada,
                 OldDeviceID = oldDeviceID,
                 OldAccountID = oldAccountID
             }, transaction: _defaultTransaction);
@@ -143,7 +142,7 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<int> InsertDevice(DeviceAdmin device)
         {
             var sql = @"INSERT INTO device (deviceID, accountID, equipmentType, uniqueID, deviceCode, simPhoneNumber, imeiNumber, habilitada) 
-                VALUES (@DeviceID, @AccountID, @EquipmentType, @UniqueID, @DeviceCode, @SimPhoneNumber, @ImeiNumber, @Habilitada)";
+                VALUES (@DeviceID, @AccountID, @EquipmentType, @UniqueID, @DeviceCode, @SimPhoneNumber, @ImeiNumber, '1')";
 
             var resultado = await _defaultConnection.ExecuteAsync(sql, device, transaction: _defaultTransaction);
             return resultado;

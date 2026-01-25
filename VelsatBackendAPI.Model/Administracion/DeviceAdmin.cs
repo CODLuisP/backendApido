@@ -15,6 +15,6 @@ namespace VelsatBackendAPI.Model.Administracion
         public string DeviceCode { get; set; }
         public string SimPhoneNumber { get; set; }
         public string ImeiNumber { get; set; }
-        public string Habilitada { get; set; }
+        public string? Habilitada { get; set; }
     }
 }
