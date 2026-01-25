@@ -231,12 +231,14 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var resultado = await _readOnlyUow.AdminRepository.UpdateDevice(device, oldDeviceID, oldAccountID);
+                var resultado = await _uow.AdminRepository.UpdateDevice(device, oldDeviceID, oldAccountID);
 
                 if (resultado == 0)
                 {
                     return NotFound(new { message = "Dispositivo no encontrado" });
                 }
+
+                _uow.SaveChanges();
 
                 return Ok(new { message = "Dispositivo actualizado correctamente", rowsAffected = resultado });
             }
@@ -251,12 +253,14 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var resultado = await _readOnlyUow.AdminRepository.InsertDevice(device);
+                var resultado = await _uow.AdminRepository.InsertDevice(device);
 
                 if (resultado == 0)
                 {
                     return BadRequest(new { message = "No se pudo crear el dispositivo" });
                 }
+
+                _uow.SaveChanges();
 
                 return Ok(new { message = "Dispositivo creado correctamente", rowsAffected = resultado });
             }
