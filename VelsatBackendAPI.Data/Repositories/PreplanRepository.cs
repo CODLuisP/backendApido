@@ -4238,5 +4238,35 @@ ORDER BY dates.fecha_dt";
             return resultado.ToList();
         }
 
+        //Reporte de alertas de velocidad
+
+        public async Task<int> InsertarAlertaVelocidad(SpeedAlert alerta)
+        {
+            string sql = @"INSERT INTO speed_alerts (deviceID, datetime, latitude, longitude, speed) 
+                   VALUES (@DeviceID, @Datetime, @Latitude, @Longitude, @Speed)";
+
+            var parameters = new
+            {
+                DeviceID = alerta.DeviceID,
+                Datetime = alerta.Datetime,
+                Latitude = alerta.Latitude,
+                Longitude = alerta.Longitude,
+                Speed = alerta.Speed
+            };
+
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
+        public async Task<List<SpeedAlert>> ReporteAlertasVelocidad(string fechaini, string fechafin)
+        {
+            string sql = @"SELECT id, deviceID, datetime, latitude, longitude, speed FROM speed_alerts WHERE STR_TO_DATE(datetime, '%d/%m/%Y %H:%i') BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i') ORDER BY datetime";
+
+            var parameters = new { FechaIni = fechaini, FechaFin = fechafin };
+
+            var result = await _doConnection.QueryAsync<SpeedAlert>(sql, parameters, transaction: _doTransaction);
+
+            return result.ToList();
+        }
+
     }
 }

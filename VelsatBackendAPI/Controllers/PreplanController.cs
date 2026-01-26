@@ -2888,6 +2888,7 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        //Reporte de alertas de velocidad
         private async Task<byte[]> GenerarExcelServiciosConductorRango(List<ServicioDetalle> resultado, string codConductor, string fechaini, string fechafin, string usuario)
         {
             using (var workbook = new XLWorkbook())
@@ -3339,6 +3340,42 @@ namespace VelsatBackendAPI.Controllers
                     workbook.SaveAs(stream);
                     return stream.ToArray();
                 }
+            }
+        }
+
+        [HttpPost("insertar")]
+        public async Task<IActionResult> InsertarAlertaVelocidad([FromBody] SpeedAlert alerta)
+        {
+            try
+            {
+                var resultado = await _readOnlyUow.PreplanRepository.InsertarAlertaVelocidad(alerta);
+                if (resultado > 0)
+                {
+                    return Ok(new { message = "Alerta insertada correctamente", id = resultado });
+                }
+                return BadRequest("No se pudo insertar la alerta.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+            }
+        }
+
+        [HttpGet("AlertasVelocidad")]
+        public async Task<IActionResult> ReporteAlertasVelocidad([FromQuery] string fechaini, [FromQuery] string fechafin)
+        {
+            try
+            {
+                var alertas = await _readOnlyUow.PreplanRepository.ReporteAlertasVelocidad(fechaini, fechafin);
+                if (alertas == null || alertas.Count == 0)
+                {
+                    return Ok("No se encontraron alertas de velocidad.");
+                }
+                return Ok(alertas);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Hubo un error al procesar la solicitud.");
             }
         }
     }
