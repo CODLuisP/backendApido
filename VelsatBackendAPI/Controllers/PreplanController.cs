@@ -3344,11 +3344,11 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpPost("InsertarAlertaVelocidad")]
-        public async Task<IActionResult> InsertarAlertaVelocidad([FromBody] SpeedAlert alerta, [FromQuery] string usuario)
+        public async Task<IActionResult> InsertarAlertaVelocidad([FromBody] SpeedAlert alerta)
         {
             try
             {
-                var resultado = await _readOnlyUow.PreplanRepository.InsertarAlertaVelocidad(alerta, usuario);
+                var resultado = await _readOnlyUow.PreplanRepository.InsertarAlertaVelocidad(alerta);
                 if (resultado > 0)
                 {
                     return Ok(new { message = "Alerta insertada correctamente", id = resultado });

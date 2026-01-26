@@ -4240,14 +4240,14 @@ ORDER BY dates.fecha_dt";
 
         //Reporte de alertas de velocidad
 
-        public async Task<int> InsertarAlertaVelocidad(SpeedAlert alerta, string usuario)
+        public async Task<int> InsertarAlertaVelocidad(SpeedAlert alerta)
         {
             string sql = @"INSERT INTO speed_alerts (usuario, deviceID, datetime, latitude, longitude, speed) 
                    VALUES (@Usuario, @DeviceID, @Datetime, @Latitude, @Longitude, @Speed)";
 
             var parameters = new
             {
-                Usuario = usuario,
+                Usuario = alerta.Usuario,
                 DeviceID = alerta.DeviceID,
                 Datetime = alerta.Datetime,
                 Latitude = alerta.Latitude,
