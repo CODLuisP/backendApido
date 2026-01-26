@@ -3343,7 +3343,7 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        [HttpPost("insertar")]
+        [HttpPost("InsertarAlertaVelocidad")]
         public async Task<IActionResult> InsertarAlertaVelocidad([FromBody] SpeedAlert alerta)
         {
             try
