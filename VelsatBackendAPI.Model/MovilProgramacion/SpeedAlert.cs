@@ -9,6 +9,7 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
     public class SpeedAlert
     {
         public int Id { get; set; }
+        public string Usuario { get; set; }
         public string DeviceID { get; set; }
         public string Datetime { get; set; }
         public string Latitude { get; set; }
