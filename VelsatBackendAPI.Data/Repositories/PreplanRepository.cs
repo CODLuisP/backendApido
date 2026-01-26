@@ -4260,12 +4260,16 @@ ORDER BY dates.fecha_dt";
 
         public async Task<List<SpeedAlert>> ReporteAlertasVelocidad(string username, string fechaini, string fechafin)
         {
-            string sql = @"SELECT id, deviceID, datetime, latitude, longitude, speed FROM speed_alerts WHERE usuario = @Username AND STR_TO_DATE(datetime, '%d/%m/%Y %H:%i') BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i') ORDER BY datetime";
+            string sql = @"SELECT id, usuario, deviceID, datetime, latitude, longitude, speed 
+                   FROM speed_alerts 
+                   WHERE usuario = @Username 
+                   AND STR_TO_DATE(datetime, '%d/%m/%Y %H:%i') >= STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                   AND STR_TO_DATE(datetime, '%d/%m/%Y %H:%i') <= STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i') 
+                   ORDER BY datetime";
 
             var parameters = new { Username = username, FechaIni = fechaini, FechaFin = fechafin };
 
             var result = await _doConnection.QueryAsync<SpeedAlert>(sql, parameters, transaction: _doTransaction);
-
             return result.ToList();
         }
 

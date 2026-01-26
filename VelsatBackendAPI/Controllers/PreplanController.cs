@@ -3348,7 +3348,9 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var resultado = await _readOnlyUow.PreplanRepository.InsertarAlertaVelocidad(alerta);
+                var resultado = await _uow.PreplanRepository.InsertarAlertaVelocidad(alerta);
+                _uow.SaveChanges();
+
                 if (resultado > 0)
                 {
                     return Ok(new { message = "Alerta insertada correctamente", id = resultado });
@@ -3366,7 +3368,7 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var alertas = await _readOnlyUow.PreplanRepository.ReporteAlertasVelocidad(fechaini, fechafin, usuario);
+                var alertas = await _readOnlyUow.PreplanRepository.ReporteAlertasVelocidad(usuario, fechaini, fechafin);
                 if (alertas == null || alertas.Count == 0)
                 {
                     return Ok("No se encontraron alertas de velocidad.");
