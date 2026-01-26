@@ -3344,11 +3344,11 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpPost("InsertarAlertaVelocidad")]
-        public async Task<IActionResult> InsertarAlertaVelocidad([FromBody] SpeedAlert alerta)
+        public async Task<IActionResult> InsertarAlertaVelocidad([FromBody] SpeedAlert alerta, [FromQuery] string usuario)
         {
             try
             {
-                var resultado = await _readOnlyUow.PreplanRepository.InsertarAlertaVelocidad(alerta);
+                var resultado = await _readOnlyUow.PreplanRepository.InsertarAlertaVelocidad(alerta, usuario);
                 if (resultado > 0)
                 {
                     return Ok(new { message = "Alerta insertada correctamente", id = resultado });
@@ -3362,11 +3362,11 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpGet("AlertasVelocidad")]
-        public async Task<IActionResult> ReporteAlertasVelocidad([FromQuery] string fechaini, [FromQuery] string fechafin)
+        public async Task<IActionResult> ReporteAlertasVelocidad([FromQuery] string usuario, [FromQuery] string fechaini, [FromQuery] string fechafin)
         {
             try
             {
-                var alertas = await _readOnlyUow.PreplanRepository.ReporteAlertasVelocidad(fechaini, fechafin);
+                var alertas = await _readOnlyUow.PreplanRepository.ReporteAlertasVelocidad(fechaini, fechafin, usuario);
                 if (alertas == null || alertas.Count == 0)
                 {
                     return Ok("No se encontraron alertas de velocidad.");
