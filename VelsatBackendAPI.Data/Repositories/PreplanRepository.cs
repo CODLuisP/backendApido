@@ -48,6 +48,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 "Total DELTA" => "DELTA",
                 "Total Quality Products" => "Quality Products",
                 "Total REP" => "REP",
+                "REP SI" => "REP SI",
                 "Total INDECOPI" => "INDECOPI",
                 "Total AMERICAN" => "AMERICAN",
                 "PLUSPETROL" => "PLUSPETROL",
@@ -521,7 +522,6 @@ namespace VelsatBackendAPI.Data.Repositories
                 return new InsertPedidoResponse();
             }
         }
-
 
         private async Task<string> ObtenerProgramaAsync(string tipo, string subarea, string codrl, string empresa, string usuario)
         {
