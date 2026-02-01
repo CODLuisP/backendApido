@@ -15,5 +15,6 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string Latitude { get; set; }
         public string Longitude { get; set; }
         public string Speed { get; set; }
+        public string Direccion { get; set; }
     }
 }

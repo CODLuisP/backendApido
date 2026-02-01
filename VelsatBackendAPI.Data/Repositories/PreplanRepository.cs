@@ -4242,8 +4242,8 @@ ORDER BY dates.fecha_dt";
 
         public async Task<int> InsertarAlertaVelocidad(SpeedAlert alerta)
         {
-            string sql = @"INSERT INTO speed_alerts (usuario, deviceID, datetime, latitude, longitude, speed) 
-                   VALUES (@Usuario, @DeviceID, @Datetime, @Latitude, @Longitude, @Speed)";
+            string sql = @"INSERT INTO speed_alerts (usuario, deviceID, datetime, latitude, longitude, speed, direccion) 
+                   VALUES (@Usuario, @DeviceID, @Datetime, @Latitude, @Longitude, @Speed, @Direccion)";
 
             var parameters = new
             {
@@ -4252,7 +4252,8 @@ ORDER BY dates.fecha_dt";
                 Datetime = alerta.Datetime,
                 Latitude = alerta.Latitude,
                 Longitude = alerta.Longitude,
-                Speed = alerta.Speed
+                Speed = alerta.Speed,
+                Direccion = alerta.Direccion
             };
 
             return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
@@ -4260,7 +4261,7 @@ ORDER BY dates.fecha_dt";
 
         public async Task<List<SpeedAlert>> ReporteAlertasVelocidad(string username, string fechaini, string fechafin)
         {
-            string sql = @"SELECT id, usuario, deviceID, datetime, latitude, longitude, speed 
+            string sql = @"SELECT id, usuario, deviceID, datetime, latitude, longitude, speed, direccion 
                    FROM speed_alerts 
                    WHERE usuario = @Username 
                    AND STR_TO_DATE(datetime, '%d/%m/%Y %H:%i') >= STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
