@@ -3416,7 +3416,7 @@ namespace VelsatBackendAPI.Controllers
                 var worksheet = workbook.Worksheets.Add("Alertas de Velocidad");
 
                 // Título principal
-                var rangoTitulo = worksheet.Range("B4:H7");
+                var rangoTitulo = worksheet.Range("B4:I7");
                 rangoTitulo.Merge();
                 rangoTitulo.Value = "REPORTE DE ALERTAS DE VELOCIDAD: " + usuario.ToUpper();
                 rangoTitulo.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -3452,22 +3452,22 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Cell(10, 4).Style = worksheet.Cell(9, 4).Style;
 
                 // Fecha y usuario de generación
-                worksheet.Cell("H9").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-                worksheet.Cell("H9").Style.Font.FontName = "Calibri";
-                worksheet.Cell("H9").Style.Font.FontSize = 10;
-                worksheet.Cell("H9").Style.Font.SetBold();
-                worksheet.Cell("H9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                worksheet.Cell("I9").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+                worksheet.Cell("I9").Style.Font.FontName = "Calibri";
+                worksheet.Cell("I9").Style.Font.FontSize = 10;
+                worksheet.Cell("I9").Style.Font.SetBold();
+                worksheet.Cell("I9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
-                worksheet.Cell("H10").Value = "USUARIO: " + usuario.ToUpper();
-                worksheet.Cell("H10").Style.Font.FontName = "Calibri";
-                worksheet.Cell("H10").Style.Font.FontSize = 10;
-                worksheet.Cell("H10").Style.Font.SetBold();
-                worksheet.Cell("H10").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                worksheet.Cell("I10").Value = "USUARIO: " + usuario.ToUpper();
+                worksheet.Cell("I10").Style.Font.FontName = "Calibri";
+                worksheet.Cell("I10").Style.Font.FontSize = 10;
+                worksheet.Cell("I10").Style.Font.SetBold();
+                worksheet.Cell("I10").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
                 worksheet.Range("B10:E10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
                 worksheet.Range("B10:E10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
-                worksheet.Range("F10:H10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
-                worksheet.Range("F10:H10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+                worksheet.Range("F10:I10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("F10:I10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 // Imágenes (opcional - usa las mismas URLs de tu método original)
                 string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
@@ -3478,7 +3478,7 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 // Cabeceras
-                var headers = new[] { "ITEM", "UNIDAD", "FECHA", "HORA", "VELOCIDAD", "LATITUD", "LONGITUD" };
+                var headers = new[] { "ITEM", "UNIDAD", "FECHA", "HORA", "VELOCIDAD", "LATITUD", "LONGITUD", "DIRECCION"};
 
                 worksheet.Row(12).Height = 40;
 
@@ -3500,6 +3500,7 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Column(6).Width = 15;  // VELOCIDAD
                 worksheet.Column(7).Width = 18;  // LATITUD
                 worksheet.Column(8).Width = 18;  // LONGITUD
+                worksheet.Column(9).Width = 40;  // DIRECCION (nuevo)
 
                 worksheet.ShowGridLines = false;
 
@@ -3521,12 +3522,13 @@ namespace VelsatBackendAPI.Controllers
                     worksheet.Cell(fila, 6).Value = alerta.Speed != null ? $"{alerta.Speed} Km/h" : "";
                     worksheet.Cell(fila, 7).Value = alerta.Latitude != null ? double.Parse(alerta.Latitude.ToString()).ToString("F5") : "";
                     worksheet.Cell(fila, 8).Value = alerta.Longitude != null ? double.Parse(alerta.Longitude.ToString()).ToString("F5") : "";
+                    worksheet.Cell(fila, 9).Value = alerta.Direccion ?? "";  // NUEVO: Dirección
                     fila++;
                 }
 
                 // Aplicar estilos de centrado y color intercalado
                 int colInicio = 2; // Columna B
-                int colFin = 8;    // Columna H
+                int colFin = 9;    // Columna I
 
                 for (int i = 13; i < fila; i++)
                 {
