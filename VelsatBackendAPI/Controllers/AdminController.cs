@@ -269,5 +269,19 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, new { message = "Error al crear el dispositivo", error = ex.Message });
             }
         }
+
+        [HttpGet("GetDevicesConex")]
+        public async Task<IActionResult> GetConexDesconex()
+        {
+            try
+            {
+                var devices = await _readOnlyUow.AdminRepository.GetConexDesconex();
+                return Ok(devices);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener las unidades", error = ex.Message });
+            }
+        }
     }
 }

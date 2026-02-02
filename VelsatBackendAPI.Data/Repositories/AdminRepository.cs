@@ -147,5 +147,14 @@ namespace VelsatBackendAPI.Data.Repositories
             var resultado = await _defaultConnection.ExecuteAsync(sql, device, transaction: _defaultTransaction);
             return resultado;
         }
+
+        public async Task<IEnumerable<ConexDevice>> GetConexDesconex()
+        {
+            var sql = @"SELECT deviceID, accountID, lastValidSpeed, lastGPSTimestamp, deviceCode, imeiNumber, lastValidLatitude, lastValidLongitude FROM device ORDER BY accountID";
+
+            var resultado = await _defaultConnection.QueryAsync<ConexDevice>(sql, transaction: _defaultTransaction);
+
+            return resultado;
+        }
     }
 }
