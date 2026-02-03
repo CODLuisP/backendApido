@@ -3343,6 +3343,26 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        [HttpPost("InsertarAlertaVelocidad")]
+        public async Task<IActionResult> InsertarAlertaVelocidad([FromBody] SpeedAlert alerta)
+        {
+            try
+            {
+                var resultado = await _uow.PreplanRepository.InsertarAlertaVelocidad(alerta);
+                _uow.SaveChanges();
+
+                if (resultado > 0)
+                {
+                    return Ok(new { message = "Alerta insertada correctamente", id = resultado });
+                }
+                return BadRequest("No se pudo insertar la alerta.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+            }
+        }
+
         [HttpGet("AlertasVelocidad")]
         public async Task<IActionResult> ReporteAlertasVelocidad([FromQuery] string usuario, [FromQuery] string fechaini, [FromQuery] string fechafin)
         {
