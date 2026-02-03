@@ -4240,25 +4240,6 @@ ORDER BY dates.fecha_dt";
 
         //Reporte de alertas de velocidad
 
-        public async Task<int> InsertarAlertaVelocidad(SpeedAlert alerta)
-        {
-            string sql = @"INSERT INTO speed_alerts (usuario, deviceID, datetime, latitude, longitude, speed, direccion) 
-                   VALUES (@Usuario, @DeviceID, @Datetime, @Latitude, @Longitude, @Speed, @Direccion)";
-
-            var parameters = new
-            {
-                Usuario = alerta.Usuario,
-                DeviceID = alerta.DeviceID,
-                Datetime = alerta.Datetime,
-                Latitude = alerta.Latitude,
-                Longitude = alerta.Longitude,
-                Speed = alerta.Speed,
-                Direccion = alerta.Direccion
-            };
-
-            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
-        }
-
         public async Task<List<SpeedAlert>> ReporteAlertasVelocidad(string username, string fechaini, string fechafin)
         {
             string sql = @"SELECT id, usuario, deviceID, datetime, latitude, longitude, speed, direccion 
@@ -4270,7 +4251,7 @@ ORDER BY dates.fecha_dt";
 
             var parameters = new { Username = username, FechaIni = fechaini, FechaFin = fechafin };
 
-            var result = await _doConnection.QueryAsync<SpeedAlert>(sql, parameters, transaction: _doTransaction);
+            var result = await _defaultConnection.QueryAsync<SpeedAlert>(sql, parameters, transaction: _defaultTransaction);
             return result.ToList();
         }
 
