@@ -437,30 +437,40 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
-        [HttpPost("ActualizarPasajeroExterno/{usuario}")]
-        public async Task<IActionResult> ActualizarPasajeroExterno([FromBody] List<GUsuario> listaClientes, [FromRoute] string usuario)
+        [HttpPost("SaveUpdatePasajeroExterno/{usuario}")]
+        public async Task<IActionResult> SaveUpdatePasajeroExterno([FromBody] List<GUsuario> listaClientes, [FromRoute] string usuario)
         {
             try
             {
                 if (listaClientes == null || !listaClientes.Any())
-                    return BadRequest("No se envió información de clientes para actualizar.");
+                    return BadRequest("No se envió información de clientes para procesar.");
 
                 if (string.IsNullOrWhiteSpace(usuario))
                     return BadRequest("El usuario es requerido.");
 
-                var resultado = await _uow.GacelaRepository.ActualizarPasajeroExterno(listaClientes, usuario);
+                var resultado = await _uow.GacelaRepository.SaveUpdatePasajeroExterno(listaClientes, usuario);
                 _uow.SaveChanges();
 
-                // Verificar si todos fueron exitosos
-                var todosExitosos = resultado.All(c => c.Observacion == "Cliente registrado");
-                var algunosExitosos = resultado.Any(c => c.Observacion == "Cliente registrado");
+                // Verificar resultados (registrados Y actualizados)
+                var exitosos = resultado.Where(c =>
+                    c.Observacion == "Cliente registrado" ||
+                    c.Observacion == "Cliente actualizado").ToList();
+
+                var fallidos = resultado.Where(c =>
+                    c.Observacion != "Cliente registrado" &&
+                    c.Observacion != "Cliente actualizado").ToList();
+
+                var todosExitosos = exitosos.Count == resultado.Count;
+                var algunosExitosos = exitosos.Any();
 
                 if (todosExitosos)
                 {
                     return Ok(new
                     {
-                        mensaje = "Todos los clientes fueron registrados exitosamente",
+                        mensaje = "Todos los clientes fueron procesados exitosamente",
                         totalProcesados = resultado.Count,
+                        registrados = resultado.Count(c => c.Observacion == "Cliente registrado"),
+                        actualizados = resultado.Count(c => c.Observacion == "Cliente actualizado"),
                         clientes = resultado.Select(c => new
                         {
                             codlan = c.Codlan,
@@ -474,10 +484,12 @@ namespace VelsatBackendAPI.Controllers
                 {
                     return Ok(new
                     {
-                        mensaje = "Algunos clientes fueron registrados con errores",
+                        mensaje = "Algunos clientes fueron procesados con errores",
                         totalProcesados = resultado.Count,
-                        exitosos = resultado.Count(c => c.Observacion == "Cliente registrado"),
-                        fallidos = resultado.Count(c => c.Observacion != "Cliente registrado"),
+                        exitosos = exitosos.Count,
+                        registrados = resultado.Count(c => c.Observacion == "Cliente registrado"),
+                        actualizados = resultado.Count(c => c.Observacion == "Cliente actualizado"),
+                        fallidos = fallidos.Count,
                         clientes = resultado.Select(c => new
                         {
                             codlan = c.Codlan,
@@ -491,7 +503,7 @@ namespace VelsatBackendAPI.Controllers
                 {
                     return BadRequest(new
                     {
-                        mensaje = "Ningún cliente pudo ser registrado",
+                        mensaje = "Ningún cliente pudo ser procesado",
                         totalProcesados = resultado.Count,
                         clientes = resultado.Select(c => new
                         {

@@ -37,7 +37,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<string> AgregarPasajeroExterno(GPedido pedido, string usuario);
 
-        Task<List<GUsuario>> ActualizarPasajeroExterno(List<GUsuario> listaClientes, string usuario);
+        Task<List<GUsuario>> SaveUpdatePasajeroExterno(List<GUsuario> listaClientes, string usuario);
 
     }
 }

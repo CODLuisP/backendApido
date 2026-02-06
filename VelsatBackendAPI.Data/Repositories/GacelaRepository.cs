@@ -2325,13 +2325,13 @@ namespace VelsatBackendAPI.Data.Repositories
 
         /////////////////////////////////
         // Método público para actualizar/guardar pasajero externo
-        public async Task<List<GUsuario>> ActualizarPasajeroExterno(List<GUsuario> listaClientes, string usuario)
+        public async Task<List<GUsuario>> SaveUpdatePasajeroExterno(List<GUsuario> listaClientes, string usuario)
         {
             var resultado = new List<GUsuario>();
 
             foreach (var cliente in listaClientes)
             {
-                string estadoRegistro = await GuardarPasajeroExterno(cliente, usuario);
+                string estadoRegistro = await SaveUpdatePasajeroExterno(cliente, usuario);
                 cliente.Observacion = estadoRegistro;
                 resultado.Add(cliente);
             }
@@ -2340,24 +2340,21 @@ namespace VelsatBackendAPI.Data.Repositories
         }
 
         // Método principal para guardar/actualizar pasajero externo
-        private async Task<string> GuardarPasajeroExterno(GUsuario us, string usuario)
+        private async Task<string> SaveUpdatePasajeroExterno(GUsuario us, string usuario)
         {
             // Validaciones
             if (VerificarNuloVacio(us.Nombre))
             {
                 return "Error: Debe ingresar nombre";
             }
-
             if (VerificarNuloVacio(us.Codlan))
             {
                 return "Error: Debe ingresar codigo";
             }
-
             if (VerificarNuloVacio(us.Empresa))
             {
                 return "Error: Debe indicar la empresa del cliente";
             }
-
             if (us.Lugar == null)
             {
                 return "Error: Debe indicar la dirección del cliente";
@@ -2368,12 +2365,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     return "Error: Debe indicar la dirección del cliente";
                 }
-
                 if (VerificarNuloVacioDouble(us.Lugar.Wx))
                 {
                     return "Error: Debe indicar coordenadas de la direccion";
                 }
-
                 if (VerificarNuloVacioDouble(us.Lugar.Wy))
                 {
                     return "Error: Debe indicar coordenadas de la direccion";
@@ -2385,7 +2380,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             if (usuarioEncontrado == null)
             {
-                // Guardar el lugar
+                // CASO NUEVO: Guardar el lugar
                 var lugar = us.Lugar;
                 lugar.Codcli = us.Codlan;
                 await GuardarLugar(lugar);
@@ -2397,7 +2392,80 @@ namespace VelsatBackendAPI.Data.Repositories
             }
             else
             {
-                return "Error: codigo de pasajero ya existe";
+                // CASO ACTUALIZACIÓN: El pasajero ya existe
+
+                // Obtener el pasajero completo con su lugar actual
+                var pasajeroActual = await LugarPasajero(us, us.Empresa);
+
+                if (pasajeroActual != null)
+                {
+                    // Calcular si cambió de ubicación
+                    double d = DistanciaExterno(
+                        double.Parse(pasajeroActual.Lugar.Wx),
+                        double.Parse(pasajeroActual.Lugar.Wy),
+                        double.Parse(us.Lugar.Wx),
+                        double.Parse(us.Lugar.Wy)
+                    );
+
+                    // Si cambió de ubicación (distancia > 0)
+                    if (d > 0.0)
+                    {
+                        // Eliminar el lugar actual
+                        await EliminarLugar(pasajeroActual.Lugar);
+
+                        // Guardar el nuevo lugar
+                        var nuevoLugar = us.Lugar;
+                        nuevoLugar.Codcli = us.Codlan;
+                        await GuardarLugar(nuevoLugar);
+                    }
+                    else
+                    {
+                        // Si NO cambió de ubicación, actualizar los demás campos del lugar
+                        await ActualizarLugar(us.Lugar, pasajeroActual.Lugar.Codlugar);
+                    }
+
+                    // Actualizar datos del pasajero (nombre, empresa, sexo, teléfono)
+                    var pasajeroActualizado = new GUsuario
+                    {
+                        Codigo = usuarioEncontrado.Codigo,
+                        Nombre = us.Nombre,
+                        Empresa = us.Empresa,
+                        Sexo = us.Sexo,
+                        Telefono = us.Telefono
+                    };
+                    await ActualizarPasajero(pasajeroActualizado);
+
+                    return "Cliente actualizado";
+                }
+                else
+                {
+                    return "Error: No se pudo obtener datos completos del pasajero";
+                }
+            }
+        }
+
+        // Método auxiliar para actualizar el lugar sin cambiar coordenadas
+        private async Task<int> ActualizarLugar(LugarCliente lugarNuevo, int? codlugar)
+        {
+            var sql = @"UPDATE lugarcliente SET direccion = @direccion, distrito = @distrito, 
+                zona = @zona 
+                WHERE codlugar = @codlugar";
+
+            var parametros = new
+            {
+                direccion = lugarNuevo.Direccion,
+                distrito = lugarNuevo.Distrito,
+                zona = lugarNuevo.Zona,
+                codlugar = codlugar
+            };
+
+            try
+            {
+                return await _doConnection.ExecuteAsync(sql, parametros, transaction: _doTransaction);
+            }
+            catch (Exception ex)
+            {
+                throw;
             }
         }
 
