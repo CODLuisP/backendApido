@@ -53,6 +53,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> CancelarServicio(Servicio servicio);
 
+        Task<int> ReiniciarServicio(string codservicio);
+
         Task<string> NewServicio(Servicio servicio, string usuario);
 
         Task<int> UpdateEstadoServicio(Pedido pedido);

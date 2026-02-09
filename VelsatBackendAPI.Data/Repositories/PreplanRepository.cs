@@ -2175,13 +2175,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<int> CancelarAsignacion(string codservicio)
         {
-            Console.WriteLine($"[CancelarAsignacion] Cancelando asignación para servicio: {codservicio}");
-
             string sql = "UPDATE servicio SET codconductor = NULL, unidad = NULL WHERE codservicio = @Codservicio";
             var parameters = new { Codservicio = codservicio };
 
             int resultado = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
-            Console.WriteLine($"[CancelarAsignacion] Filas afectadas: {resultado}");
 
             return resultado;
         }
@@ -2241,6 +2238,16 @@ namespace VelsatBackendAPI.Data.Repositories
             }).ToList();
 
             return pasajeros;
+        }
+
+        public async Task<int> ReiniciarServicio(string codservicio)
+        {
+            string sql = "UPDATE servicio SET fechaini = NULL, fechafin = NULL WHERE codservicio = @Codservicio";
+            var parameters = new { Codservicio = codservicio };
+
+            int resultado = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+
+            return resultado;
         }
 
         public async Task<string> NewServicio(Servicio servicio, string usuario)

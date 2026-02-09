@@ -585,6 +585,36 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
+        [HttpPut("reiniciar/{codservicio}")]
+        public async Task<IActionResult> ReiniciarServicio(string codservicio)
+        {
+            if (string.IsNullOrEmpty(codservicio))
+            {
+                return BadRequest("El código de servicio es requerido.");
+            }
+
+            try
+            {
+                int filasAfectadas = await _uow.PreplanRepository.ReiniciarServicio(codservicio);
+
+                // ✅ Solo en PUT (actualización)
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new { mensaje = "Servicio reiniciado correctamente." });
+                }
+                else
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Ocurrió un error al reiniciar el servicio.", detalle = ex.Message });
+            }
+
+        }
 
         [HttpPost("AgregarServicio")]
         public async Task<IActionResult> GrabarServicioMovil([FromBody] Servicio servicio, [FromQuery] string usuario)
