@@ -1223,39 +1223,7 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             int contador = 1;
 
-            string sql = @"
-select 
-    p.destinocodigo, 
-    p.codigo, 
-    p.codcliente, 
-    p.nombre, 
-    p.rol, 
-    p.fecha, 
-    p.area, 
-    p.horaprog, 
-    p.orden, 
-    p.numero, 
-    p.lastnumero, 
-    p.codtarifa, 
-    p.codconductor, 
-    p.codunidad, 
-    p.tipo, 
-    p.empresa, 
-    STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') as formato, 
-    p.destinocodlugar,
-    p.eliminado 
-from preplan p
-where 
-    STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') >= STR_TO_DATE(@Fecini,'%d/%m/%Y %H:%i') 
-    and STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') <= STR_TO_DATE(@Fecfin,'%d/%m/%Y %H:%i') 
-    and p.cerrado='0' 
-    and p.eliminado='0' 
-    and p.borrado='0' 
-    and p.usuario = @Usuario 
-    and p.empresa = @Empresa 
-    and p.horaprog is not null 
-    and p.numero is not null 
-order by p.empresa, p.eliminado, formato, p.numero, p.orden * 1";
+            string sql = @"select p.destinocodigo, p.codigo, p.codcliente, p.nombre, p.rol, p.fecha, p.area, p.horaprog, p.orden, p.numero, p.lastnumero, p.codtarifa, p.codconductor, p.codunidad, p.tipo, p.empresa, STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') as formato, p.destinocodlugar, l.codlugar, l.direccion, l.wx, l.wy, l.distrito, l.zona, p.eliminado from preplan p, lugarcliente l where p.codcliente=l.codcli and STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i')>=STR_TO_DATE(@Fecini,'%d/%m/%Y %H:%i') and STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i')<=STR_TO_DATE(@Fecfin,'%d/%m/%Y %H:%i') and l.estado='A' and cerrado='0' and eliminado='0' and borrado='0' and usuario = @Usuario and empresa=@Empresa and horaprog is not null and numero is not null order by empresa, eliminado, formato, numero, orden * 1";
 
             var parameters = new { Usuario = usu, Fecini = fecini, Fecfin = fecfin, Empresa = empresa };
 
@@ -1295,14 +1263,20 @@ order by p.empresa, p.eliminado, formato, p.numero, p.orden * 1";
                 Destinocodigo = row.destinocodigo,
                 Pasajero = new Usuario
                 {
-                    Codigo = row.codcliente,
+                    Codigo = row.codcliente,     // ← Agregar esta línea
                     Apepate = row.nombre,
                     Codlan = row.codcliente,
                     Empresa = row.empresa,
+
                 },
                 Lugar = new LugarCliente
                 {
-                    Codlugar = row.destinocodlugar != null ? (int)row.destinocodlugar : 0,
+                    Codlugar = !string.IsNullOrEmpty(row.destinocodlugar) ? int.Parse(row.destinocodlugar) : row.codlugar,
+                    Direccion = row.direccion,
+                    Wx = row.wx,
+                    Wy = row.wy,
+                    Distrito = row.distrito,
+                    Zona = row.zona
                 }
             }).ToList();
 
