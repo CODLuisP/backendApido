@@ -970,7 +970,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
             int r = 0;
             List<Pedido> listapuntos = su.Listapuntos ?? new List<Pedido>();
-            //su.Numpax = listapuntos.Count.ToString();
 
             Console.WriteLine($"[GrabarServicios] Puntos a procesar: {listapuntos.Count}");
             Console.WriteLine($"[GrabarServicios] Servicio configurado - Empresa: {su.Empresa}, Zona: {su.Zona}, Destino: {su.Destino}");
@@ -1002,10 +1001,11 @@ namespace VelsatBackendAPI.Data.Repositories
                     throw new Exception($"El pedido en la posición {b} no tiene pasajero asociado.");
                 }
 
-                Console.WriteLine($"[GrabarServicios] Pedido {b} - Pasajero: {pe.Pasajero.Codigo}, Código pedido: {pe.Codigo}");
+                Console.WriteLine($"[GrabarServicios] Pedido {b} - Pasajero: {pe.Pasajero.Codigo}, Código pedido: {pe.Codigo}, Lugar del pedido: {pe.Lugar?.Codlugar}");
 
-                Console.WriteLine($"[GrabarServicios] Buscando datos del pasajero {pe.Pasajero.Codigo}...");
-                Usuario us = await LugarPasajero(pe.Pasajero);
+                // CAMBIO PRINCIPAL: Pasar el lugar específico del pedido
+                Console.WriteLine($"[GrabarServicios] Buscando datos del pasajero {pe.Pasajero.Codigo} con lugar específico {pe.Lugar?.Codlugar}...");
+                Usuario us = await LugarPasajero(pe.Pasajero, pe.Lugar);
 
                 if (us == null)
                 {
@@ -1013,17 +1013,10 @@ namespace VelsatBackendAPI.Data.Repositories
                     throw new Exception($"No se encontró el usuario para el pasajero con ID {pe.Pasajero?.Codigo}");
                 }
 
-                Console.WriteLine($"[GrabarServicios] Pasajero encontrado - Nombre: {us.Nombre}, Lugar: {us.Lugar?.Direccion}");
+                Console.WriteLine($"[GrabarServicios] Pasajero encontrado - Código: {us.Codigo}, Lugar: {us.Lugar?.Codlugar}, Coordenadas: ({us.Lugar?.Wx}, {us.Lugar?.Wy})");
 
-                if (pe.Lugar?.Codlugar != null)
-                {
-                    Console.WriteLine($"[GrabarServicios] Actualizando lugar del pasajero de {us.Lugar?.Codlugar} a {pe.Lugar.Codlugar}");
-                    us.Lugar.Codlugar = pe.Lugar.Codlugar;
-                }
-                else
-                {
-                    Console.WriteLine($"[GrabarServicios] Manteniendo lugar original del pasajero: {us.Lugar?.Codlugar}");
-                }
+                // YA NO ES NECESARIO este bloque porque LugarPasajero ya trae el lugar correcto
+                // El lugar ya viene configurado correctamente desde LugarPasajero
 
                 // Configurar fecha según el tipo de servicio
                 string fechaAnterior = pe.Fecha;
@@ -1034,12 +1027,13 @@ namespace VelsatBackendAPI.Data.Repositories
                     Console.WriteLine($"[GrabarServicios] Fecha actualizada de '{fechaAnterior}' a '{pe.Fecha}' (Tipo servicio: {su.Tipo})");
                 }
 
+                // Asignar los datos correctos al pedido
                 pe.Pasajero = us;
                 pe.Servicio = sur;
-                pe.Lugar = us.Lugar;
+                pe.Lugar = us.Lugar;  // Ahora us.Lugar tiene las coordenadas correctas del lugar específico
                 pe.Orden = b.ToString();
 
-                Console.WriteLine($"[GrabarServicios] Configurando subservicio - Orden: {pe.Orden}, Fecha: {pe.Fecha}");
+                Console.WriteLine($"[GrabarServicios] Configurando subservicio - Orden: {pe.Orden}, Fecha: {pe.Fecha}, Codlugar: {pe.Lugar?.Codlugar}");
                 Console.WriteLine($"[GrabarServicios] Grabando subservicio para pedido {pe.Codigo}...");
 
                 r = await NuevoSubServicio(pe);
@@ -1113,20 +1107,61 @@ namespace VelsatBackendAPI.Data.Repositories
         }
 
 
-        private async Task<Usuario> LugarPasajero(Usuario pasajero)
+        private async Task<Usuario> LugarPasajero(Usuario pasajero, LugarCliente? lugarDelPedido = null)
         {
-            string sql = @"Select l.codlugar, l.wy, l.wx, c.codcliente from cliente c, lugarcliente l where l.codcli = c.codlugar and c.codlan = @Codlan and c.estadocuenta = 'A' and l.estado = 'A'";
+            Console.WriteLine($"[LugarPasajero] Buscando lugar para pasajero - Codlan: {pasajero.Codlan}, Codlugar específico: {lugarDelPedido?.Codlugar}");
 
-            var parameters = new { Codlan = pasajero.Codlan };
+            string sql;
+            object parameters;
+
+            // Si el pedido trae un lugar específico, buscar exactamente ESE lugar
+            if (lugarDelPedido?.Codlugar != null)
+            {
+                Console.WriteLine($"[LugarPasajero] Usando lugar específico del pedido: {lugarDelPedido.Codlugar}");
+
+                sql = @"Select l.codlugar, l.wy, l.wx, c.codcliente 
+                from cliente c, lugarcliente l 
+                where l.codcli = c.codlugar 
+                and c.codlan = @Codlan 
+                and c.estadocuenta = 'A' 
+                and l.estado = 'A'
+                and l.codlugar = @CodlugarEspecifico
+                LIMIT 1";
+
+                parameters = new
+                {
+                    Codlan = pasajero.Codlan,
+                    CodlugarEspecifico = lugarDelPedido.Codlugar
+                };
+            }
+            else
+            {
+                Console.WriteLine($"[LugarPasajero] No hay lugar específico, buscando lugar por defecto del cliente");
+
+                // Si no viene lugar específico, buscar el primer lugar activo del cliente
+                sql = @"Select l.codlugar, l.wy, l.wx, c.codcliente 
+                from cliente c, lugarcliente l 
+                where l.codcli = c.codlugar 
+                and c.codlan = @Codlan 
+                and c.estadocuenta = 'A' 
+                and l.estado = 'A'
+                ORDER BY l.codlugar ASC
+                LIMIT 1";
+
+                parameters = new { Codlan = pasajero.Codlan };
+            }
 
             var result = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
 
             if (!result.Any())
             {
+                Console.WriteLine($"[LugarPasajero] ERROR: No se encontró ningún lugar para el pasajero con Codlan: {pasajero.Codlan}");
                 return null;
             }
 
             var row = result.First();
+
+            Console.WriteLine($"[LugarPasajero] Lugar encontrado - Codlugar: {row.codlugar}, Coordenadas: ({row.wx}, {row.wy})");
 
             return new Usuario
             {
@@ -1135,7 +1170,11 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     Codlugar = row.codlugar,
                     Wy = row.wy,
-                    Wx = row.wx
+                    Wx = row.wx,
+                    // Mantener datos adicionales del pedido si existen
+                    Direccion = lugarDelPedido?.Direccion,
+                    Distrito = lugarDelPedido?.Distrito,
+                    Zona = lugarDelPedido?.Zona
                 }
             };
         }
@@ -1223,7 +1262,50 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             int contador = 1;
 
-            string sql = @"select p.destinocodigo, p.codigo, p.codcliente, p.nombre, p.rol, p.fecha, p.area, p.horaprog, p.orden, p.numero, p.lastnumero, p.codtarifa, p.codconductor, p.codunidad, p.tipo, p.empresa, STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') as formato, p.destinocodlugar, l.codlugar, l.direccion, l.wx, l.wy, l.distrito, l.zona, p.eliminado from preplan p, lugarcliente l where p.codcliente=l.codcli and STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i')>=STR_TO_DATE(@Fecini,'%d/%m/%Y %H:%i') and STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i')<=STR_TO_DATE(@Fecfin,'%d/%m/%Y %H:%i') and l.estado='A' and cerrado='0' and eliminado='0' and borrado='0' and usuario = @Usuario and empresa=@Empresa and horaprog is not null and numero is not null order by empresa, eliminado, formato, numero, orden * 1";
+            // MODIFICAR EL JOIN para usar el lugar específico del pedido
+            string sql = @"
+        select 
+            p.destinocodigo, 
+            p.codigo, 
+            p.codcliente, 
+            p.nombre, 
+            p.rol, 
+            p.fecha, 
+            p.area, 
+            p.horaprog, 
+            p.orden, 
+            p.numero, 
+            p.lastnumero, 
+            p.codtarifa, 
+            p.codconductor, 
+            p.codunidad, 
+            p.tipo, 
+            p.empresa, 
+            STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') as formato, 
+            p.destinocodlugar, 
+            l.codlugar, 
+            l.direccion, 
+            l.wx, 
+            l.wy, 
+            l.distrito, 
+            l.zona, 
+            p.eliminado 
+        from preplan p
+        inner join lugarcliente l ON 
+            -- CLAVE: Usar el lugar específico del pedido
+            l.codlugar = COALESCE(p.destinocodlugar, p.codcliente)
+            AND l.estado='A'
+        where 
+            STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') >= STR_TO_DATE(@Fecini,'%d/%m/%Y %H:%i') 
+            and STR_TO_DATE(p.fecha,'%d/%m/%Y %H:%i') <= STR_TO_DATE(@Fecfin,'%d/%m/%Y %H:%i') 
+            and p.cerrado='0' 
+            and p.eliminado='0' 
+            and p.borrado='0' 
+            and p.usuario = @Usuario 
+            and p.empresa = @Empresa 
+            and p.horaprog is not null 
+            and p.numero is not null 
+        order by p.empresa, p.eliminado, formato, p.numero, p.orden * 1";
 
             var parameters = new { Usuario = usu, Fecini = fecini, Fecfin = fecfin, Empresa = empresa };
 
@@ -1263,15 +1345,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 Destinocodigo = row.destinocodigo,
                 Pasajero = new Usuario
                 {
-                    Codigo = row.codcliente,     // ← Agregar esta línea
+                    Codigo = row.codcliente,
                     Apepate = row.nombre,
                     Codlan = row.codcliente,
                     Empresa = row.empresa,
-
                 },
                 Lugar = new LugarCliente
                 {
-                    Codlugar = !string.IsNullOrEmpty(row.destinocodlugar) ? int.Parse(row.destinocodlugar) : row.codlugar,
+                    Codlugar = row.codlugar,  // Ya viene el correcto del JOIN
                     Direccion = row.direccion,
                     Wx = row.wx,
                     Wy = row.wy,
