@@ -1699,7 +1699,6 @@ namespace VelsatBackendAPI.Controllers
                     detalle = ex.Message
                 });
             }
-
         }
 
         [HttpPut("UpdateDestino")]
