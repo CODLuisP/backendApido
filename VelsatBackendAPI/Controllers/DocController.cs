@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using VelsatBackendAPI.Data.Repositories;
 using VelsatBackendAPI.Model.Documentacion;
+using VelsatBackendAPI.Model.MovilProgramacion;
 
 namespace VelsatBackendAPI.Controllers
 {
@@ -326,6 +327,26 @@ namespace VelsatBackendAPI.Controllers
                     message = "Error interno del servidor",
                     error = ex.Message
                 });
+            }
+        }
+
+        [HttpGet("detalleConductor/{codtaxi}")]
+        public async Task<ActionResult<Usuario>> GetDetalleConductor(string codtaxi)
+        {
+            try
+            {
+                var conductor = await _readOnlyUow.DocRepository.GetDetalleConductor(codtaxi);
+
+                if (conductor == null)
+                {
+                    return NotFound("No se encontró el conductor.");
+                }
+
+                return Ok(conductor);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno: {ex.Message}");
             }
         }
     }

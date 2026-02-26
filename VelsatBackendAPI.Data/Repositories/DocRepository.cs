@@ -1,7 +1,9 @@
 ﻿using Dapper;
+using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
 using System.Data;
 using VelsatBackendAPI.Model.Documentacion;
+using VelsatBackendAPI.Model.MovilProgramacion;
 
 namespace VelsatBackendAPI.Data.Repositories
 {
@@ -195,6 +197,46 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 Console.WriteLine("Error al obtener documentos de conductor próximos a vencer");
                 return new List<Docconductor>();
+            }
+        }
+
+        public async Task<Usuario> GetDetalleConductor(string codtaxi)
+        {
+            if (!int.TryParse(codtaxi, out int codtaxiInt))
+            {
+                return null;
+            }
+
+            const string sql = @"SELECT codtaxi, nombres, apellidos, sexo, dni, telefono 
+                         FROM taxi 
+                         WHERE estado = 'A' AND codtaxi = @Codtaxi";
+            try
+            {
+                var results = await _doConnection.QueryAsync<dynamic>(sql, new
+                {
+                    Codtaxi = codtaxiInt
+                }, transaction: _doTransaction);
+
+                var row = results.FirstOrDefault();
+                if (row == null)
+                {
+                    return null;
+                }
+
+                return new Usuario
+                {
+                    Codigo = row.codtaxi.ToString(),
+                    Nombre = row.nombres,
+                    Apepate = row.apellidos,
+                    Sexo = row.sexo,
+                    Dni = row.dni,
+                    Telefono = row.telefono
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error al obtener detalle del conductor");
+                return null;
             }
         }
     }

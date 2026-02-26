@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using VelsatBackendAPI.Model.Documentacion;
+using VelsatBackendAPI.Model.MovilProgramacion;
 
 namespace VelsatBackendAPI.Data.Repositories
 {
@@ -21,5 +22,7 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> Create(Docconductor docconductor);
         Task<bool> DeleteConductor(int id);
         Task<List<Docconductor>> GetDocumentosConductorProximosVencer(string usuario);
+        Task<Usuario> GetDetalleConductor(string codtaxi);
+
     }
 }
