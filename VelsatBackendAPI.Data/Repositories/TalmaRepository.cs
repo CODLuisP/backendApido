@@ -1,14 +1,6 @@
 ﻿using Dapper;
-using Microsoft.Extensions.Logging;
 using MySql.Data.MySqlClient;
-using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Talma;
 
 namespace VelsatBackendAPI.Data.Repositories
@@ -27,8 +19,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<InsertPedidoTalmaResponse> InsertPedido(IEnumerable<RegistroExcel> registros)
         {
-            var sw = Stopwatch.StartNew();
-
             var response = new InsertPedidoTalmaResponse
             {
                 Success = true,
@@ -187,9 +177,6 @@ namespace VelsatBackendAPI.Data.Repositories
                 });
             }
 
-            sw.Stop();
-            Console.WriteLine($"Procesamiento completado en {sw.ElapsedMilliseconds}ms. Éxito: {response.Success}");
-
             return response;
         }
 
@@ -213,11 +200,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             try
             {
-                var sw = Stopwatch.StartNew();
                 var results = await _doConnection.QueryAsync(sql, parameters, transaction: _doTransaction);
-                sw.Stop();
-
-                Console.WriteLine($"Consulta de clientes batch completada en {sw.ElapsedMilliseconds}ms");
 
                 var diccionario = new Dictionary<string, DatosCliente>(StringComparer.OrdinalIgnoreCase);
 
@@ -268,11 +251,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             try
             {
-                var sw = Stopwatch.StartNew();
                 var filasAfectadas = await _doConnection.ExecuteAsync(sql, pedidos, transaction: _doTransaction);
-                sw.Stop();
-
-                Console.WriteLine($"Inserción de {filasAfectadas} registros completada en {sw.ElapsedMilliseconds}ms");
 
                 if (filasAfectadas != pedidos.Count)
                 {
@@ -327,12 +306,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
                 try
                 {
-                    var sw = Stopwatch.StartNew();
                     var filasAfectadas = await _doConnection.ExecuteAsync(sql, lote, transaction: _doTransaction);
-                    sw.Stop();
-
                     totalInsertados += filasAfectadas;
-                    Console.WriteLine($"Lote {numeroLote}/{totalLotes} insertado: {filasAfectadas} registros en {sw.ElapsedMilliseconds}ms");
                 }
                 catch (MySqlException ex) when (ex.Number == 1062)
                 {

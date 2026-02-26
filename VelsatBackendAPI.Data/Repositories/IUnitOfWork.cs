@@ -25,7 +25,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         IPreplanRepository PreplanRepository { get; }
 
-        IAlertaRepository AlertaRepository { get; }
+        IDocRepository DocRepository { get; }
 
         IRecorridoRepository RecorridoRepository { get; }
 

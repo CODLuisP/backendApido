@@ -52,7 +52,6 @@ builder.Services.AddSingleton(mysqlConfiguration);
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IReadOnlyUnitOfWork, ReadOnlyUnitOfWork>();
-builder.Services.AddSingleton<IUnitOfWorkFactory, UnitOfWorkFactory>();
 
 // ✅ CORS configurado correctamente
 builder.Services.AddCors(options =>

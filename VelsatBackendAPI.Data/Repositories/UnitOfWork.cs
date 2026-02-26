@@ -30,7 +30,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<ITurnosRepository> _turnosRepository;
         private readonly Lazy<IPasajerosRepository> _pasajerosRepository;
         private readonly Lazy<IPreplanRepository> _preplanRepository;
-        private readonly Lazy<IAlertaRepository> _alertaRepository;
+        private readonly Lazy<IDocRepository> _docRepository;
         private readonly Lazy<IRecorridoRepository> _recorridoRepository;
         private readonly Lazy<IKmServicioRepository> _kmServicioRepository;
         private readonly Lazy<IGacelaRepository> _gacelaRepository;
@@ -70,8 +70,7 @@ namespace VelsatBackendAPI.Data.Repositories
             _preplanRepository = new Lazy<IPreplanRepository>(() =>
                 new PreplanRepository(DefaultConnection, _defaultTransaction, DOConnection, _doTransaction));
 
-            _alertaRepository = new Lazy<IAlertaRepository>(() =>
-                new AlertaRepository(DefaultConnection, _defaultTransaction));
+            _docRepository = new Lazy<IDocRepository>(() => new DocRepository(DOConnection, _doTransaction));
 
             _recorridoRepository = new Lazy<IRecorridoRepository>(() => new RecorridoRepository(DOConnection, _doTransaction));
 
@@ -329,12 +328,12 @@ namespace VelsatBackendAPI.Data.Repositories
             }
         }
 
-        public IAlertaRepository AlertaRepository
+        public IDocRepository DocRepository
         {
             get
             {
                 ValidateNotDisposedOrCommitted();
-                return _alertaRepository.Value;
+                return _docRepository.Value;
             }
         }
 
@@ -578,7 +577,7 @@ namespace VelsatBackendAPI.Data.Repositories
             TryDisposeRepository(_turnosRepository);
             TryDisposeRepository(_pasajerosRepository);
             TryDisposeRepository(_preplanRepository);
-            TryDisposeRepository(_alertaRepository);
+            TryDisposeRepository(_docRepository);
             TryDisposeRepository(_recorridoRepository);
             TryDisposeRepository(_kmServicioRepository);
             TryDisposeRepository(_gacelaRepository);

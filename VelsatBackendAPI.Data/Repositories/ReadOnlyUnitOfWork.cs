@@ -33,6 +33,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<ITurnosRepository> _turnosRepository;
         private readonly Lazy<ITalmaRepository> _talmaRepository;
         private readonly Lazy<IAdminRepository> _adminRepository;
+        private readonly Lazy<IDocRepository> _docRepository;
 
 
         private bool _disposed = false;
@@ -63,6 +64,7 @@ namespace VelsatBackendAPI.Data.Repositories
             _preplanRepository = new Lazy<IPreplanRepository>(() => new PreplanRepository(DefaultConnection, null, DOConnection, null));
             _turnosRepository = new Lazy<ITurnosRepository>(() => new TurnosRepository(DOConnection, null));
             _talmaRepository = new Lazy<ITalmaRepository> (() => new TalmaRepository(DOConnection, null));
+            _docRepository = new Lazy<IDocRepository>(() => new DocRepository(DOConnection, null));
 
             //ADMIN
             _adminRepository = new Lazy<IAdminRepository>(() => new AdminRepository(DefaultConnection, null));
@@ -267,6 +269,16 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (_disposed)
                     throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
                 return _adminRepository.Value;
+            }
+        }
+
+        public IDocRepository DocRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _docRepository.Value;
             }
         }
 
