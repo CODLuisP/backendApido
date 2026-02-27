@@ -16,7 +16,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<IEnumerable<Usuarioadmin>> GetAllUsers()
         {
-            var sql = @"SELECT accountID, password, contactPhone, contactEmail, description, creationTime, isActive, ruc from usuarios";
+            var sql = @"SELECT accountID, password, contactPhone, contactEmail, description, creationTime, isActive, ruc from usuarios WHERE isActive = 1";
 
             var resultado = await _defaultConnection.QueryAsync<Usuarioadmin>(sql, transaction: _defaultTransaction);
 
@@ -77,7 +77,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<IEnumerable<Deviceuser>> GetSubUsers()
         {
-            var sql = @"SELECT id, UserId, DeviceName, Status, DeviceID from deviceuser";
+            var sql = @"SELECT id, UserId, DeviceName, Status, DeviceID from deviceuser WHERE status = '1'";
 
             var resultado = await _defaultConnection.QueryAsync<Deviceuser>(sql, transaction: _defaultTransaction);
 
