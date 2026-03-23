@@ -3585,5 +3585,25 @@ namespace VelsatBackendAPI.Controllers
                 }
             }
         }
+
+        [HttpPost("CompletarServiciosLatam")]
+        public async Task<IActionResult> CompletarServiciosLatam([FromBody] CompletarServiciosLatamRequest request)
+        {
+            try
+            {
+                var resultado = await _uow.PreplanRepository.CompletarServiciosLatam(request.Registros, request.Fecha, request.CodUsuario);
+                _uow.SaveChanges();
+
+                if (resultado > 0)
+                {
+                    return Ok(new { message = "Servicios actualizados correctamente", total = resultado });
+                }
+                return BadRequest("No se pudo actualizar ningún servicio.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+            }
+        }
     }
 }

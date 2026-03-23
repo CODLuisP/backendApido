@@ -4280,5 +4280,84 @@ ORDER BY dates.fecha_dt";
             return result.ToList();
         }
 
+        public async Task<int> CompletarServiciosLatam(RegistroLatam registros, string fecha)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<int> CompletarServiciosLatam(List<RegistroLatam> registros, string fecha, string codusuario)
+        {
+            int totalActualizados = 0;
+
+            foreach (var registro in registros)
+            {
+                // 1. Obtener código del conductor por nombre
+                string codConductor = await ObtenerCodConductor(registro.Conductor, codusuario);
+
+                if (codConductor == null)
+                    continue; // O puedes lanzar excepción si prefieres cortar el proceso
+
+                // 2. Actualizar tabla servicio (unidad y codconductor)
+                string sqlServicio = @"UPDATE servicio 
+                               SET unidad = @Unidad, 
+                                   codconductor = @CodConductor 
+                               WHERE numero = @Numero";
+
+                var paramsServicio = new
+                {
+                    Unidad = registro.Unidad,
+                    CodConductor = codConductor,
+                    Numero = registro.Codservicio
+                };
+
+                await _doConnection.ExecuteAsync(sqlServicio, paramsServicio, transaction: _doTransaction);
+
+                // 3. Obtener el codservicio (PK) del registro actualizado
+                string sqlGetCod = @"SELECT codservicio FROM servicio 
+                             WHERE numero = @Numero";
+
+                var codServicio = await _doConnection.QueryFirstOrDefaultAsync<int>(
+                    sqlGetCod,
+                    new { Numero = registro.Codservicio },
+                    transaction: _doTransaction
+                );
+
+                if (codServicio == 0)
+                    continue;
+
+                // 4. Actualizar subservicio con la hora real
+                string sqlSubservicio = @"UPDATE subservicio 
+                                  SET fecha = @Fecha 
+                                  WHERE codservicio = @CodServicio 
+                                  AND orden = '0'";
+
+                string soloFecha = fecha.Split(' ')[0]; // Toma solo "12/03/2026"
+
+                var paramsSubservicio = new
+                {
+                    Fecha = $"{soloFecha} {registro.HoraAtoReal}",
+                    CodServicio = codServicio
+                };
+
+                int rows = await _doConnection.ExecuteAsync(sqlSubservicio, paramsSubservicio, transaction: _doTransaction);
+                totalActualizados += rows;
+            }
+
+            return totalActualizados;
+        }
+
+        private async Task<string> ObtenerCodConductor(string nombreConductor, string codUsuario)
+        {
+            string sql = @"SELECT codtaxi FROM taxi 
+                   WHERE apellidos LIKE @Nombre 
+                   AND estado = 'A' 
+                   AND codusuario = @CodUsuario
+                   LIMIT 1";
+
+            var parameters = new { Nombre = $"%{nombreConductor}%", CodUsuario = codUsuario };
+
+            var result = await _doConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _doTransaction);
+            return result;
+        }
     }
 }

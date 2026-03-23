@@ -118,5 +118,8 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> InsertarAlertaVelocidad(SpeedAlert alerta);
 
         Task<List<SpeedAlert>> ReporteAlertasVelocidad(string usuario, string fechaini, string fechafin);
+
+        //Reporte para completar registros LATAM
+        Task<int> CompletarServiciosLatam(List<RegistroLatam> registros, string fecha, string codusuario);
     }
 }
