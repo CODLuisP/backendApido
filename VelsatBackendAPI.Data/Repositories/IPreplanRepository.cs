@@ -113,6 +113,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<List<ServicioDetalle>> ReporteConductorServicioRango(string codConductor, string fechaini, string fechafin);
 
+        Task<List<ServicioDetalle>> ReporteTodosCondutoresRango(string fechaini, string fechafin, string usuario);
 
         //Reporte de alertas de velocidad
         Task<int> InsertarAlertaVelocidad(SpeedAlert alerta);

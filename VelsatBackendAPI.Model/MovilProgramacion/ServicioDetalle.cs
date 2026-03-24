@@ -25,5 +25,6 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string Turno { get; set; }
         public string Unidadasig { get; set; }
 
+        public string? CodConductor { get; set; }
     }
 }
