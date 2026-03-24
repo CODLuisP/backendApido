@@ -3591,18 +3591,20 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var resultado = await _uow.PreplanRepository.CompletarServiciosLatam(request.Registros, request.Fecha, request.CodUsuario);
+                var resultado = await _uow.PreplanRepository
+                    .CompletarServiciosLatam(request.Registros, request.Fecha, request.CodUsuario);
                 _uow.SaveChanges();
 
-                if (resultado > 0)
+                return Ok(new
                 {
-                    return Ok(new { message = "Servicios actualizados correctamente", total = resultado });
-                }
-                return BadRequest("No se pudo actualizar ningún servicio.");
+                    message = "Proceso completado",
+                    total = resultado.Total,
+                    noEncontrados = resultado.NoEncontrados
+                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "Hubo un error al procesar la solicitud.");
+                return StatusCode(500, $"Error: {ex.Message}");
             }
         }
     }

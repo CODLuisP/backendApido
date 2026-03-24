@@ -4280,14 +4280,13 @@ ORDER BY dates.fecha_dt";
             return result.ToList();
         }
 
-        public async Task<int> CompletarServiciosLatam(List<RegistroLatam> registros, string fecha, string codusuario)
+        public async Task<CompletarServiciosLatamResult> CompletarServiciosLatam(List<RegistroLatam> registros, string fecha, string codusuario)
         {
-            int totalActualizados = 0;
-            int timeout = 120; // 2 minutos
+            var result = new CompletarServiciosLatamResult();
+            int timeout = 120;
 
             string sqlConductores = @"SELECT codtaxi, apellidos FROM taxi 
-                               WHERE estado = 'A' 
-                               AND codusuario = @CodUsuario";
+                               WHERE estado = 'A' AND codusuario = @CodUsuario";
 
             var conductores = await _doConnection.QueryAsync<ConductorDto>(
                 sqlConductores,
@@ -4320,8 +4319,22 @@ ORDER BY dates.fecha_dt";
 
             foreach (var registro in registros)
             {
-                if (!mapaConductores.TryGetValue(registro.Conductor, out var codConductor)) continue;
-                if (!mapaServicios.TryGetValue(registro.Codservicio, out var codServicio)) continue;
+                bool conductorOk = mapaConductores.TryGetValue(registro.Conductor, out var codConductor);
+                bool servicioOk = mapaServicios.TryGetValue(registro.Codservicio, out var codServicio);
+
+                // ✅ Si no se encontró el número en la tabla → no encontrado
+                if (!servicioOk)
+                {
+                    result.NoEncontrados.Add(registro);
+                    continue;
+                }
+
+                // ✅ Si no se encontró el conductor → igual agregar a no encontrados
+                if (!conductorOk)
+                {
+                    result.NoEncontrados.Add(registro);
+                    continue;
+                }
 
                 await _doConnection.ExecuteAsync(
                     "UPDATE servicio SET unidad = @Unidad, codconductor = @CodConductor WHERE numero = @Numero",
@@ -4337,10 +4350,10 @@ ORDER BY dates.fecha_dt";
                     commandTimeout: timeout
                 );
 
-                totalActualizados += rows;
+                result.Total += rows;
             }
 
-            return totalActualizados;
+            return result;
         }
 
         // DTOs locales para evitar el problema de mapeo de tuplas con Dapper
@@ -4354,20 +4367,6 @@ ORDER BY dates.fecha_dt";
         {
             public int Codservicio { get; set; }
             public string Numero { get; set; }
-        }
-
-        private async Task<string> ObtenerCodConductor(string nombreConductor, string codUsuario)
-        {
-            string sql = @"SELECT codtaxi FROM taxi 
-                   WHERE apellidos LIKE @Nombre 
-                   AND estado = 'A' 
-                   AND codusuario = @CodUsuario
-                   LIMIT 1";
-
-            var parameters = new { Nombre = $"%{nombreConductor}%", CodUsuario = codUsuario };
-
-            var result = await _doConnection.QueryFirstOrDefaultAsync<string>(sql, parameters, transaction: _doTransaction);
-            return result;
         }
     }
 }
