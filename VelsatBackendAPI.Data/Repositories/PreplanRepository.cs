@@ -4280,70 +4280,80 @@ ORDER BY dates.fecha_dt";
             return result.ToList();
         }
 
-        public async Task<int> CompletarServiciosLatam(RegistroLatam registros, string fecha)
-        {
-            throw new NotImplementedException();
-        }
-
         public async Task<int> CompletarServiciosLatam(List<RegistroLatam> registros, string fecha, string codusuario)
         {
             int totalActualizados = 0;
+            int timeout = 120; // 2 minutos
+
+            string sqlConductores = @"SELECT codtaxi, apellidos FROM taxi 
+                               WHERE estado = 'A' 
+                               AND codusuario = @CodUsuario";
+
+            var conductores = await _doConnection.QueryAsync<ConductorDto>(
+                sqlConductores,
+                new { CodUsuario = codusuario },
+                transaction: _doTransaction,
+                commandTimeout: timeout
+            );
+
+            var mapaConductores = new Dictionary<string, string>();
+            foreach (var nombre in registros.Select(r => r.Conductor).Distinct())
+            {
+                var match = conductores.FirstOrDefault(c =>
+                    c.Apellidos.Contains(nombre, StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                    mapaConductores[nombre] = match.Codtaxi;
+            }
+
+            var numeros = registros.Select(r => r.Codservicio).ToList();
+
+            var servicios = await _doConnection.QueryAsync<ServicioDto>(
+                "SELECT codservicio, numero FROM servicio WHERE numero IN @Numeros",
+                new { Numeros = numeros },
+                transaction: _doTransaction,
+                commandTimeout: timeout
+            );
+
+            var mapaServicios = servicios.ToDictionary(s => s.Numero, s => s.Codservicio);
+
+            string soloFecha = fecha.Split(' ')[0];
 
             foreach (var registro in registros)
             {
-                // 1. Obtener código del conductor por nombre
-                string codConductor = await ObtenerCodConductor(registro.Conductor, codusuario);
+                if (!mapaConductores.TryGetValue(registro.Conductor, out var codConductor)) continue;
+                if (!mapaServicios.TryGetValue(registro.Codservicio, out var codServicio)) continue;
 
-                if (codConductor == null)
-                    continue; // O puedes lanzar excepción si prefieres cortar el proceso
-
-                // 2. Actualizar tabla servicio (unidad y codconductor)
-                string sqlServicio = @"UPDATE servicio 
-                               SET unidad = @Unidad, 
-                                   codconductor = @CodConductor 
-                               WHERE numero = @Numero";
-
-                var paramsServicio = new
-                {
-                    Unidad = registro.Unidad,
-                    CodConductor = codConductor,
-                    Numero = registro.Codservicio
-                };
-
-                await _doConnection.ExecuteAsync(sqlServicio, paramsServicio, transaction: _doTransaction);
-
-                // 3. Obtener el codservicio (PK) del registro actualizado
-                string sqlGetCod = @"SELECT codservicio FROM servicio 
-                             WHERE numero = @Numero";
-
-                var codServicio = await _doConnection.QueryFirstOrDefaultAsync<int>(
-                    sqlGetCod,
-                    new { Numero = registro.Codservicio },
-                    transaction: _doTransaction
+                await _doConnection.ExecuteAsync(
+                    "UPDATE servicio SET unidad = @Unidad, codconductor = @CodConductor WHERE numero = @Numero",
+                    new { Unidad = registro.Unidad, CodConductor = codConductor, Numero = registro.Codservicio },
+                    transaction: _doTransaction,
+                    commandTimeout: timeout
                 );
 
-                if (codServicio == 0)
-                    continue;
+                int rows = await _doConnection.ExecuteAsync(
+                    "UPDATE subservicio SET fecha = @Fecha WHERE codservicio = @CodServicio AND orden = '0'",
+                    new { Fecha = $"{soloFecha} {registro.HoraAtoReal}", CodServicio = codServicio },
+                    transaction: _doTransaction,
+                    commandTimeout: timeout
+                );
 
-                // 4. Actualizar subservicio con la hora real
-                string sqlSubservicio = @"UPDATE subservicio 
-                                  SET fecha = @Fecha 
-                                  WHERE codservicio = @CodServicio 
-                                  AND orden = '0'";
-
-                string soloFecha = fecha.Split(' ')[0]; // Toma solo "12/03/2026"
-
-                var paramsSubservicio = new
-                {
-                    Fecha = $"{soloFecha} {registro.HoraAtoReal}",
-                    CodServicio = codServicio
-                };
-
-                int rows = await _doConnection.ExecuteAsync(sqlSubservicio, paramsSubservicio, transaction: _doTransaction);
                 totalActualizados += rows;
             }
 
             return totalActualizados;
+        }
+
+        // DTOs locales para evitar el problema de mapeo de tuplas con Dapper
+        private class ConductorDto
+        {
+            public string Codtaxi { get; set; }
+            public string Apellidos { get; set; }
+        }
+
+        private class ServicioDto
+        {
+            public int Codservicio { get; set; }
+            public string Numero { get; set; }
         }
 
         private async Task<string> ObtenerCodConductor(string nombreConductor, string codUsuario)
