@@ -4341,10 +4341,7 @@ WHERE codtaxi = @Codigo;
             var result = new CompletarServiciosLatamResult();
             int timeout = 120;
 
-            Console.WriteLine($"[LATAM] Iniciando. Registros: {registros.Count}, Fecha: {fecha}, CodUsuario: {codusuario}");
-
-            string sqlConductores = @"SELECT codtaxi, apellidos FROM taxi 
-                       WHERE estado = 'A' AND codusuario = @CodUsuario";
+            string sqlConductores = @"SELECT codtaxi, apellidos FROM taxi WHERE estado = 'A' AND codusuario = @CodUsuario";
 
             var conductores = await _doConnection.QueryAsync<ConductorDto>(
                 sqlConductores,
@@ -4352,8 +4349,6 @@ WHERE codtaxi = @Codigo;
                 transaction: _doTransaction,
                 commandTimeout: timeout
             );
-
-            Console.WriteLine($"[LATAM] Conductores encontrados en BD: {conductores.Count()}");
 
             var mapaConductores = new Dictionary<string, string>();
             foreach (var nombre in registros.Select(r => r.Conductor).Distinct())
@@ -4363,15 +4358,9 @@ WHERE codtaxi = @Codigo;
                 if (match != null)
                 {
                     mapaConductores[nombre] = match.Codtaxi;
-                    Console.WriteLine($"[LATAM] Conductor mapeado: '{nombre}' → {match.Codtaxi}");
-                }
-                else
-                {
-                    Console.WriteLine($"[LATAM] ⚠️ Conductor NO encontrado: '{nombre}'");
                 }
             }
 
-            // Convertir fecha al formato de la columna dd/MM/yyyy
             string soloFecha;
             if (DateTime.TryParseExact(fecha.Split(' ')[0], "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var fechaParsed))
                 soloFecha = fechaParsed.ToString("dd/MM/yyyy");
@@ -4380,10 +4369,7 @@ WHERE codtaxi = @Codigo;
             else
                 throw new ArgumentException($"Formato de fecha no reconocido: {fecha}");
 
-            Console.WriteLine($"[LATAM] Fecha recibida: '{fecha}' → soloFecha: '{soloFecha}'");
-
             var numeros = registros.Select(r => r.Codservicio).ToList();
-            Console.WriteLine($"[LATAM] Números a buscar ({numeros.Count}): {string.Join(", ", numeros)}");
 
             var servicios = await _doConnection.QueryAsync<ServicioDto>(
                 "SELECT codservicio, numero FROM servicio WHERE numero IN @Numeros AND codusuario = @Codusuario AND empresa = 'LATAM' AND LEFT(fecha, 10) = @Fecha",
@@ -4392,12 +4378,9 @@ WHERE codtaxi = @Codigo;
                 commandTimeout: timeout
             );
 
-            Console.WriteLine($"[LATAM] Servicios encontrados en BD: {servicios.Count()}");
-
             var mapaServicios = servicios.ToDictionary(s => s.Numero, s => s.Codservicio);
 
             var updateServicio = new List<object>();
-            var updateSubservicio = new List<object>();
 
             foreach (var registro in registros)
             {
@@ -4406,36 +4389,27 @@ WHERE codtaxi = @Codigo;
 
                 if (!servicioOk || !conductorOk)
                 {
-                    Console.WriteLine($"[LATAM] ❌ No encontrado → Numero: {registro.Codservicio} | ServicioOk: {servicioOk} | ConductorOk: {conductorOk}");
                     result.NoEncontrados.Add(registro);
                     continue;
                 }
 
-                Console.WriteLine($"[LATAM] ✅ Match OK → Numero: {registro.Codservicio} | CodServicio: {codServicio} | CodConductor: {codConductor}");
-                updateServicio.Add(new { Unidad = registro.Unidad, CodConductor = codConductor, CodServicio = codServicio });
-                updateSubservicio.Add(new { Fecha = $"{soloFecha} {registro.HoraAtoReal}", CodServicio = codServicio });
+                updateServicio.Add(new
+                {
+                    Unidad = registro.Unidad,
+                    CodConductor = codConductor,
+                    FechaFin = $"{soloFecha} {registro.HoraAtoReal}",
+                    CodServicio = codServicio
+                });
             }
-
-            Console.WriteLine($"[LATAM] Registros a actualizar: {updateServicio.Count} | No encontrados: {result.NoEncontrados.Count}");
 
             if (updateServicio.Any())
             {
-                await _doConnection.ExecuteAsync(
-                    "UPDATE servicio SET unidad = @Unidad, codconductor = @CodConductor WHERE codservicio = @CodServicio",
+                result.Total = await _doConnection.ExecuteAsync(
+                    "UPDATE servicio SET unidad = @Unidad, codconductor = @CodConductor, fechafin = @FechaFin WHERE codservicio = @CodServicio",
                     updateServicio,
                     transaction: _doTransaction,
                     commandTimeout: timeout
                 );
-
-                int rows = await _doConnection.ExecuteAsync(
-                    "UPDATE subservicio SET fecha = @Fecha WHERE codservicio = @CodServicio AND orden = '0'",
-                    updateSubservicio,
-                    transaction: _doTransaction,
-                    commandTimeout: timeout
-                );
-
-                result.Total = rows;
-                Console.WriteLine($"[LATAM] Finalizado. Total actualizados: {result.Total} | No encontrados: {result.NoEncontrados.Count}");
             }
 
             return result;
