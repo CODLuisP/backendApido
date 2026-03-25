@@ -4341,8 +4341,10 @@ WHERE codtaxi = @Codigo;
             var result = new CompletarServiciosLatamResult();
             int timeout = 120;
 
+            Console.WriteLine($"[LATAM] Iniciando. Registros: {registros.Count}, Fecha: {fecha}, CodUsuario: {codusuario}");
+
             string sqlConductores = @"SELECT codtaxi, apellidos FROM taxi 
-                               WHERE estado = 'A' AND codusuario = @CodUsuario";
+                       WHERE estado = 'A' AND codusuario = @CodUsuario";
 
             var conductores = await _doConnection.QueryAsync<ConductorDto>(
                 sqlConductores,
@@ -4351,62 +4353,89 @@ WHERE codtaxi = @Codigo;
                 commandTimeout: timeout
             );
 
+            Console.WriteLine($"[LATAM] Conductores encontrados en BD: {conductores.Count()}");
+
             var mapaConductores = new Dictionary<string, string>();
             foreach (var nombre in registros.Select(r => r.Conductor).Distinct())
             {
                 var match = conductores.FirstOrDefault(c =>
                     c.Apellidos.Contains(nombre, StringComparison.OrdinalIgnoreCase));
                 if (match != null)
+                {
                     mapaConductores[nombre] = match.Codtaxi;
+                    Console.WriteLine($"[LATAM] Conductor mapeado: '{nombre}' → {match.Codtaxi}");
+                }
+                else
+                {
+                    Console.WriteLine($"[LATAM] ⚠️ Conductor NO encontrado: '{nombre}'");
+                }
             }
 
+            // Convertir fecha al formato de la columna dd/MM/yyyy
+            string soloFecha;
+            if (DateTime.TryParseExact(fecha.Split(' ')[0], "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var fechaParsed))
+                soloFecha = fechaParsed.ToString("dd/MM/yyyy");
+            else if (DateTime.TryParseExact(fecha.Split(' ')[0], "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out fechaParsed))
+                soloFecha = fechaParsed.ToString("dd/MM/yyyy");
+            else
+                throw new ArgumentException($"Formato de fecha no reconocido: {fecha}");
+
+            Console.WriteLine($"[LATAM] Fecha recibida: '{fecha}' → soloFecha: '{soloFecha}'");
+
             var numeros = registros.Select(r => r.Codservicio).ToList();
+            Console.WriteLine($"[LATAM] Números a buscar ({numeros.Count}): {string.Join(", ", numeros)}");
 
             var servicios = await _doConnection.QueryAsync<ServicioDto>(
-                "SELECT codservicio, numero FROM servicio WHERE numero IN @Numeros",
-                new { Numeros = numeros },
+                "SELECT codservicio, numero FROM servicio WHERE numero IN @Numeros AND codusuario = @Codusuario AND empresa = 'LATAM' AND LEFT(fecha, 10) = @Fecha",
+                new { Numeros = numeros, Codusuario = codusuario, Fecha = soloFecha },
                 transaction: _doTransaction,
                 commandTimeout: timeout
             );
 
+            Console.WriteLine($"[LATAM] Servicios encontrados en BD: {servicios.Count()}");
+
             var mapaServicios = servicios.ToDictionary(s => s.Numero, s => s.Codservicio);
 
-            string soloFecha = fecha.Split(' ')[0];
+            var updateServicio = new List<object>();
+            var updateSubservicio = new List<object>();
 
             foreach (var registro in registros)
             {
                 bool conductorOk = mapaConductores.TryGetValue(registro.Conductor, out var codConductor);
                 bool servicioOk = mapaServicios.TryGetValue(registro.Codservicio, out var codServicio);
 
-                // ✅ Si no se encontró el número en la tabla → no encontrado
-                if (!servicioOk)
+                if (!servicioOk || !conductorOk)
                 {
+                    Console.WriteLine($"[LATAM] ❌ No encontrado → Numero: {registro.Codservicio} | ServicioOk: {servicioOk} | ConductorOk: {conductorOk}");
                     result.NoEncontrados.Add(registro);
                     continue;
                 }
 
-                // ✅ Si no se encontró el conductor → igual agregar a no encontrados
-                if (!conductorOk)
-                {
-                    result.NoEncontrados.Add(registro);
-                    continue;
-                }
+                Console.WriteLine($"[LATAM] ✅ Match OK → Numero: {registro.Codservicio} | CodServicio: {codServicio} | CodConductor: {codConductor}");
+                updateServicio.Add(new { Unidad = registro.Unidad, CodConductor = codConductor, CodServicio = codServicio });
+                updateSubservicio.Add(new { Fecha = $"{soloFecha} {registro.HoraAtoReal}", CodServicio = codServicio });
+            }
 
+            Console.WriteLine($"[LATAM] Registros a actualizar: {updateServicio.Count} | No encontrados: {result.NoEncontrados.Count}");
+
+            if (updateServicio.Any())
+            {
                 await _doConnection.ExecuteAsync(
-                    "UPDATE servicio SET unidad = @Unidad, codconductor = @CodConductor WHERE numero = @Numero",
-                    new { Unidad = registro.Unidad, CodConductor = codConductor, Numero = registro.Codservicio },
+                    "UPDATE servicio SET unidad = @Unidad, codconductor = @CodConductor WHERE codservicio = @CodServicio",
+                    updateServicio,
                     transaction: _doTransaction,
                     commandTimeout: timeout
                 );
 
                 int rows = await _doConnection.ExecuteAsync(
                     "UPDATE subservicio SET fecha = @Fecha WHERE codservicio = @CodServicio AND orden = '0'",
-                    new { Fecha = $"{soloFecha} {registro.HoraAtoReal}", CodServicio = codServicio },
+                    updateSubservicio,
                     transaction: _doTransaction,
                     commandTimeout: timeout
                 );
 
-                result.Total += rows;
+                result.Total = rows;
+                Console.WriteLine($"[LATAM] Finalizado. Total actualizados: {result.Total} | No encontrados: {result.NoEncontrados.Count}");
             }
 
             return result;
