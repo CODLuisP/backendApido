@@ -2435,7 +2435,7 @@ namespace VelsatBackendAPI.Controllers
                 }
                 else
                 {
-                    periodo = $"{fechaInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)} - {fechaFin.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}";
+                    periodo = $"{fechaInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)} - {fechaFin.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}";
                     turnosTrabajados = 2;
                 }
 
