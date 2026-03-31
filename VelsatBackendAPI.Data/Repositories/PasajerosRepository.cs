@@ -126,7 +126,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (codusuario.Equals("cgacela", StringComparison.OrdinalIgnoreCase))
                 {
                     const string sqlDesactivar = @"UPDATE lugarcliente SET estado = 'E' WHERE codcli = @Codcli";
-                    await _defaultConnection.ExecuteAsync(sqlDesactivar, new { Codcli = codlugar }, transaction: _doTransaction);
+                    await _doConnection.ExecuteAsync(sqlDesactivar, new { Codcli = codlugar }, transaction: _doTransaction);
 
                     sqlLugarCliente = @"INSERT INTO lugarcliente (codcli, direccion, distrito, wy, wx, zona, estado) 
                                 VALUES (@Codcli, @Direccion, @Distrito, @Wy, @Wx, @Zona, 'A')";
