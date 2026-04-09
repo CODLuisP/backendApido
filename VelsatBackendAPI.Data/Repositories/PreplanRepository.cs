@@ -65,6 +65,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 "Total LCP" => "LCP",
                 "Total COPA AIR" => "COPA AIR",
                 "Tierra LATAM" => "LATAM",
+                "LAGARDERE" => "LAGARDERE",
                 _ => "AVIANCA"
             };
         }
