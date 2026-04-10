@@ -54,7 +54,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 "PLUSPETROL" => "PLUSPETROL",
                 "PROSEGUR" => "PROSEGUR",
                 "TALMA" => "TALMA",
-                "Total DHL" => "DHL",
+                "DHL" => "DHL",
                 "OI PERU" => "OI PERU",
                 "CHINALCO" => "CHINALCO",
                 "METSO" => "METSO",
