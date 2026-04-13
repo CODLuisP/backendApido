@@ -21,6 +21,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Transactions;
 using VelsatBackendAPI.Model;
+using VelsatBackendAPI.Model.Cgcela;
 using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
@@ -1031,11 +1032,20 @@ namespace VelsatBackendAPI.Data.Repositories
                 pe.Servicio = sur;
                 pe.Lugar = us.Lugar;
                 pe.Orden = b.ToString();
+                pe.Empresa = su.Empresa;
 
                 Console.WriteLine($"[GrabarServicios] Configurando subservicio - Orden: {pe.Orden}, Fecha: {pe.Fecha}");
                 Console.WriteLine($"[GrabarServicios] Grabando subservicio para pedido {pe.Codigo}...");
 
-                r = await NuevoSubServicio(pe);
+                try
+                {
+                    r = await NuevoSubServicio(pe);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[GrabarServicios] ERROR en NuevoSubServicio punto {b}: {ex.Message} | Inner: {ex.InnerException?.Message}");
+                    throw;
+                }
 
                 if (r > 0)
                 {
@@ -1075,24 +1085,30 @@ namespace VelsatBackendAPI.Data.Repositories
                 Observacion = pedido.Observacion
             };
 
+            Console.WriteLine($"[NuevoSubServicio] Codubicli: {pedido.Lugar?.Codlugar}, Codcliente: {pedido.Pasajero?.Codigo}, Codservicio: {pedido.Servicio?.Codservicio}, Fecha: {pedido.Fecha}, Orden: {pedido.Orden}");
+
             int filasAfectadas = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
             //INCREMENTAR TOTALPAX SI SE INSERTÓ EXITOSAMENTE
             if (filasAfectadas > 0 && !string.IsNullOrEmpty(pedido.Servicio?.Codservicio))
             {
-                await IncrementarTotalPax(pedido.Servicio.Codservicio);
+                await IncrementarTotalPax(pedido.Servicio.Codservicio, pedido.Empresa, pedido.Orden);
             }
 
             return filasAfectadas;
         }
 
-        private async Task<int> IncrementarTotalPax(string codservicio)
+        private async Task<int> IncrementarTotalPax(string codservicio, string empresa, string codorden)
         {
             // Convertir el string a int de forma segura
             if (!int.TryParse(codservicio, out int codservicioInt))
             {
                 throw new ArgumentException("El código de servicio no es válido. Debe ser un número entero.");
             }
+
+            // Para LAGARDERE
+            if (empresa?.ToUpper() == "LAGARDERE" && codorden == "0")
+                return 0;
 
             string sql = @"UPDATE servicio SET totalpax = CAST(CAST(totalpax AS UNSIGNED) + 1 AS CHAR) WHERE codservicio = @Codservicio";
 

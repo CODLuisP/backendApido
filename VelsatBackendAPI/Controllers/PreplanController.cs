@@ -2414,30 +2414,15 @@ namespace VelsatBackendAPI.Controllers
 
                 // CALCULAR PERIODO Y TURNOS TRABAJADOS
                 // Obtener turno y hora de inicio del primer resultado
-                string turnoRaw = resultado.FirstOrDefault()?.Turno ?? "D";
-                string turno = turnoRaw.ToUpper() == "D" ? "Día" :
-                               turnoRaw.ToUpper() == "N" ? "Noche" :
-                               turnoRaw;
-
                 string hora = resultado.FirstOrDefault()?.HoraInicioTurno ?? "00:00";
 
                 DateTime fechaInicio = DateTime.ParseExact($"{fecha} {hora}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
                 DateTime fechaFin = fechaInicio.AddHours(12);
 
+                string turno = $"{fechaInicio:HH:mm} - {fechaFin:HH:mm}";
+
                 int turnosTrabajados = 1;
-                string periodo;
-
-
-                if (fechaInicio.Date == fechaFin.Date)
-                {
-                    periodo = fechaInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                    turnosTrabajados = 1;
-                }
-                else
-                {
-                    periodo = $"{fechaInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)} - {fechaFin.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}";
-                    turnosTrabajados = 2;
-                }
+                string periodo = fechaInicio.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
                 // CALCULAR MÉTRICAS
                 int cantidadServicios = resultado
