@@ -2362,7 +2362,6 @@ namespace VelsatBackendAPI.Controllers
         }
 
         private async Task<byte[]> GenerarExcelServiciosConductor(List<ServicioDetalle> resultado, string codConductor, string fecha, string usuario)
-
         {
             using (var workbook = new XLWorkbook())
             {
@@ -2413,11 +2412,23 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 // CALCULAR PERIODO Y TURNOS TRABAJADOS
-                // Obtener turno y hora de inicio del primer resultado
-                string hora = resultado.FirstOrDefault()?.HoraInicioTurno ?? "00:00";
+                // Obtener horainicio del primer resultado
+                string horaInicioTurno = resultado.FirstOrDefault()?.HoraInicioTurno;
 
-                DateTime fechaInicio = DateTime.ParseExact($"{fecha} {hora}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                DateTime fechaFin = fechaInicio.AddHours(12);
+                string fechaSolo = fecha.Contains(" ") ? fecha.Split(' ')[0] : fecha;
+
+                DateTime fechaInicio, fechaFin;
+
+                if (string.IsNullOrWhiteSpace(horaInicioTurno))
+                {
+                    fechaInicio = DateTime.ParseExact($"{fechaSolo} 00:00", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                    fechaFin = DateTime.ParseExact($"{fechaSolo} 23:59", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    fechaInicio = DateTime.ParseExact($"{fechaSolo} {horaInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                    fechaFin = fechaInicio.AddHours(12);
+                }
 
                 string turno = $"{fechaInicio:HH:mm} - {fechaFin:HH:mm}";
 
@@ -2953,38 +2964,38 @@ namespace VelsatBackendAPI.Controllers
                 }
 
                 // CALCULAR PERIODO Y TURNOS TRABAJADOS
-                // SIEMPRE completar las fechas con horas
-                string fechaIniCompleta = $"{fechaini} 00:00";
-                string fechaFinCompleta = $"{fechafin} 23:59";
+                string horaInicioTurno = resultado.FirstOrDefault()?.HoraInicioTurno;
 
-                DateTime fechaInicio = DateTime.ParseExact(fechaIniCompleta, "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                DateTime fechaFin = DateTime.ParseExact(fechaFinCompleta, "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                DateTime fechaInicio, fechaFin;
 
+                if (string.IsNullOrWhiteSpace(horaInicioTurno))
+                {
+                    fechaInicio = DateTime.ParseExact($"{fechaini} 00:00", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                    fechaFin = DateTime.ParseExact($"{fechafin} 23:59", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    fechaInicio = DateTime.ParseExact($"{fechaini} {horaInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                    fechaFin = DateTime.ParseExact($"{fechafin} {horaInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                                       .AddHours(12);
+                }
 
                 // Contar días únicos donde hubo servicios reales
                 int turnosTrabajados = resultado
                     .Where(s => !string.IsNullOrEmpty(s.Fecha))
-                    .Select(s => s.Fecha) // "23/03/2026", "24/03/2026"
+                    .Select(s => s.Fecha)
                     .Distinct()
                     .Count();
 
                 if (turnosTrabajados < 1) turnosTrabajados = 1;
 
-                string periodo;
-                if (fechaInicio.Date == fechaFin.Date)
-                {
-                    periodo = fechaInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                }
-                else
-                {
-                    periodo = $"{fechaInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)} - {fechaFin.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}";
-                }
+                // PERIODO: solo fechas
+                string periodo = fechaInicio.Date == fechaFin.Date
+                    ? fechaInicio.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+                    : $"{fechaini} - {fechafin}";
 
-                // Obtener turno del primer resultado (solo para mostrar)
-                string turnoRaw = resultado.FirstOrDefault()?.Turno ?? "D";
-                string turno = turnoRaw.ToUpper() == "D" ? "Día" :
-                               turnoRaw.ToUpper() == "N" ? "Noche" :
-                               turnoRaw;
+                // TURNO: rango horario
+                string turno = $"{fechaInicio:HH:mm} - {fechaFin:HH:mm}";
 
                 // CALCULAR MÉTRICAS
                 int cantidadServicios = resultado

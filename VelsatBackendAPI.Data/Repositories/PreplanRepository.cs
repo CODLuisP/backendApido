@@ -4130,14 +4130,20 @@ WHERE codtaxi = @Codigo;
                 transaction: _doTransaction
             );
 
-            // Si turno u horainicio son null o vacíos, usar valores por defecto
             string horainicio = (conductor == null || string.IsNullOrWhiteSpace((string)conductor.horainicio))
-                ? "00:00"
+                ? null
                 : (string)conductor.horainicio;
 
-            string turno = (conductor == null || string.IsNullOrWhiteSpace((string)conductor.turno))
-                ? "SIN TURNO"
-                : (string)conductor.turno;
+            string fechaSolo = fecha.Contains(" ") ? fecha.Split(' ')[0] : fecha;
+
+            // Calcular rango según si tiene horainicio o no
+            string horaIniParam = horainicio ?? "00:00";
+            DateTime fechaFinDt = horainicio == null
+                ? DateTime.ParseExact($"{fechaSolo} 23:59", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                : DateTime.ParseExact($"{fechaSolo} {horainicio}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture).AddHours(12);
+
+            string horaFinParam = fechaFinDt.ToString("HH:mm");
+            string fechaFinParam = fechaFinDt.ToString("dd/MM/yyyy");
 
             // Consulta principal
             string sql = @"
@@ -4165,17 +4171,8 @@ WHERE codtaxi = @Codigo;
                 INNER JOIN taxi t ON s.codconductor = t.codtaxi
                 CROSS JOIN LATERAL (
                     SELECT 
-                        STR_TO_DATE(
-                            CONCAT(@Fecha, ' ', @HoraInicio),
-                            '%d/%m/%Y %H:%i'
-                        ) AS fecha_inicio,
-                        DATE_ADD(
-                            STR_TO_DATE(
-                                CONCAT(@Fecha, ' ', @HoraInicio),
-                                '%d/%m/%Y %H:%i'
-                            ),
-                            INTERVAL 12 HOUR
-                        ) AS fecha_fin
+                        STR_TO_DATE(CONCAT(@Fecha, ' ', @HoraInicio), '%d/%m/%Y %H:%i') AS fecha_inicio,
+                        STR_TO_DATE(CONCAT(@FechaFin, ' ', @HoraFin), '%d/%m/%Y %H:%i') AS fecha_fin
                 ) params
                 CROSS JOIN LATERAL (
                     SELECT 
@@ -4189,13 +4186,13 @@ WHERE codtaxi = @Codigo;
                   AND su.orden > 0
                 ORDER BY dates.fecha_dt";
 
-            string fechaSolo = fecha.Contains(" ") ? fecha.Split(' ')[0] : fecha;
-
             var parameters = new
             {
                 CodConductor = codConductor,
                 Fecha = fechaSolo,
-                HoraInicio = horainicio
+                HoraInicio = horaIniParam,
+                FechaFin = fechaFinParam,
+                HoraFin = horaFinParam
             };
 
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
@@ -4205,9 +4202,31 @@ WHERE codtaxi = @Codigo;
         //Reporte de servicios por conductor rangos
         public async Task<List<ServicioDetalle>> ReporteConductorServicioRango(string codConductor, string fechaini, string fechafin)
         {
-            // SIEMPRE completar las fechas con horas
-            string fechaIniCompleta = $"{fechaini} 00:00";
-            string fechaFinCompleta = $"{fechafin} 23:59";
+            // Validación previa: obtener horainicio del conductor
+            string sqlValidacion = @"SELECT turno, horainicio FROM taxi WHERE codtaxi = @CodConductor";
+
+            var conductor = await _doConnection.QueryFirstOrDefaultAsync<dynamic>(
+                sqlValidacion,
+                new { CodConductor = codConductor },
+                transaction: _doTransaction
+            );
+
+            string horainicio = (conductor == null || string.IsNullOrWhiteSpace((string)conductor.horainicio)) ? null : (string)conductor.horainicio;
+
+            string fechaIniCompleta, fechaFinCompleta;
+
+            if (horainicio == null)
+            {
+                fechaIniCompleta = $"{fechaini} 00:00";
+                fechaFinCompleta = $"{fechafin} 23:59";
+            }
+            else
+            {
+                fechaIniCompleta = $"{fechaini} {horainicio}";
+                fechaFinCompleta = DateTime.ParseExact($"{fechafin} {horainicio}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                                           .AddHours(12)
+                                           .ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+            }
 
             // Consulta principal
             string sql = @"
