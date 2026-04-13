@@ -4184,6 +4184,7 @@ WHERE codtaxi = @Codigo;
                   AND dates.fecha_dt BETWEEN params.fecha_inicio AND params.fecha_fin
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0
+                  AND s.estado <> 'C'
                 ORDER BY dates.fecha_dt";
 
             var parameters = new
@@ -4263,6 +4264,7 @@ WHERE codtaxi = @Codigo;
                                          AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0
+                  AND s.estado <> 'C'
                 ORDER BY dates.fecha_dt";
 
             var parameters = new
@@ -4276,8 +4278,8 @@ WHERE codtaxi = @Codigo;
             return resultado.ToList();
         }
 
-        //Reporte de servicios por rango de fechas
-        public async Task<List<ServicioDetalle>> ReporteTodosCondutoresRango(string fechaini, string fechafin, string usuario)
+        //Reporte de servicios todos conductores una fecha
+        public async Task<List<ServicioDetalle>> ReporteTodosConductores(string fechaini, string usuario)
         {
             string sql = @"
                 SELECT 
@@ -4312,11 +4314,15 @@ WHERE codtaxi = @Codigo;
                 WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
                                          AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
                   AND su.codcliente NOT IN (39953, 4175)
-                  AND su.orden > 0 AND s.codusuario = @Codusuario
+                  AND su.orden > 0 
+                  AND s.codusuario = @Codusuario
+                  AND s.estado <> 'C'
                 ORDER BY t.apellidos, dates.fecha_dt";
 
+            DateTime fechaBase = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
             string fechaIniCompleta = $"{fechaini} 00:00";
-            string fechaFinCompleta = $"{fechafin} 23:59";
+            DateTime fechaFinDt = fechaBase.AddDays(1).AddHours(12); // día siguiente 12:00
+            string fechaFinCompleta = fechaFinDt.ToString("dd/MM/yyyy HH:mm");
 
             var parameters = new
             {
@@ -4326,7 +4332,126 @@ WHERE codtaxi = @Codigo;
             };
 
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
-            return resultado.ToList();
+
+            string fechaini_str = fechaBase.ToString("dd/MM/yyyy");
+            string fechaSiguiente = fechaBase.AddDays(1).ToString("dd/MM/yyyy");
+
+            // Filtro por conductor: evaluar individualmente según turno y horainicio
+            var resultadoFiltrado = resultado
+                .Where(s =>
+                {
+                    // Día principal → siempre incluir
+                    if (s.Fecha == fechaini_str) return true;
+
+                    // Día siguiente → evaluar según datos del conductor
+                    if (s.Fecha == fechaSiguiente)
+                    {
+                        bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
+                        bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
+
+                        // Ambos tienen valor → usar turno para decidir
+                        if (tieneTurno && tieneHoraInicio)
+                            return s.Turno.ToUpper() == "N";
+
+                        // Alguno es null/vacío → rango por defecto 00:00-23:59, no incluir día siguiente
+                        return false;
+                    }
+
+                    return false;
+                })
+                .ToList();
+
+            return resultadoFiltrado;
+        }
+
+        //Reporte de servicios todos conductores por rango de fechas
+        public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario)
+        {
+            string sql = @"
+                SELECT 
+                    s.codservicio,
+                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+                    s.empresa AS Empresa, 
+                    s.tipo AS Tipo, 
+                    s.numero AS Numero, 
+                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+                    c.apellidos AS Apellidos, 
+                    l.direccion AS Direccion, 
+                    l.distrito AS Distrito, 
+                    s.unidad AS Unidad, 
+                    t.apellidos AS ApellidosConductor,
+                    t.turno AS Turno,
+                    t.horainicio AS HoraInicioTurno,
+                    t.unidadasig AS Unidadasig,
+                    s.codconductor AS CodConductor
+                FROM servicio s
+                INNER JOIN subservicio su ON s.codservicio = su.codservicio
+                INNER JOIN cliente c ON su.codcliente = c.codcliente
+                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+                INNER JOIN taxi t ON s.codconductor = t.codtaxi
+                CROSS JOIN LATERAL (
+                    SELECT 
+                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+                ) dates
+                WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+                  AND su.codcliente NOT IN (39953, 4175)
+                  AND su.orden > 0 
+                  AND s.codusuario = @Codusuario 
+                  AND s.estado <> 'C'
+                ORDER BY t.apellidos, dates.fecha_dt";
+
+            DateTime fechaBaseIni = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
+            DateTime fechaBaseFin = DateTime.ParseExact(fechafin, "dd/MM/yyyy", null);
+
+            string fechaIniCompleta = $"{fechaini} 00:00";
+            DateTime fechaFinDt = fechaBaseFin.AddDays(1).AddHours(12); // día siguiente a fechafin 12:00
+            string fechaFinCompleta = fechaFinDt.ToString("dd/MM/yyyy HH:mm");
+
+            var parameters = new
+            {
+                FechaIni = fechaIniCompleta,
+                FechaFin = fechaFinCompleta,
+                Codusuario = usuario
+            };
+
+            var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
+
+            // Fechas válidas del rango principal
+            var fechasValidas = Enumerable
+                .Range(0, (fechaBaseFin - fechaBaseIni).Days + 1)
+                .Select(d => fechaBaseIni.AddDays(d).ToString("dd/MM/yyyy"))
+                .ToHashSet();
+
+            string fechaSiguienteAFin = fechaBaseFin.AddDays(1).ToString("dd/MM/yyyy");
+
+            var resultadoFiltrado = resultado
+                .Where(s =>
+                {
+                    // Cualquier día dentro del rango → siempre incluir
+                    if (fechasValidas.Contains(s.Fecha)) return true;
+
+                    // Día siguiente a fechafin → solo conductores nocturnos
+                    if (s.Fecha == fechaSiguienteAFin)
+                    {
+                        bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
+                        bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
+
+                        if (tieneTurno && tieneHoraInicio)
+                            return s.Turno.ToUpper() == "N";
+
+                        return false;
+                    }
+
+                    return false;
+                })
+                .ToList();
+
+            return resultadoFiltrado;
         }
 
         //Reporte de alertas de velocidad

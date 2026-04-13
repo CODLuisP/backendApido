@@ -3371,23 +3371,22 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        [HttpGet("ExcelServiciosTodosConductores")]
-        public async Task<IActionResult> ExcelServiciosTodosConductores([FromQuery] string fechaini, [FromQuery] string fechafin, [FromQuery] string usuario)
+        //Reporte de servicios todos conductores una fecha
+        [HttpGet("ExcelServiciosTodosConductoresDia")]
+        public async Task<IActionResult> ExcelServiciosTodosConductoresDia([FromQuery] string fechaini, [FromQuery] string usuario)
         {
             if (string.IsNullOrEmpty(fechaini))
                 return BadRequest(new { mensaje = "La fecha inicial es obligatoria." });
-            if (string.IsNullOrEmpty(fechafin))
-                return BadRequest(new { mensaje = "La fecha final es obligatoria." });
 
             try
             {
-                var resultado = await _readOnlyUow.PreplanRepository.ReporteTodosCondutoresRango(fechaini, fechafin, usuario);
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteTodosConductores(fechaini, usuario);
 
                 if (resultado == null || !resultado.Any())
                     return NotFound(new { mensaje = "No se encontraron servicios para el rango indicado." });
 
-                var excelBytes = await GenerarExcelTodosConductores(resultado, fechaini, fechafin, usuario);
-                string fileName = $"Servicios_Conductores_{fechaini.Replace("/", "-")}_al_{fechafin.Replace("/", "-")}.xlsx";
+                var excelBytes = await GenerarExcelTodosConductoresDia(resultado, fechaini, usuario);
+                string fileName = $"Servicios_Conductores_{fechaini.Replace("/", "-")}.xlsx";
 
                 return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
@@ -3401,7 +3400,8 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        private async Task<byte[]> GenerarExcelTodosConductores(List<ServicioDetalle> resultado, string fechaini, string fechafin, string usuario)
+        //MÉTODO EXCEL
+        private async Task<byte[]> GenerarExcelTodosConductoresDia(List<ServicioDetalle> resultado, string fechaini, string usuario)
         {
             using (var workbook = new XLWorkbook())
             {
@@ -3425,14 +3425,21 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Cell("J7").Style.Font.SetBold();
                 worksheet.Cell("J7").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
-                worksheet.Cell("J8").Value = "USUARIO : " + (usuario?.ToUpper() ?? "N/A");
+                // Fecha sin hora
+                worksheet.Cell("J8").Value = "FECHA : " + fechaini;
                 worksheet.Cell("J8").Style.Font.FontName = "Calibri";
-                worksheet.Cell("J8").Style.Font.FontSize = 10;
+                worksheet.Cell("J8").Style.Font.FontSize = 13;
                 worksheet.Cell("J8").Style.Font.SetBold();
                 worksheet.Cell("J8").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
-                worksheet.Range("B8:J8").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
-                worksheet.Range("B8:J8").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+                worksheet.Cell("J9").Value = "USUARIO : " + (usuario?.ToUpper() ?? "N/A");
+                worksheet.Cell("J9").Style.Font.FontName = "Calibri";
+                worksheet.Cell("J9").Style.Font.FontSize = 10;
+                worksheet.Cell("J9").Style.Font.SetBold();
+                worksheet.Cell("J9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                worksheet.Range("B9:J9").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("B9:J9").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 // Imágenes
                 string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
@@ -3445,7 +3452,47 @@ namespace VelsatBackendAPI.Controllers
                 using (var ms2 = new MemoryStream(imageBytes2))
                     worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("I2")).WithSize(240, 80);
 
-                // Anchos de columna (una sola vez)
+                // Calcular métricas globales
+                int totalServicios = resultado
+                    .Where(s => !string.IsNullOrEmpty(s.Numero) && !string.IsNullOrEmpty(s.Empresa))
+                    .Select(s => new { s.Empresa, s.Fecha, s.Numero, s.CodConductor })
+                    .Distinct()
+                    .Count();
+
+                int totalConductores = resultado
+                    .Select(s => s.CodConductor)
+                    .Distinct()
+                    .Count();
+
+                decimal promedio = totalConductores > 0
+                    ? Math.Round((decimal)totalServicios / totalConductores, MidpointRounding.AwayFromZero)
+                    : 0;
+
+                // Etiqueta + valor lado a lado desde L5
+                void EscribirMetrica(string celda, string celdaValor, string etiqueta, string valor)
+                {
+                    worksheet.Cell(celda).Value = etiqueta;
+                    worksheet.Cell(celda).Style.Font.FontName = "Calibri";
+                    worksheet.Cell(celda).Style.Font.FontSize = 10;
+                    worksheet.Cell(celda).Style.Font.SetBold();
+                    worksheet.Cell(celda).Style.Font.FontColor = XLColor.White;
+                    worksheet.Cell(celda).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                    worksheet.Cell(celda).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(celda).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                    worksheet.Cell(celdaValor).Value = valor;
+                    worksheet.Cell(celdaValor).Style.Font.FontName = "Calibri";
+                    worksheet.Cell(celdaValor).Style.Font.FontSize = 13;
+                    worksheet.Cell(celdaValor).Style.Font.SetBold();
+                    worksheet.Cell(celdaValor).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(celdaValor).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                }
+
+                EscribirMetrica("L5", "M5", "CANT. SERVICIOS", totalServicios.ToString());
+                EscribirMetrica("L6", "M6", "CANT. CONDUCTORES", totalConductores.ToString());
+                EscribirMetrica("L7", "M7", "PROMEDIO SERVICIOS", promedio.ToString("0"));
+
+                // Anchos de columna
                 worksheet.Column(2).Width = 7;
                 worksheet.Column(3).Width = 12;
                 worksheet.Column(4).Width = 25;
@@ -3463,113 +3510,310 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Column(16).Width = 35;
                 worksheet.ShowGridLines = false;
 
+                // ── CABECERAS TABLA (una sola vez) ───────────────────────────
+                int filaActual = 11;
+
+                var headers = new[] { "ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV",
+            "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO",
+            "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO",
+            "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR" };
+
+                worksheet.Row(filaActual).Height = 40;
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    var cell = worksheet.Cell(filaActual, i + 2);
+                    cell.Value = headers[i];
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Font.FontColor = XLColor.White;
+                    cell.Style.Font.FontName = "Calibri";
+                    cell.Style.Font.FontSize = 10;
+                    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    cell.Style.Alignment.WrapText = true;
+                }
+                filaActual++;
+
                 // ── AGRUPAR POR CONDUCTOR ────────────────────────────────────
                 var conductores = resultado
                     .GroupBy(s => s.CodConductor)
                     .ToList();
 
-                int filaActual = 10; // Empieza después de la cabecera global
+                int item = 1;
 
-                string fechaIniCompleta = $"{fechaini} 00:00";
-                string fechaFinCompleta = $"{fechafin} 23:59";
-                DateTime fechaInicio = DateTime.ParseExact(fechaIniCompleta, "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                DateTime fechaFin = DateTime.ParseExact(fechaFinCompleta, "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-
-                string periodo = fechaInicio.Date == fechaFin.Date
-                    ? fechaInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
-                    : $"{fechaInicio.ToString("dd/MM/yyyy HH:mm")} - {fechaFin.ToString("dd/MM/yyyy HH:mm")}";
-
-                foreach (var grupoConductor in conductores)
+                for (int gc = 0; gc < conductores.Count; gc++)
                 {
-                    var serviciosConductor = grupoConductor.ToList();
+                    var serviciosConductor = conductores[gc].ToList();
+                    bool esUltimoConductor = gc == conductores.Count - 1;
 
-                    // ── MÉTRICAS POR CONDUCTOR ───────────────────────────────
-                    string nombreConductor = serviciosConductor.FirstOrDefault()?.ApellidosConductor ?? "";
-                    string unidadAsignada = serviciosConductor.FirstOrDefault()?.Unidadasig ?? "";
-                    string turnoRaw = serviciosConductor.FirstOrDefault()?.Turno ?? "D";
-                    string turno = turnoRaw.ToUpper() == "D" ? "Día" :
-                                             turnoRaw.ToUpper() == "N" ? "Noche" : turnoRaw;
-
-                    int turnosTrabajados = serviciosConductor
-                        .Where(s => !string.IsNullOrEmpty(s.Fecha))
-                        .Select(s => s.Fecha)
-                        .Distinct()
-                        .Count();
-                    if (turnosTrabajados < 1) turnosTrabajados = 1;
-
-                    int cantidadServicios = serviciosConductor
-                        .Where(s => !string.IsNullOrEmpty(s.Numero))
-                        .Select(s => new { s.Fecha, s.Numero })
-                        .Distinct()
-                        .Count();
-
-                    decimal promedioServicios = turnosTrabajados > 0
-                        ? (decimal)cantidadServicios / turnosTrabajados : 0;
-
-                    var serviciosUnicos = serviciosConductor
-                        .Where(s => !string.IsNullOrEmpty(s.Numero))
-                        .GroupBy(s => new { s.Fecha, s.Numero })
-                        .Select(g => g.First())
-                        .ToList();
-
-                    TimeSpan totalHorasManejo = SumarDiferenciasTiempo(serviciosUnicos);
-                    string horasmanejo = FormatearHoras(totalHorasManejo);
-                    TimeSpan horasManejoPromTs = TimeSpan.FromMinutes(totalHorasManejo.TotalMinutes / turnosTrabajados);
-                    string horasmanejoprom = FormatearHoras(horasManejoPromTs);
-
-                    var serviciosRecojoUnicos = serviciosConductor
-                        .Where(s => !string.IsNullOrEmpty(s.Numero) && s.Tipo?.ToUpper() == "I")
-                        .GroupBy(s => new { s.Fecha, s.Numero })
-                        .Select(g => g.First())
-                        .ToList();
-
-                    int totalRecojoServicios = 0, recojosPuntuales = 0;
-                    foreach (var sv in serviciosRecojoUnicos)
-                    {
-                        totalRecojoServicios++;
-                        string diff = CalcularDiferenciaTiempo(sv.HoraAto ?? "", sv.HoraTurno ?? "");
-                        if (!string.IsNullOrEmpty(diff) && !diff.StartsWith("-")) recojosPuntuales++;
-                    }
-                    int puntualidad = totalRecojoServicios > 0
-                        ? (int)Math.Round((decimal)recojosPuntuales / totalRecojoServicios * 100) : 0;
-
-                    // ── BLOQUE ESTADÍSTICAS ──────────────────────────────────
-                    EscribirEstadisticasConductor(worksheet, filaActual,
-                        nombreConductor, unidadAsignada, periodo, turno,
-                        turnosTrabajados, cantidadServicios, promedioServicios,
-                        horasmanejo, horasmanejoprom, puntualidad);
-
-                    filaActual += 3; // 3 filas de estadísticas
-
-                    // ── CABECERAS TABLA ──────────────────────────────────────
-                    var headers = new[] { "ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV",
-                        "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO",
-                        "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO",
-                        "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR" };
-
-                    worksheet.Row(filaActual).Height = 40;
-                    for (int i = 0; i < headers.Length; i++)
-                    {
-                        var cell = worksheet.Cell(filaActual, i + 2);
-                        cell.Value = headers[i];
-                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
-                        cell.Style.Font.Bold = true;
-                        cell.Style.Font.FontColor = XLColor.White;
-                        cell.Style.Font.FontName = "Calibri";
-                        cell.Style.Font.FontSize = 10;
-                        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-                        cell.Style.Alignment.WrapText = true;
-                    }
-                    filaActual++;
-
-                    // ── FILAS DE DETALLE ─────────────────────────────────────
-                    int item = 1;
                     string numeroServicioAnt = "";
                     bool colorAlternativo = false;
                     var colorGrupo1 = XLColor.FromHtml("#EBF1DE");
                     var colorGrupo2 = XLColor.White;
-                    int filaInicioDetalle = filaActual;
+                    int filaInicioGrupo = filaActual;
+
+                    foreach (var servicio in serviciosConductor)
+                    {
+                        string numeroActual = servicio.Numero ?? "";
+                        if (numeroActual != numeroServicioAnt)
+                        {
+                            if (numeroServicioAnt != "") colorAlternativo = !colorAlternativo;
+                            numeroServicioAnt = numeroActual;
+                        }
+
+                        string tipoTexto = servicio.Tipo?.ToUpper() == "I" ? "Recojo" :
+                                           servicio.Tipo?.ToUpper() == "S" ? "Reparto" :
+                                           servicio.Tipo ?? "";
+
+                        worksheet.Cell(filaActual, 2).Value = item++;
+                        worksheet.Cell(filaActual, 3).Value = servicio.Fecha ?? "";  // ya viene dd/MM/yyyy sin hora
+                        worksheet.Cell(filaActual, 4).Value = servicio.Empresa ?? "";
+                        worksheet.Cell(filaActual, 5).Value = tipoTexto;
+                        worksheet.Cell(filaActual, 6).Value = numeroActual;
+                        worksheet.Cell(filaActual, 7).Value = servicio.HoraTurno ?? "";
+                        worksheet.Cell(filaActual, 8).Value = servicio.HoraInicio ?? "";
+                        worksheet.Cell(filaActual, 9).Value = servicio.HoraAto ?? "";
+
+                        string diferenciaTiempo = CalcularDiffTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
+                        worksheet.Cell(filaActual, 10).Value = diferenciaTiempo;
+
+                        string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "").Replace("-", "");
+                        worksheet.Cell(filaActual, 11).Value = tiempoProgramado;
+
+                        worksheet.Cell(filaActual, 12).Value = servicio.Apellidos ?? "";
+                        worksheet.Cell(filaActual, 13).Value = servicio.Direccion ?? "";
+                        worksheet.Cell(filaActual, 14).Value = servicio.Distrito ?? "";
+                        worksheet.Cell(filaActual, 15).Value = servicio.Unidad ?? "";
+                        worksheet.Cell(filaActual, 16).Value = servicio.ApellidosConductor ?? "";
+
+                        var rango = worksheet.Range(filaActual, 2, filaActual, 16);
+                        rango.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                        rango.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                        rango.Style.Font.FontName = "Calibri";
+                        rango.Style.Font.FontSize = 10;
+                        rango.Style.Fill.BackgroundColor = colorAlternativo ? colorGrupo2 : colorGrupo1;
+
+                        worksheet.Cell(filaActual, 9).Style.Fill.BackgroundColor = XLColor.FromHtml("#ffe246");
+
+                        if (tipoTexto == "Recojo" && !string.IsNullOrEmpty(diferenciaTiempo))
+                        {
+                            worksheet.Cell(filaActual, 10).Style.Font.FontColor = diferenciaTiempo.StartsWith("-")
+                                ? XLColor.Red
+                                : XLColor.FromHtml("#228b22");
+                        }
+
+                        filaActual++;
+                    }
+
+                    // ── BORDES DEL GRUPO ─────────────────────────────────────
+                    if (filaActual - 1 >= filaInicioGrupo)
+                    {
+                        var rangoBordes = worksheet.Range(filaInicioGrupo, 2, filaActual - 1, 16);
+
+                        // Bordes internos finos
+                        rangoBordes.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                        rangoBordes.Style.Border.InsideBorderColor = XLColor.Gray;
+
+                        // Borde exterior del grupo más grueso para separar conductores
+                        rangoBordes.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+                        rangoBordes.Style.Border.OutsideBorderColor = XLColor.FromHtml("#1a3446");
+
+                        var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 16);
+                        rangoWrap.Style.Alignment.WrapText = true;
+                    }
+
+                    // Separación visual entre conductores (excepto el último)
+                    if (!esUltimoConductor)
+                        filaActual += 1;
+                }
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    return stream.ToArray();
+                }
+            }
+        }
+
+        //Reporte de servicios todos conductores por rango de fechas
+        [HttpGet("ExcelServiciosTodosConductores")]
+        public async Task<IActionResult> ExcelServiciosTodosConductores([FromQuery] string fechaini, [FromQuery] string fechafin, [FromQuery] string usuario)
+        {
+            if (string.IsNullOrEmpty(fechaini))
+                return BadRequest(new { mensaje = "La fecha inicial es obligatoria." });
+            if (string.IsNullOrEmpty(fechafin))
+                return BadRequest(new { mensaje = "La fecha final es obligatoria." });
+
+            try
+            {
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteTodosConductoresRango(fechaini, fechafin, usuario);
+
+                if (resultado == null || !resultado.Any())
+                    return NotFound(new { mensaje = "No se encontraron servicios para el rango indicado." });
+
+                var excelBytes = await GenerarExcelTodosConductoresRango(resultado, fechaini, fechafin, usuario);
+                string fileName = $"Servicios_Conductores_{fechaini.Replace("/", "-")}_al_{fechafin.Replace("/", "-")}.xlsx";
+
+                return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error al generar el reporte.",
+                    detalle = ex.Message
+                });
+            }
+        }
+
+        private async Task<byte[]> GenerarExcelTodosConductoresRango(List<ServicioDetalle> resultado, string fechaini, string fechafin, string usuario)
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Servicios Conductores");
+
+                // ── CABECERA GLOBAL ──────────────────────────────────────────
+                var rangoTitulo = worksheet.Range("C2:H5");
+                rangoTitulo.Merge();
+                rangoTitulo.Value = "REPORTE DE SERVICIOS POR CONDUCTOR";
+                rangoTitulo.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoTitulo.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                rangoTitulo.Style.Font.FontColor = XLColor.White;
+                rangoTitulo.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoTitulo.Style.Font.FontName = "Calibri";
+                rangoTitulo.Style.Font.FontSize = 16;
+                rangoTitulo.Style.Font.SetBold();
+
+                worksheet.Cell("J7").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                worksheet.Cell("J7").Style.Font.FontName = "Calibri";
+                worksheet.Cell("J7").Style.Font.FontSize = 10;
+                worksheet.Cell("J7").Style.Font.SetBold();
+                worksheet.Cell("J7").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                worksheet.Cell("J8").Value = $"PERIODO : {fechaini} - {fechafin}";
+                worksheet.Cell("J8").Style.Font.FontName = "Calibri";
+                worksheet.Cell("J8").Style.Font.FontSize = 14;
+                worksheet.Cell("J8").Style.Font.SetBold();
+                worksheet.Cell("J8").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                worksheet.Cell("J9").Value = "USUARIO : " + (usuario?.ToUpper() ?? "N/A");
+                worksheet.Cell("J9").Style.Font.FontName = "Calibri";
+                worksheet.Cell("J9").Style.Font.FontSize = 10;
+                worksheet.Cell("J9").Style.Font.SetBold();
+                worksheet.Cell("J9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                worksheet.Range("B9:J9").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("B9:J9").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+
+                // Imágenes
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                    worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B2")).WithSize(81, 81);
+
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                    worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("I2")).WithSize(240, 80);
+
+                // Anchos de columna
+                worksheet.Column(2).Width = 7;
+                worksheet.Column(3).Width = 12;
+                worksheet.Column(4).Width = 25;
+                worksheet.Column(5).Width = 18;
+                worksheet.Column(6).Width = 10;
+                worksheet.Column(7).Width = 14;
+                worksheet.Column(8).Width = 12;
+                worksheet.Column(9).Width = 15;
+                worksheet.Column(10).Width = 14;
+                worksheet.Column(11).Width = 14;
+                worksheet.Column(12).Width = 35;
+                worksheet.Column(13).Width = 60;
+                worksheet.Column(14).Width = 20;
+                worksheet.Column(15).Width = 12;
+                worksheet.Column(16).Width = 35;
+                worksheet.ShowGridLines = false;
+
+                // ── MÉTRICAS GLOBALES ────────────────────────────────────────
+                int totalServicios = resultado
+                    .Where(s => !string.IsNullOrEmpty(s.Numero) && !string.IsNullOrEmpty(s.Empresa))
+                    .Select(s => new { s.Empresa, s.Fecha, s.Numero, s.CodConductor })
+                    .Distinct()
+                    .Count();
+
+                int totalConductores = resultado
+                    .Select(s => s.CodConductor)
+                    .Distinct()
+                    .Count();
+
+                decimal promedio = totalConductores > 0
+                    ? Math.Round((decimal)totalServicios / totalConductores, MidpointRounding.AwayFromZero)
+                    : 0;
+
+                void EscribirMetrica(string celda, string celdaValor, string etiqueta, string valor)
+                {
+                    worksheet.Cell(celda).Value = etiqueta;
+                    worksheet.Cell(celda).Style.Font.FontName = "Calibri";
+                    worksheet.Cell(celda).Style.Font.FontSize = 10;
+                    worksheet.Cell(celda).Style.Font.SetBold();
+                    worksheet.Cell(celda).Style.Font.FontColor = XLColor.White;
+                    worksheet.Cell(celda).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                    worksheet.Cell(celda).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(celda).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                    worksheet.Cell(celdaValor).Value = valor;
+                    worksheet.Cell(celdaValor).Style.Font.FontName = "Calibri";
+                    worksheet.Cell(celdaValor).Style.Font.FontSize = 13;
+                    worksheet.Cell(celdaValor).Style.Font.SetBold();
+                    worksheet.Cell(celdaValor).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(celdaValor).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                }
+
+                EscribirMetrica("L5", "M5", "CANT. SERVICIOS", totalServicios.ToString());
+                EscribirMetrica("L6", "M6", "CANT. CONDUCTORES", totalConductores.ToString());
+                EscribirMetrica("L7", "M7", "PROMEDIO SERVICIOS", promedio.ToString("0"));
+
+                // ── CABECERAS TABLA (una sola vez) ───────────────────────────
+                int filaActual = 11;
+
+                var headers = new[] { "ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV",
+            "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO",
+            "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO",
+            "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR" };
+
+                worksheet.Row(filaActual).Height = 40;
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    var cell = worksheet.Cell(filaActual, i + 2);
+                    cell.Value = headers[i];
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Font.FontColor = XLColor.White;
+                    cell.Style.Font.FontName = "Calibri";
+                    cell.Style.Font.FontSize = 10;
+                    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    cell.Style.Alignment.WrapText = true;
+                }
+                filaActual++;
+
+                // ── AGRUPAR POR CONDUCTOR ────────────────────────────────────
+                var conductores = resultado
+                    .GroupBy(s => s.CodConductor)
+                    .ToList();
+
+                int item = 1;
+
+                for (int gc = 0; gc < conductores.Count; gc++)
+                {
+                    var serviciosConductor = conductores[gc].ToList();
+                    bool esUltimoConductor = gc == conductores.Count - 1;
+
+                    string numeroServicioAnt = "";
+                    bool colorAlternativo = false;
+                    var colorGrupo1 = XLColor.FromHtml("#EBF1DE");
+                    var colorGrupo2 = XLColor.White;
+                    int filaInicioGrupo = filaActual;
 
                     foreach (var servicio in serviciosConductor)
                     {
@@ -3624,21 +3868,21 @@ namespace VelsatBackendAPI.Controllers
                         filaActual++;
                     }
 
-                    // Bordes del bloque de detalle
-                    if (filaActual - 1 >= filaInicioDetalle)
+                    // ── BORDES DEL GRUPO ─────────────────────────────────────
+                    if (filaActual - 1 >= filaInicioGrupo)
                     {
-                        var rangoBordes = worksheet.Range(filaInicioDetalle, 2, filaActual - 1, 16);
+                        var rangoBordes = worksheet.Range(filaInicioGrupo, 2, filaActual - 1, 16);
                         rangoBordes.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
-                        rangoBordes.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                         rangoBordes.Style.Border.InsideBorderColor = XLColor.Gray;
-                        rangoBordes.Style.Border.OutsideBorderColor = XLColor.Gray;
+                        rangoBordes.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+                        rangoBordes.Style.Border.OutsideBorderColor = XLColor.FromHtml("#1a3446");
 
-                        var rangoWrap = worksheet.Range(filaInicioDetalle, 7, filaActual - 1, 16);
+                        var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 16);
                         rangoWrap.Style.Alignment.WrapText = true;
                     }
 
-                    // ── 2 FILAS DE SEPARACIÓN ────────────────────────────────
-                    filaActual += 2;
+                    if (!esUltimoConductor)
+                        filaActual += 1;
                 }
 
                 using (var stream = new MemoryStream())
@@ -3647,72 +3891,6 @@ namespace VelsatBackendAPI.Controllers
                     return stream.ToArray();
                 }
             }
-        }
-
-        private void EscribirEstadisticasConductor(IXLWorksheet worksheet, int fila, string nombreConductor, string unidadAsignada, string periodo, string turno, int turnosTrabajados, int cantidadServicios, decimal promedioServicios, string horasmanejo, string horasmanejoprom, int puntualidad)
-        {
-            void Etiqueta(int f, int colInicio, int colFin, string valor)
-            {
-                var r = worksheet.Range(f, colInicio, f, colFin);
-                r.Merge();
-                r.Value = valor;
-                r.Style.Font.FontName = "Calibri";
-                r.Style.Font.FontSize = 10;
-                r.Style.Font.SetBold();
-                r.Style.Font.FontColor = XLColor.White;
-                r.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
-                r.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                r.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            }
-
-            void Valor(int f, int col, string valor, bool bold = false)
-            {
-                var cell = worksheet.Cell(f, col);
-                cell.Value = valor;
-                cell.Style.Font.FontName = "Calibri";
-                cell.Style.Font.FontSize = 10;
-                if (bold) cell.Style.Font.SetBold();
-                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
-                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            }
-
-            void ValorCentro(int f, int col, string valor)
-            {
-                var cell = worksheet.Cell(f, col);
-                cell.Value = valor;
-                cell.Style.Font.FontName = "Calibri";
-                cell.Style.Font.FontSize = 10;
-                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            }
-
-            // Fila 1
-            Etiqueta(fila, 2, 3, "CONDUCTOR");           // B:C
-            Valor(fila, 4, $"{nombreConductor} - {unidadAsignada}", bold: true);
-            Etiqueta(fila, 6, 7, "TURNOS TRABAJADOS");   // F:G
-            ValorCentro(fila, 8, turnosTrabajados.ToString("D2"));
-            Etiqueta(fila, 10, 11, "HORAS MANEJO");      // J:K
-            ValorCentro(fila, 12, horasmanejo);
-
-            fila++;
-
-            // Fila 2
-            Etiqueta(fila, 2, 3, "PERIODO");
-            Valor(fila, 4, periodo, bold: true);
-            Etiqueta(fila, 6, 7, "CANTIDAD SERVICIOS");
-            ValorCentro(fila, 8, cantidadServicios.ToString("D2"));
-            Etiqueta(fila, 10, 11, "HORAS MANEJO PROMEDIO");
-            ValorCentro(fila, 12, horasmanejoprom);
-
-            fila++;
-
-            // Fila 3
-            Etiqueta(fila, 2, 3, "TURNO");
-            Valor(fila, 4, turno, bold: true);
-            Etiqueta(fila, 6, 7, "PROMEDIO SERVICIOS");
-            ValorCentro(fila, 8, Math.Round(promedioServicios, MidpointRounding.AwayFromZero).ToString("00"));
-            Etiqueta(fila, 10, 11, "PUNTUALIDAD");
-            ValorCentro(fila, 12, puntualidad.ToString() + "%");
         }
 
         [HttpPost("InsertarAlertaVelocidad")]
