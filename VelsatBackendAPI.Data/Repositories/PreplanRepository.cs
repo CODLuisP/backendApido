@@ -4117,6 +4117,33 @@ WHERE codtaxi = @Codigo;
             return await _doConnection.QueryFirstOrDefaultAsync<ControlTrack>(sql, parameters, transaction: _doTransaction);
         }
 
+        //Actualizar turnos y horas de conductores
+        public async Task<List<TaxiTurno>> GetTurnoHoraInicio(List<int> codTaxis)
+        {
+            string sql = @"SELECT codtaxi AS CodTaxi, turno AS Turno, horainicio AS HoraInicio FROM taxi WHERE codtaxi IN @CodTaxis";
+
+            var resultado = await _doConnection.QueryAsync<TaxiTurno>(
+                sql,
+                new { CodTaxis = codTaxis },
+                transaction: _doTransaction
+            );
+
+            return resultado.ToList();
+        }
+
+        public async Task<int> UpdateTurnoHoraInicio(List<TaxiTurno> actualizaciones)
+        {
+            string sql = @"UPDATE taxi SET turno = @Turno, horainicio = @HoraInicio WHERE codtaxi = @CodTaxi";
+
+            int filas = await _doConnection.ExecuteAsync(
+                sql,
+                actualizaciones,
+                transaction: _doTransaction
+            );
+
+            return filas;
+        }
+
 
         //Reporte de servicios por conductor
         public async Task<List<ServicioDetalle>> ReporteConductorServicio(string codConductor, string fecha)

@@ -117,6 +117,11 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario);
 
+        Task<List<TaxiTurno>> GetTurnoHoraInicio(List<int> codTaxis);
+        Task<int> UpdateTurnoHoraInicio(List<TaxiTurno> actualizaciones);
+
+
+
         //Reporte de alertas de velocidad
         Task<int> InsertarAlertaVelocidad(SpeedAlert alerta);
 

@@ -2316,6 +2316,58 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        [HttpGet("turno")]
+        public async Task<IActionResult> GetTurnoHoraInicio([FromQuery] List<int> codtaxis)
+        {
+            if (codtaxis == null || codtaxis.Count == 0)
+                return BadRequest(new { mensaje = "Debe enviar al menos un codtaxi." });
+
+            try
+            {
+                var resultado = await _uow.PreplanRepository.GetTurnoHoraInicio(codtaxis);
+
+                if (resultado == null || resultado.Count == 0)
+                    return NotFound(new { mensaje = "No se encontraron conductores con los códigos indicados." });
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor al obtener turno y hora de inicio.",
+                    detalle = ex.Message
+                });
+            }
+        }
+
+        [HttpPatch("turno")]
+        public async Task<IActionResult> UpdateTurnoHoraInicio([FromBody] List<TaxiTurno> actualizaciones)
+        {
+            if (actualizaciones == null || actualizaciones.Count == 0)
+                return BadRequest(new { mensaje = "Debe enviar al menos un conductor." });
+
+            try
+            {
+                int filasAfectadas = await _uow.PreplanRepository.UpdateTurnoHoraInicio(actualizaciones);
+
+                _uow.SaveChanges();
+
+                if (filasAfectadas == 0)
+                    return NotFound(new { mensaje = "No se encontraron conductores con los códigos indicados." });
+
+                return Ok(new { mensaje = "Conductores actualizados correctamente.", filasAfectadas });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor al actualizar turno y hora de inicio.",
+                    detalle = ex.Message
+                });
+            }
+        }
+
         [HttpGet("ExcelServiciosConductor")]
         public async Task<IActionResult> ExcelServiciosConductor([FromQuery] string codConductor, [FromQuery] string fecha, [FromQuery] string usuario)
         {
@@ -2980,10 +3032,29 @@ namespace VelsatBackendAPI.Controllers
                                        .AddHours(12);
                 }
 
-                // Contar días únicos donde hubo servicios reales
+                // En lugar de contar fechas distintas del campo Fecha,
+                // calcular a qué "fecha de turno" pertenece cada servicio.
+
                 int turnosTrabajados = resultado
-                    .Where(s => !string.IsNullOrEmpty(s.Fecha))
-                    .Select(s => s.Fecha)
+                    .Where(s => !string.IsNullOrEmpty(s.Fecha) && !string.IsNullOrEmpty(s.HoraAto))
+                    .Select(s =>
+                    {
+                        // Parsear fecha y hora del servicio
+                        DateTime fechaHoraServicio = DateTime.ParseExact(
+                            $"{s.Fecha} {s.HoraAto}",
+                            "dd/MM/yyyy HH:mm",
+                            CultureInfo.InvariantCulture
+                        );
+
+                        // Si la hora del servicio es ANTES del inicio del turno (ej: 00:00 - 16:59),
+                        // significa que pertenece al turno del día ANTERIOR
+                        TimeSpan horaInicio = TimeSpan.Parse(horaInicioTurno); // "17:00"
+
+                        if (fechaHoraServicio.TimeOfDay < horaInicio)
+                            return fechaHoraServicio.Date.AddDays(-1); // Retrocede al día del turno real
+                        else
+                            return fechaHoraServicio.Date;
+                    })
                     .Distinct()
                     .Count();
 
