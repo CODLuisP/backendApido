@@ -148,6 +148,17 @@ namespace VelsatBackendAPI.Data.Repositories
             return resultado;
         }
 
+        public async Task<int> DeleteDevice(string deviceID, string accountID)
+        {
+            var sql = @"DELETE FROM device WHERE deviceID = @DeviceID AND accountID = @AccountID";
+
+            var resultado = await _defaultConnection.ExecuteAsync(sql,
+                new { DeviceID = deviceID, AccountID = accountID },
+                transaction: _defaultTransaction);
+
+            return resultado;
+        }
+
         public async Task<IEnumerable<ConexDevice>> GetConexDesconex()
         {
             var sql = @"SELECT deviceID, accountID, lastValidSpeed, lastGPSTimestamp, deviceCode, imeiNumber, lastValidLatitude, lastValidLongitude FROM device ORDER BY accountID";
