@@ -4312,7 +4312,7 @@ namespace VelsatBackendAPI.Data.Repositories
         }
 
         //Reporte de servicios todos conductores una fecha
-        public async Task<List<ServicioDetalle>> ReporteTodosConductores(string fechaini, string usuario)
+        public async Task<List<ServicioDetalle>> ReporteTodosConductores(string fechaini, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
                 SELECT 
@@ -4349,8 +4349,12 @@ namespace VelsatBackendAPI.Data.Repositories
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0 
                   AND s.codusuario = @Codusuario
-                  AND s.estado <> 'C'
-                ORDER BY t.apellidos, dates.fecha_dt";
+                  AND s.estado <> 'C'";
+
+            if (codtaxis != null && codtaxis.Any())
+                sql += " AND s.codconductor IN @CodTaxis";
+
+            sql += " ORDER BY t.apellidos, dates.fecha_dt";
 
             DateTime fechaBase = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
             string fechaIniCompleta = $"{fechaini} 00:00";
@@ -4361,7 +4365,8 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 FechaIni = fechaIniCompleta,
                 FechaFin = fechaFinCompleta,
-                Codusuario = usuario
+                Codusuario = usuario,
+                CodTaxis = codtaxis
             };
 
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
@@ -4398,7 +4403,7 @@ namespace VelsatBackendAPI.Data.Repositories
         }
 
         //Reporte de servicios todos conductores por rango de fechas
-        public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario)
+        public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
                 SELECT 
@@ -4435,8 +4440,12 @@ namespace VelsatBackendAPI.Data.Repositories
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0 
                   AND s.codusuario = @Codusuario 
-                  AND s.estado <> 'C'
-                ORDER BY t.apellidos, dates.fecha_dt";
+                  AND s.estado <> 'C'";
+
+            if (codtaxis != null && codtaxis.Any())
+                sql += " AND s.codconductor IN @CodTaxis";
+
+            sql += " ORDER BY t.apellidos, dates.fecha_dt";
 
             DateTime fechaBaseIni = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
             DateTime fechaBaseFin = DateTime.ParseExact(fechafin, "dd/MM/yyyy", null);
@@ -4449,7 +4458,8 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 FechaIni = fechaIniCompleta,
                 FechaFin = fechaFinCompleta,
-                Codusuario = usuario
+                Codusuario = usuario,
+                CodTaxis = codtaxis
             };
 
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);

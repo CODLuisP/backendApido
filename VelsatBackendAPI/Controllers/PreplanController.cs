@@ -3444,14 +3444,14 @@ namespace VelsatBackendAPI.Controllers
 
         //Reporte de servicios todos conductores una fecha
         [HttpGet("ExcelServiciosTodosConductoresDia")]
-        public async Task<IActionResult> ExcelServiciosTodosConductoresDia([FromQuery] string fechaini, [FromQuery] string usuario)
+        public async Task<IActionResult> ExcelServiciosTodosConductoresDia([FromQuery] string fechaini, [FromQuery] string usuario, [FromQuery] List<int>? codtaxis = null)
         {
             if (string.IsNullOrEmpty(fechaini))
                 return BadRequest(new { mensaje = "La fecha inicial es obligatoria." });
 
             try
             {
-                var resultado = await _readOnlyUow.PreplanRepository.ReporteTodosConductores(fechaini, usuario);
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteTodosConductores(fechaini, usuario, codtaxis);
 
                 if (resultado == null || !resultado.Any())
                     return NotFound(new { mensaje = "No se encontraron servicios para el rango indicado." });
@@ -3739,7 +3739,7 @@ namespace VelsatBackendAPI.Controllers
 
         //Reporte de servicios todos conductores por rango de fechas
         [HttpGet("ExcelServiciosTodosConductores")]
-        public async Task<IActionResult> ExcelServiciosTodosConductores([FromQuery] string fechaini, [FromQuery] string fechafin, [FromQuery] string usuario)
+        public async Task<IActionResult> ExcelServiciosTodosConductores([FromQuery] string fechaini, [FromQuery] string fechafin, [FromQuery] string usuario, [FromQuery] List<int>? codtaxis = null)
         {
             if (string.IsNullOrEmpty(fechaini))
                 return BadRequest(new { mensaje = "La fecha inicial es obligatoria." });
@@ -3748,7 +3748,7 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var resultado = await _readOnlyUow.PreplanRepository.ReporteTodosConductoresRango(fechaini, fechafin, usuario);
+                var resultado = await _readOnlyUow.PreplanRepository.ReporteTodosConductoresRango(fechaini, fechafin, usuario, codtaxis);
 
                 if (resultado == null || !resultado.Any())
                     return NotFound(new { mensaje = "No se encontraron servicios para el rango indicado." });
