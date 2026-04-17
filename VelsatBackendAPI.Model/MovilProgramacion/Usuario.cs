@@ -19,6 +19,7 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string? Dni { get; set; }
         public string? Telefono { get; set; }
         public string? Empresa { get; set; }
+        public string? Tipo { get; set; }
         public LugarCliente? Lugar { get; set; }
         public Servicio? Servicioactual { get; set; }
     }

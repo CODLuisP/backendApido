@@ -2317,14 +2317,14 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpGet("turno")]
-        public async Task<IActionResult> GetTurnoHoraInicio([FromQuery] List<int> codtaxis)
+        public async Task<IActionResult> GetTurnoHoraInicio([FromQuery] List<int> codtaxis, string tipo = null)
         {
             if (codtaxis == null || codtaxis.Count == 0)
                 return BadRequest(new { mensaje = "Debe enviar al menos un codtaxi." });
 
             try
             {
-                var resultado = await _uow.PreplanRepository.GetTurnoHoraInicio(codtaxis);
+                var resultado = await _uow.PreplanRepository.GetTurnoHoraInicio(codtaxis, tipo);
 
                 if (resultado == null || resultado.Count == 0)
                     return NotFound(new { mensaje = "No se encontraron conductores con los códigos indicados." });
@@ -3579,6 +3579,8 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Column(14).Width = 20;
                 worksheet.Column(15).Width = 12;
                 worksheet.Column(16).Width = 35;
+                worksheet.Column(17).Width = 14;
+                worksheet.Column(18).Width = 19;
                 worksheet.ShowGridLines = false;
 
                 // ── CABECERAS TABLA (una sola vez) ───────────────────────────
@@ -3587,7 +3589,7 @@ namespace VelsatBackendAPI.Controllers
                 var headers = new[] { "ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV",
             "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO",
             "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO",
-            "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR" };
+            "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR", "CANT. SERVICIOS", "TURNO"};
 
                 worksheet.Row(filaActual).Height = 40;
                 for (int i = 0; i < headers.Length; i++)
@@ -3611,6 +3613,14 @@ namespace VelsatBackendAPI.Controllers
                     .ToList();
 
                 int item = 1;
+
+                var conteoporConductor = resultado
+                .Where(s => !string.IsNullOrEmpty(s.Numero) && !string.IsNullOrEmpty(s.Empresa))
+                .GroupBy(s => s.CodConductor)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(s => new { s.Empresa, s.Fecha, s.Numero }).Distinct().Count()
+                );
 
                 for (int gc = 0; gc < conductores.Count; gc++)
                 {
@@ -3656,8 +3666,11 @@ namespace VelsatBackendAPI.Controllers
                         worksheet.Cell(filaActual, 14).Value = servicio.Distrito ?? "";
                         worksheet.Cell(filaActual, 15).Value = servicio.Unidad ?? "";
                         worksheet.Cell(filaActual, 16).Value = servicio.ApellidosConductor ?? "";
+                        int cantServicios = conteoporConductor.TryGetValue(servicio.CodConductor, out var cnt) ? cnt : 0;
+                        worksheet.Cell(filaActual, 17).Value = cantServicios;
+                        worksheet.Cell(filaActual, 18).Value = FormatearTurno(servicio.Turno, servicio.HoraInicioTurno);
 
-                        var rango = worksheet.Range(filaActual, 2, filaActual, 16);
+                        var rango = worksheet.Range(filaActual, 2, filaActual, 18);
                         rango.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                         rango.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                         rango.Style.Font.FontName = "Calibri";
@@ -3679,7 +3692,7 @@ namespace VelsatBackendAPI.Controllers
                     // ── BORDES DEL GRUPO ─────────────────────────────────────
                     if (filaActual - 1 >= filaInicioGrupo)
                     {
-                        var rangoBordes = worksheet.Range(filaInicioGrupo, 2, filaActual - 1, 16);
+                        var rangoBordes = worksheet.Range(filaInicioGrupo, 2, filaActual - 1, 18);
 
                         // Bordes internos finos
                         rangoBordes.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
@@ -3689,7 +3702,7 @@ namespace VelsatBackendAPI.Controllers
                         rangoBordes.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
                         rangoBordes.Style.Border.OutsideBorderColor = XLColor.FromHtml("#1a3446");
 
-                        var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 16);
+                        var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 18);
                         rangoWrap.Style.Alignment.WrapText = true;
                     }
 
@@ -3704,6 +3717,24 @@ namespace VelsatBackendAPI.Controllers
                     return stream.ToArray();
                 }
             }
+        }
+
+        private string FormatearTurno(string turno, string horaInicio)
+        {
+            // Tiene turno y hora → calcular periodo normal
+            if (!string.IsNullOrEmpty(turno) && !string.IsNullOrEmpty(horaInicio))
+            {
+                if (TimeSpan.TryParse(horaInicio, out var ts))
+                {
+                    var fin = ts.Add(TimeSpan.FromHours(12));
+                    fin = new TimeSpan(fin.Ticks % TimeSpan.TicksPerDay);
+                    string nombre = turno.ToUpper() == "D" ? "Día" : "Noche";
+                    return $"{nombre} ({horaInicio} - {fin:hh\\:mm})";
+                }
+            }
+
+            // Fallback: no tienen turno u hora de inicio
+            return "00:00 - 23:59";
         }
 
         //Reporte de servicios todos conductores por rango de fechas
@@ -3803,6 +3834,8 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Column(14).Width = 20;
                 worksheet.Column(15).Width = 12;
                 worksheet.Column(16).Width = 35;
+                worksheet.Column(17).Width = 14;
+                worksheet.Column(18).Width = 19;
                 worksheet.ShowGridLines = false;
 
                 // ── MÉTRICAS GLOBALES ────────────────────────────────────────
@@ -3850,7 +3883,7 @@ namespace VelsatBackendAPI.Controllers
                 var headers = new[] { "ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV",
             "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO",
             "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO",
-            "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR" };
+            "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR", "CANT. SERVICIOS", "TURNO" };
 
                 worksheet.Row(filaActual).Height = 40;
                 for (int i = 0; i < headers.Length; i++)
@@ -3874,6 +3907,15 @@ namespace VelsatBackendAPI.Controllers
                     .ToList();
 
                 int item = 1;
+
+                // Antes del: for (int gc = 0; gc < conductores.Count; gc++)
+                var conteoporConductor = resultado
+                    .Where(s => !string.IsNullOrEmpty(s.Numero) && !string.IsNullOrEmpty(s.Empresa))
+                    .GroupBy(s => s.CodConductor)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Select(s => new { s.Empresa, s.Fecha, s.Numero }).Distinct().Count()
+                    );
 
                 for (int gc = 0; gc < conductores.Count; gc++)
                 {
@@ -3920,7 +3962,11 @@ namespace VelsatBackendAPI.Controllers
                         worksheet.Cell(filaActual, 15).Value = servicio.Unidad ?? "";
                         worksheet.Cell(filaActual, 16).Value = servicio.ApellidosConductor ?? "";
 
-                        var rango = worksheet.Range(filaActual, 2, filaActual, 16);
+                        int cantServicios = conteoporConductor.TryGetValue(servicio.CodConductor, out var cnt) ? cnt : 0;
+                        worksheet.Cell(filaActual, 17).Value = cantServicios;
+                        worksheet.Cell(filaActual, 18).Value = FormatearTurno(servicio.Turno, servicio.HoraInicioTurno);
+
+                        var rango = worksheet.Range(filaActual, 2, filaActual, 18);
                         rango.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                         rango.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                         rango.Style.Font.FontName = "Calibri";
@@ -3942,13 +3988,13 @@ namespace VelsatBackendAPI.Controllers
                     // ── BORDES DEL GRUPO ─────────────────────────────────────
                     if (filaActual - 1 >= filaInicioGrupo)
                     {
-                        var rangoBordes = worksheet.Range(filaInicioGrupo, 2, filaActual - 1, 16);
+                        var rangoBordes = worksheet.Range(filaInicioGrupo, 2, filaActual - 1, 18);
                         rangoBordes.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
                         rangoBordes.Style.Border.InsideBorderColor = XLColor.Gray;
                         rangoBordes.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
                         rangoBordes.Style.Border.OutsideBorderColor = XLColor.FromHtml("#1a3446");
 
-                        var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 16);
+                        var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 18);
                         rangoWrap.Style.Alignment.WrapText = true;
                     }
 

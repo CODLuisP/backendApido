@@ -19,6 +19,7 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string? Turno { get; set; }
         public string? Horainicio { get; set; }
         public string? Unidadasig { get; set; }
+        public string? Tipo { get; set; }
         public string? Brevete { get; set; }
         public string? Sctr { get; set; }
         public string? Direccion { get; set; }

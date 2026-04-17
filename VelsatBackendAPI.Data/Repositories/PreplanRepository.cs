@@ -636,7 +636,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<List<Usuario>> GetConductores(string usuario)
         {
-            string sql = @"SELECT codtaxi, nombres, apellidos FROM taxi WHERE codusuario = @Usuario and estado = 'A' and habilitado = '1'";
+            string sql = @"SELECT codtaxi, nombres, apellidos, tipo FROM taxi WHERE codusuario = @Usuario and estado = 'A' and habilitado = '1'";
 
             var conductores = await _doConnection.QueryAsync<dynamic>(sql, new { Usuario = usuario }, transaction: _doTransaction);
 
@@ -648,7 +648,8 @@ namespace VelsatBackendAPI.Data.Repositories
                 {
                     Codigo = row.codtaxi.ToString(),
                     Nombre = row.nombres,
-                    Apepate = row.apellidos
+                    Apepate = row.apellidos,
+                    Tipo = row.tipo
                 };
 
                 listaConductores.Add(conductor);
@@ -3156,6 +3157,7 @@ namespace VelsatBackendAPI.Data.Repositories
                   turno as Turno,
                   horainicio as Horainicio,
                   unidadasig as Unidadasig,
+                  tipo as Tipo,
                   brevete as Brevete, 
                   sctr as Sctr, 
                   direccion as Direccion, 
@@ -3164,10 +3166,7 @@ namespace VelsatBackendAPI.Data.Repositories
                   fecvalidbrevete as FecValidBrevete, 
                   estbrevete as EstBrevete, 
                   sexo as Sexo, 
-                  habilitado as Habilitado,
-                  turno as Turno,
-                  horainicio as Horainicio,
-                  unidadasig as Unidadasig
+                  habilitado as Habilitado
            FROM taxi 
            WHERE codusuario = @Codusuario AND estado = 'A' 
            ORDER BY habilitado DESC, apellidos";
@@ -3301,8 +3300,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<int> NuevoConductorAsync(Conductor conductor, string usuario)
         {
-            string sqlTaxi = @"INSERT INTO taxi (nombres, apellidos, login, clave, estado, codusuario, telefono, email, turno, horainicio, unidadasig, brevete, dni, direccion, sctr, catbrevete, estbrevete, fecvalidbrevete) 
-                      VALUES (@Nombres, @Apellidos, @Login, @Clave, 'A', @Codusuario, @Telefono, @Email, @Turno, @Horainicio, @Unidadasig, @Brevete, @Dni, @Direccion, @Sctr, @Catbrevete, @Estbrevete, @Fecvalidbrevete)";
+            string sqlTaxi = @"INSERT INTO taxi (nombres, apellidos, login, clave, estado, codusuario, telefono, email, turno, horainicio, tipo, unidadasig, brevete, dni, direccion, sctr, catbrevete, estbrevete, fecvalidbrevete) 
+                      VALUES (@Nombres, @Apellidos, @Login, @Clave, 'A', @Codusuario, @Telefono, @Email, @Turno, @Horainicio, @Tipo, @Unidadasig, @Brevete, @Dni, @Direccion, @Sctr, @Catbrevete, @Estbrevete, @Fecvalidbrevete)";
 
             var parametersEdriver = new
             {
@@ -3322,6 +3321,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Fecvalidbrevete = conductor.FecValidBrevete,
                 Turno = conductor.Turno,
                 Horainicio = conductor.Horainicio,
+                Tipo =  conductor.Tipo,
                 Unidadasig = conductor.Unidadasig
             };
 
@@ -3380,25 +3380,25 @@ namespace VelsatBackendAPI.Data.Repositories
 
             // Primera actualización en la tabla taxi
             string sql = @"UPDATE taxi 
-SET nombres = @Nombres, 
-    apellidos = @Apellidos, 
-    login = @Login, 
-    clave = @Clave, 
-    telefono = @Telefono, 
-    email = @Email, 
-    brevete = @Brevete, 
-    dni = @Dni, 
-    direccion = @Direccion, 
-    sctr = @Sctr, 
-    catbrevete = @CatBrevete, 
-    estbrevete = @EstBrevete, 
-    fecvalidbrevete = @FecValidBrevete,
-    sexo = @Sexo,
-    turno = @Turno,
-    horainicio = @Horainicio,
-    unidadasig = @Unidadasig
-WHERE codtaxi = @Codigo;
-";
+                SET nombres = @Nombres, 
+                    apellidos = @Apellidos, 
+                    login = @Login, 
+                    clave = @Clave, 
+                    telefono = @Telefono, 
+                    email = @Email, 
+                    brevete = @Brevete, 
+                    dni = @Dni, 
+                    direccion = @Direccion, 
+                    sctr = @Sctr, 
+                    catbrevete = @CatBrevete, 
+                    estbrevete = @EstBrevete, 
+                    fecvalidbrevete = @FecValidBrevete,
+                    sexo = @Sexo,
+                    turno = @Turno,
+                    horainicio = @Horainicio,
+                    tipo = @Tipo,
+                    unidadasig = @Unidadasig
+                WHERE codtaxi = @Codigo;";
 
             var parameters = new
             {
@@ -3417,6 +3417,7 @@ WHERE codtaxi = @Codigo;
                 FecValidBrevete = conductor.FecValidBrevete,
                 Turno = conductor.Turno,
                 Horainicio = conductor.Horainicio,
+                Tipo = conductor.Tipo,
                 Unidadasig = conductor.Unidadasig,
                 Codigo = conductor.Codigo
             };
@@ -4118,13 +4119,18 @@ WHERE codtaxi = @Codigo;
         }
 
         //Actualizar turnos y horas de conductores
-        public async Task<List<TaxiTurno>> GetTurnoHoraInicio(List<int> codTaxis)
+        public async Task<List<TaxiTurno>> GetTurnoHoraInicio(List<int> codTaxis, string tipo = null)
         {
-            string sql = @"SELECT codtaxi AS CodTaxi, turno AS Turno, horainicio AS HoraInicio FROM taxi WHERE codtaxi IN @CodTaxis";
+            string sql = @"SELECT codtaxi AS CodTaxi, turno AS Turno, horainicio AS HoraInicio 
+                   FROM taxi 
+                   WHERE codtaxi IN @CodTaxis";
+
+            if (!string.IsNullOrEmpty(tipo))
+                sql += " AND tipo = @Tipo";
 
             var resultado = await _doConnection.QueryAsync<TaxiTurno>(
                 sql,
-                new { CodTaxis = codTaxis },
+                new { CodTaxis = codTaxis, Tipo = tipo },
                 transaction: _doTransaction
             );
 
