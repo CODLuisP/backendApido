@@ -4376,28 +4376,40 @@ namespace VelsatBackendAPI.Data.Repositories
 
             // Filtro por conductor: evaluar individualmente según turno y horainicio
             var resultadoFiltrado = resultado
-                .Where(s =>
+            .Where(s =>
+            {
+                bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
+                bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
+
+                if (tieneTurno && tieneHoraInicio)
                 {
-                    // Día principal → siempre incluir
-                    if (s.Fecha == fechaini_str) return true;
+                    // Reconstruir el rango exacto igual que ReporteConductorServicio
+                    DateTime inicioTurno = DateTime.ParseExact(
+                        $"{fechaini} {s.HoraInicioTurno}",
+                        "dd/MM/yyyy HH:mm",
+                        CultureInfo.InvariantCulture
+                    );
+                    DateTime finTurno = inicioTurno.AddHours(12);
 
-                    // Día siguiente → evaluar según datos del conductor
-                    if (s.Fecha == fechaSiguiente)
-                    {
-                        bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
-                        bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
-
-                        // Ambos tienen valor → usar turno para decidir
-                        if (tieneTurno && tieneHoraInicio)
-                            return s.Turno.ToUpper() == "N";
-
-                        // Alguno es null/vacío → rango por defecto 00:00-23:59, no incluir día siguiente
+                    // Parsear la fecha+hora del servicio para comparar con el rango
+                    string fechaHoraServicio = $"{s.Fecha} {s.HoraTurno}";
+                    if (!DateTime.TryParseExact(
+                        fechaHoraServicio,
+                        "dd/MM/yyyy HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime fechaDtServicio))
                         return false;
-                    }
 
-                    return false;
-                })
-                .ToList();
+                    return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
+                }
+
+                // Sin turno/horainicio → rango por defecto: solo el día base completo
+                if (s.Fecha == fechaini_str) return true;
+
+                return false;
+            })
+            .ToList();
 
             return resultadoFiltrado;
         }
@@ -4473,26 +4485,43 @@ namespace VelsatBackendAPI.Data.Repositories
             string fechaSiguienteAFin = fechaBaseFin.AddDays(1).ToString("dd/MM/yyyy");
 
             var resultadoFiltrado = resultado
-                .Where(s =>
-                {
-                    // Cualquier día dentro del rango → siempre incluir
-                    if (fechasValidas.Contains(s.Fecha)) return true;
+            .Where(s =>
+            {
+                bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
+                bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
 
-                    // Día siguiente a fechafin → solo conductores nocturnos
-                    if (s.Fecha == fechaSiguienteAFin)
-                    {
-                        bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
-                        bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
-
-                        if (tieneTurno && tieneHoraInicio)
-                            return s.Turno.ToUpper() == "N";
-
-                        return false;
-                    }
-
+                if (!DateTime.TryParseExact(
+                    $"{s.Fecha} {s.HoraTurno}",
+                    "dd/MM/yyyy HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime fechaDtServicio))
                     return false;
-                })
-                .ToList();
+
+                if (tieneTurno && tieneHoraInicio)
+                {
+                    // Evaluar contra cada día del rango: el servicio debe caer en algún
+                    // turno válido que comience en ese día
+                    return Enumerable
+                        .Range(0, (fechaBaseFin - fechaBaseIni).Days + 1)
+                        .Select(d => fechaBaseIni.AddDays(d))
+                        .Any(diaBase =>
+                        {
+                            DateTime inicioTurno = DateTime.ParseExact(
+                                $"{diaBase:dd/MM/yyyy} {s.HoraInicioTurno}",
+                                "dd/MM/yyyy HH:mm",
+                                CultureInfo.InvariantCulture
+                            );
+                            DateTime finTurno = inicioTurno.AddHours(12);
+                            return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
+                        });
+                }
+
+                // Sin turno/horainicio → solo días exactos del rango, hora 00:00-23:59
+                return fechaDtServicio >= fechaBaseIni &&
+                       fechaDtServicio <= fechaBaseFin.AddHours(23).AddMinutes(59);
+            })
+            .ToList();
 
             return resultadoFiltrado;
         }
