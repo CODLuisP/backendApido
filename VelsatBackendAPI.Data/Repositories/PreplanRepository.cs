@@ -4184,9 +4184,9 @@ namespace VelsatBackendAPI.Data.Repositories
 
             // Obtener todos los conductores activos del usuario
             string sqlConductores = @"
-        SELECT codtaxi 
-        FROM taxi 
-        WHERE estado = 'A' AND codusuario = @Codusuario";
+            SELECT codtaxi 
+            FROM taxi 
+            WHERE estado = 'A' AND codusuario = @Codusuario";
 
             var conductores = (await _doConnection.QueryAsync<int>(
                 sqlConductores,
@@ -4198,7 +4198,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             // Obtener todos los horarios del mes anterior de todos los conductores
             string sqlGet = @"
-        SELECT id_conductor, fecha, hora_inicio, turno
+        SELECT id_conductor, fecha, hora_inicio, turno, tipo
         FROM conductor_horario_calendario
         WHERE id_conductor IN @Conductores
           AND YEAR(fecha) = @Anio
@@ -4224,20 +4224,26 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (!horariosPorConductor.TryGetValue(codConductor, out var horariosRef))
                     continue;
 
+                // Buscar último permanente del mes anterior
+                var ultimoPermanente = horariosRef
+                    .Where(h => (string)h.tipo == "P")
+                    .OrderBy(h => (DateTime)h.fecha)
+                    .LastOrDefault();
+
+                // Si existe permanente usarlo,
+                // si no usar el último registro normal
+                var horarioBase = ultimoPermanente ?? horariosRef.Last();
+
                 for (int dia = 1; dia <= diasEnMesNuevo; dia++)
                 {
                     var fechaNueva = new DateTime(anio, mes, dia);
-
-                    var horarioDelDia = horariosRef
-                        .FirstOrDefault(h => ((DateTime)h.fecha).Day == dia)
-                        ?? horariosRef.Last();
 
                     registros.Add(new
                     {
                         IdConductor = codConductor,
                         Fecha = fechaNueva,
-                        HoraInicio = (string)horarioDelDia.hora_inicio,
-                        Turno = (string)(horarioDelDia.turno ?? ""),
+                        HoraInicio = (string)horarioBase.hora_inicio,
+                        Turno = (string)(horarioBase.turno ?? ""),
                         Tipo = "N"
                     });
                 }
