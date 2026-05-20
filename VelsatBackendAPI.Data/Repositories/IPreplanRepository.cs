@@ -109,6 +109,29 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<ControlTrack> ObtenerPorToken(string token);
 
+
+        //Sección conductores y horarios
+        // Obtener horario de un conductor en una fecha específica
+        Task<ConductorHorarioCalendario> GetHorarioPorFecha(int idConductor, string fecha);
+
+        // Obtener todos los horarios de un conductor en un mes
+        Task<List<ConductorHorarioCalendario>> GetHorariosMes(int idConductor, int anio, int mes);
+
+        // Obtener horarios de todos los conductores en un mes (para el calendario general)
+        Task<List<ConductorHorarioCalendario>> GetHorariosMesTodos(int anio, int mes);
+
+        Task<int> CopiarCalendarioMesAnteriorTodos(int anio, int mes, string codusuario);
+
+        // Generar el calendario de un mes para un conductor (INSERT masivo al inicio de mes)
+        Task<int> GenerarCalendarioMes(int idConductor, string horaInicio, string turno, int anio, int mes);
+
+        // Actualizar horario de un día puntual (tipo T o P)
+        Task<int> ActualizarHorarioDia(HorarioCalendarioRequest request);
+
+        // Actualizar desde una fecha en adelante (cambio permanente)
+        Task<int> ActualizarHorarioDesde(HorarioCalendarioRequest request, string fechaFin);
+
+        //---------------
         Task<List<ServicioDetalle>> ReporteConductorServicio(string codConductor, string fecha);
 
         Task<List<ServicioDetalle>> ReporteConductorServicioRango(string codConductor, string fechaini, string fechafin);
@@ -116,10 +139,7 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<List<ServicioDetalle>> ReporteTodosConductores(string fechaini, string usuario, List<int>? codtaxis = null);
 
         Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario, List<int>? codtaxis = null);
-
-        Task<List<TaxiTurno>> GetTurnoHoraInicio(List<int> codTaxis, string tipo);
-        Task<int> UpdateTurnoHoraInicio(List<TaxiTurno> actualizaciones);
-
+        //------------------
 
 
         //Reporte de alertas de velocidad

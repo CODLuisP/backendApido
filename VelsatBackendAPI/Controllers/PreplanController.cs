@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Win32;
 using Newtonsoft.Json;
+using NPOI.SS.Formula.Functions;
 using System.Globalization;
 using VelsatBackendAPI.Data.Repositories;
 using VelsatBackendAPI.Model;
@@ -2316,58 +2317,75 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        [HttpGet("turno")]
-        public async Task<IActionResult> GetTurnoHoraInicio([FromQuery] List<int> codtaxis, string tipo = null)
+        //HORARIOS DE CONDUCTORES
+        // GET: api/Preplan/HorarioCalendario/{idConductor}?anio=2026&mes=5
+        [HttpGet("HorarioCalendario/{idConductor}")]
+        public async Task<IActionResult> GetMes(int idConductor, [FromQuery] int anio, [FromQuery] int mes)
         {
-            if (codtaxis == null || codtaxis.Count == 0)
-                return BadRequest(new { mensaje = "Debe enviar al menos un codtaxi." });
-
-            try
-            {
-                var resultado = await _uow.PreplanRepository.GetTurnoHoraInicio(codtaxis, tipo);
-
-                if (resultado == null || resultado.Count == 0)
-                    return NotFound(new { mensaje = "No se encontraron conductores con los códigos indicados." });
-
-                return Ok(resultado);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new
-                {
-                    mensaje = "Error interno del servidor al obtener turno y hora de inicio.",
-                    detalle = ex.Message
-                });
-            }
+            var resultado = await _uow.PreplanRepository.GetHorariosMes(idConductor, anio, mes);
+            return Ok(resultado);
         }
 
-        [HttpPatch("turno")]
-        public async Task<IActionResult> UpdateTurnoHoraInicio([FromBody] List<TaxiTurno> actualizaciones)
+        // GET: api/Preplan/todos?anio=2026&mes=5
+        [HttpGet("todos")]
+        public async Task<IActionResult> GetMesTodos([FromQuery] int anio, [FromQuery] int mes)
         {
-            if (actualizaciones == null || actualizaciones.Count == 0)
-                return BadRequest(new { mensaje = "Debe enviar al menos un conductor." });
-
-            try
-            {
-                int filasAfectadas = await _uow.PreplanRepository.UpdateTurnoHoraInicio(actualizaciones);
-
-                _uow.SaveChanges();
-
-                if (filasAfectadas == 0)
-                    return NotFound(new { mensaje = "No se encontraron conductores con los códigos indicados." });
-
-                return Ok(new { mensaje = "Conductores actualizados correctamente.", filasAfectadas });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new
-                {
-                    mensaje = "Error interno del servidor al actualizar turno y hora de inicio.",
-                    detalle = ex.Message
-                });
-            }
+            var resultado = await _uow.PreplanRepository.GetHorariosMesTodos(anio, mes);
+            return Ok(resultado);
         }
 
+        // POST: api/Preplan/copiarMesTodos
+        [HttpPost("copiarMesTodos")]
+        public async Task<IActionResult> CopiarMesTodos([FromBody] CopiarMesTodosRequest request)
+        {
+            var filas = await _uow.PreplanRepository.CopiarCalendarioMesAnteriorTodos(
+                request.Anio, request.Mes, request.Codusuario
+            );
+            _uow.SaveChanges();
+            return Ok(new { filasAfectadas = filas });
+        }
+
+        // POST: api/Preplan/generar
+        // Body: { idConductor, horaInicio, turno, anio, mes }
+        [HttpPost("generar")]
+        public async Task<IActionResult> GenerarMes([FromBody] GenerarMesRequest request)
+        {
+            var filas = await _uow.PreplanRepository.GenerarCalendarioMes(
+                request.IdConductor, request.HoraInicio, request.Turno, request.Anio, request.Mes
+            );
+            _uow.SaveChanges();
+            return Ok(new { filasAfectadas = filas });
+        }
+
+        // PUT: api/Preplan/actualizar
+        // Body: { idConductor, fecha, horaInicio, turno, tipo, aplicarDesdeAqui }
+        [HttpPut("actualizar")]
+        public async Task<IActionResult> Actualizar([FromBody] HorarioCalendarioRequest request)
+        {
+            int filas;
+
+            if (request.AplicarDesdeAqui)
+            {
+                // Calcular último día del mes de la fecha enviada
+                var fechaDt = DateTime.ParseExact(request.Fecha, "dd/MM/yyyy", CultureInfo.InvariantCulture);
+                var ultimoDia = new DateTime(fechaDt.Year, fechaDt.Month,
+                                             DateTime.DaysInMonth(fechaDt.Year, fechaDt.Month));
+                string fechaFin = ultimoDia.ToString("dd/MM/yyyy");
+
+                filas = await _uow.PreplanRepository.ActualizarHorarioDesde(request, fechaFin);
+            }
+            else
+            {
+                // Solo ese día → tipo T
+                request.Tipo = "T";
+                filas = await _uow.PreplanRepository.ActualizarHorarioDia(request);
+            }
+            _uow.SaveChanges();
+
+            return Ok(new { filasAfectadas = filas });
+        }
+
+        //REPORTES CONDUCTORES
         [HttpGet("ExcelServiciosConductor")]
         public async Task<IActionResult> ExcelServiciosConductor([FromQuery] string codConductor, [FromQuery] string fecha, [FromQuery] string usuario)
         {

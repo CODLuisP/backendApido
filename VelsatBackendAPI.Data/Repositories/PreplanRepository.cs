@@ -4118,48 +4118,240 @@ namespace VelsatBackendAPI.Data.Repositories
             return await _doConnection.QueryFirstOrDefaultAsync<ControlTrack>(sql, parameters, transaction: _doTransaction);
         }
 
-        //Actualizar turnos y horas de conductores
-        public async Task<List<TaxiTurno>> GetTurnoHoraInicio(List<int> codTaxis, string tipo = null)
+        //CONDUCTORES Y HORARIOS
+        // Obtener horario de un conductor en una fecha específica
+        public async Task<ConductorHorarioCalendario> GetHorarioPorFecha(int idConductor, string fecha)
         {
-            string sql = @"SELECT codtaxi AS CodTaxi, turno AS Turno, horainicio AS HoraInicio 
-                   FROM taxi 
-                   WHERE codtaxi IN @CodTaxis";
+            string sql = @"
+            SELECT id AS Id, id_conductor AS IdConductor, fecha AS Fecha,
+                   hora_inicio AS HoraInicio, turno AS Turno, tipo AS Tipo
+            FROM conductor_horario_calendario
+            WHERE id_conductor = @IdConductor
+              AND fecha = STR_TO_DATE(@Fecha, '%d/%m/%Y')";
 
-            if (!string.IsNullOrEmpty(tipo))
-                sql += " AND tipo = @Tipo";
-
-            var resultado = await _doConnection.QueryAsync<TaxiTurno>(
+            return await _doConnection.QueryFirstOrDefaultAsync<ConductorHorarioCalendario>(
                 sql,
-                new { CodTaxis = codTaxis, Tipo = tipo },
+                new { IdConductor = idConductor, Fecha = fecha },
                 transaction: _doTransaction
             );
+        }
 
+        // Obtener todos los horarios de un conductor en un mes
+        public async Task<List<ConductorHorarioCalendario>> GetHorariosMes(int idConductor, int anio, int mes)
+        {
+            string sql = @"
+            SELECT id AS Id, id_conductor AS IdConductor, fecha AS Fecha,
+                   hora_inicio AS HoraInicio, turno AS Turno, tipo AS Tipo
+            FROM conductor_horario_calendario
+            WHERE id_conductor = @IdConductor
+              AND YEAR(fecha) = @Anio
+              AND MONTH(fecha) = @Mes
+            ORDER BY fecha";
+
+            var resultado = await _doConnection.QueryAsync<ConductorHorarioCalendario>(
+                sql,
+                new { IdConductor = idConductor, Anio = anio, Mes = mes },
+                transaction: _doTransaction
+            );
             return resultado.ToList();
         }
 
-        public async Task<int> UpdateTurnoHoraInicio(List<TaxiTurno> actualizaciones)
+        // Obtener horarios de todos los conductores en un mes
+        public async Task<List<ConductorHorarioCalendario>> GetHorariosMesTodos(int anio, int mes)
         {
-            string sql = @"UPDATE taxi SET turno = @Turno, horainicio = @HoraInicio WHERE codtaxi = @CodTaxi";
+            string sql = @"
+            SELECT id AS Id, id_conductor AS IdConductor, fecha AS Fecha,
+                   hora_inicio AS HoraInicio, turno AS Turno, tipo AS Tipo
+            FROM conductor_horario_calendario
+            WHERE YEAR(fecha) = @Anio
+              AND MONTH(fecha) = @Mes
+            ORDER BY id_conductor, fecha";
 
-            int filas = await _doConnection.ExecuteAsync(
+            var resultado = await _doConnection.QueryAsync<ConductorHorarioCalendario>(
                 sql,
-                actualizaciones,
+                new { Anio = anio, Mes = mes },
                 transaction: _doTransaction
             );
-
-            return filas;
+            return resultado.ToList();
         }
 
+        public async Task<int> CopiarCalendarioMesAnteriorTodos(int anio, int mes, string codusuario)
+        {
+            var fechaMesAnterior = new DateTime(anio, mes, 1).AddMonths(-1);
+            int anioAnterior = fechaMesAnterior.Year;
+            int mesAnterior = fechaMesAnterior.Month;
+            int diasEnMesNuevo = DateTime.DaysInMonth(anio, mes);
 
-        //Reporte de servicios por conductor
+            // Obtener todos los conductores activos del usuario
+            string sqlConductores = @"
+        SELECT codtaxi 
+        FROM taxi 
+        WHERE estado = 'A' AND codusuario = @Codusuario";
+
+            var conductores = (await _doConnection.QueryAsync<int>(
+                sqlConductores,
+                new { Codusuario = codusuario },
+                transaction: _doTransaction
+            )).ToList();
+
+            if (!conductores.Any()) return 0;
+
+            // Obtener todos los horarios del mes anterior de todos los conductores
+            string sqlGet = @"
+        SELECT id_conductor, fecha, hora_inicio, turno
+        FROM conductor_horario_calendario
+        WHERE id_conductor IN @Conductores
+          AND YEAR(fecha) = @Anio
+          AND MONTH(fecha) = @Mes
+        ORDER BY id_conductor, fecha";
+
+            var horariosAnteriores = (await _doConnection.QueryAsync<dynamic>(
+                sqlGet,
+                new { Conductores = conductores, Anio = anioAnterior, Mes = mesAnterior },
+                transaction: _doTransaction
+            )).ToList();
+
+            // Agrupar por conductor
+            var horariosPorConductor = horariosAnteriores
+                .GroupBy(h => (int)h.id_conductor)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var registros = new List<object>();
+
+            foreach (var codConductor in conductores)
+            {
+                // Si el conductor no tiene horarios del mes anterior, saltarlo
+                if (!horariosPorConductor.TryGetValue(codConductor, out var horariosRef))
+                    continue;
+
+                for (int dia = 1; dia <= diasEnMesNuevo; dia++)
+                {
+                    var fechaNueva = new DateTime(anio, mes, dia);
+
+                    var horarioDelDia = horariosRef
+                        .FirstOrDefault(h => ((DateTime)h.fecha).Day == dia)
+                        ?? horariosRef.Last();
+
+                    registros.Add(new
+                    {
+                        IdConductor = codConductor,
+                        Fecha = fechaNueva,
+                        HoraInicio = (string)horarioDelDia.hora_inicio,
+                        Turno = (string)(horarioDelDia.turno ?? ""),
+                        Tipo = "N"
+                    });
+                }
+            }
+
+            if (!registros.Any()) return 0;
+
+            string sqlInsert = @"
+        INSERT INTO conductor_horario_calendario 
+            (id_conductor, fecha, hora_inicio, turno, tipo)
+        VALUES 
+            (@IdConductor, @Fecha, @HoraInicio, @Turno, @Tipo)
+        ON DUPLICATE KEY UPDATE
+            hora_inicio = VALUES(hora_inicio),
+            turno = VALUES(turno),
+            tipo = VALUES(tipo)";
+
+            return await _doConnection.ExecuteAsync(sqlInsert, registros, transaction: _doTransaction);
+        }
+
+        // Generar calendario completo de un mes para un conductor
+        public async Task<int> GenerarCalendarioMes(int idConductor, string horaInicio, string turno, int anio, int mes)
+        {
+            int diasEnMes = DateTime.DaysInMonth(anio, mes);
+
+            var registros = Enumerable.Range(1, diasEnMes).Select(dia => new
+            {
+                IdConductor = idConductor,
+                Fecha = new DateTime(anio, mes, dia),
+                HoraInicio = horaInicio,
+                Turno = turno,
+                Tipo = 'N'
+            }).ToList();
+
+            string sql = @"
+            INSERT INTO conductor_horario_calendario 
+                (id_conductor, fecha, hora_inicio, turno, tipo)
+            VALUES 
+                (@IdConductor, @Fecha, @HoraInicio, @Turno, @Tipo)
+            ON DUPLICATE KEY UPDATE
+                hora_inicio = VALUES(hora_inicio),
+                turno = VALUES(turno),
+                tipo = VALUES(tipo)";
+
+            return await _doConnection.ExecuteAsync(sql, registros, transaction: _doTransaction);
+        }
+
+        // Actualizar un día puntual
+        public async Task<int> ActualizarHorarioDia(HorarioCalendarioRequest request)
+        {
+            string sql = @"
+            INSERT INTO conductor_horario_calendario 
+                (id_conductor, fecha, hora_inicio, turno, tipo)
+            VALUES 
+                (@IdConductor, STR_TO_DATE(@Fecha, '%d/%m/%Y'), @HoraInicio, @Turno, @Tipo)
+            ON DUPLICATE KEY UPDATE
+                hora_inicio = VALUES(hora_inicio),
+                turno = VALUES(turno),
+                tipo = VALUES(tipo)";
+
+            return await _doConnection.ExecuteAsync(
+                sql,
+                new
+                {
+                    IdConductor = request.IdConductor,
+                    Fecha = request.Fecha,
+                    HoraInicio = request.HoraInicio,
+                    Turno = request.Turno,
+                    Tipo = request.Tipo
+                },
+                transaction: _doTransaction
+            );
+        }
+
+        // Actualizar desde una fecha en adelante hasta fin de mes
+        public async Task<int> ActualizarHorarioDesde(HorarioCalendarioRequest request, string fechaFin)
+        {
+            string sql = @"
+            UPDATE conductor_horario_calendario
+            SET hora_inicio = @HoraInicio,
+                turno = @Turno,
+                tipo = @Tipo
+            WHERE id_conductor = @IdConductor
+              AND fecha BETWEEN STR_TO_DATE(@FechaDesde, '%d/%m/%Y') 
+                            AND STR_TO_DATE(@FechaFin, '%d/%m/%Y')";
+
+            return await _doConnection.ExecuteAsync(
+                sql,
+                new
+                {
+                    IdConductor = request.IdConductor,
+                    HoraInicio = request.HoraInicio,
+                    Turno = request.Turno,
+                    Tipo = request.Tipo,
+                    FechaDesde = request.Fecha,
+                    FechaFin = fechaFin
+                },
+                transaction: _doTransaction
+            );
+        }
+
+        //REPORTE DE HORARIOS DE CONDUCTORES
         public async Task<List<ServicioDetalle>> ReporteConductorServicio(string codConductor, string fecha)
         {
-            // Validación previa: verificar si el conductor tiene turno y hora de inicio
-            string sqlValidacion = @"SELECT turno, horainicio FROM taxi WHERE codtaxi = @CodConductor";
+            // Obtener horario del conductor en esa fecha específica desde el calendario
+            string sqlValidacion = @"
+        SELECT chc.turno, chc.hora_inicio AS horainicio 
+        FROM conductor_horario_calendario chc
+        WHERE chc.id_conductor = @CodConductor
+          AND chc.fecha = STR_TO_DATE(@Fecha, '%d/%m/%Y')";
 
             var conductor = await _doConnection.QueryFirstOrDefaultAsync<dynamic>(
                 sqlValidacion,
-                new { CodConductor = codConductor },
+                new { CodConductor = codConductor, Fecha = fecha.Contains(" ") ? fecha.Split(' ')[0] : fecha },
                 transaction: _doTransaction
             );
 
@@ -4169,7 +4361,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
             string fechaSolo = fecha.Contains(" ") ? fecha.Split(' ')[0] : fecha;
 
-            // Calcular rango según si tiene horainicio o no
             string horaIniParam = horainicio ?? "00:00";
             DateTime fechaFinDt = horainicio == null
                 ? DateTime.ParseExact($"{fechaSolo} 23:59", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
@@ -4178,47 +4369,49 @@ namespace VelsatBackendAPI.Data.Repositories
             string horaFinParam = fechaFinDt.ToString("HH:mm");
             string fechaFinParam = fechaFinDt.ToString("dd/MM/yyyy");
 
-            // Consulta principal
             string sql = @"
-                SELECT 
-                    s.codservicio,
-                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-                    s.empresa AS Empresa, 
-                    s.tipo AS Tipo, 
-                    s.numero AS Numero, 
-                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-                    c.apellidos AS Apellidos, 
-                    l.direccion AS Direccion, 
-                    l.distrito AS Distrito, 
-                    s.unidad AS Unidad, 
-                    t.apellidos AS ApellidosConductor,
-                    t.turno AS Turno,
-                    t.horainicio AS HoraInicioTurno,
-                    t.unidadasig AS Unidadasig
-                FROM servicio s
-                INNER JOIN subservicio su ON s.codservicio = su.codservicio
-                INNER JOIN cliente c ON su.codcliente = c.codcliente
-                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-                INNER JOIN taxi t ON s.codconductor = t.codtaxi
-                CROSS JOIN LATERAL (
-                    SELECT 
-                        STR_TO_DATE(CONCAT(@Fecha, ' ', @HoraInicio), '%d/%m/%Y %H:%i') AS fecha_inicio,
-                        STR_TO_DATE(CONCAT(@FechaFin, ' ', @HoraFin), '%d/%m/%Y %H:%i') AS fecha_fin
-                ) params
-                CROSS JOIN LATERAL (
-                    SELECT 
-                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-                ) dates
-                WHERE s.codconductor = @CodConductor
-                  AND dates.fecha_dt BETWEEN params.fecha_inicio AND params.fecha_fin
-                  AND su.codcliente NOT IN (39953, 4175)
-                  AND su.orden > 0
-                  AND s.estado <> 'C'
-                ORDER BY dates.fecha_dt";
+        SELECT 
+            s.codservicio,
+            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+            s.empresa AS Empresa, 
+            s.tipo AS Tipo, 
+            s.numero AS Numero, 
+            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+            c.apellidos AS Apellidos, 
+            l.direccion AS Direccion, 
+            l.distrito AS Distrito, 
+            s.unidad AS Unidad, 
+            t.apellidos AS ApellidosConductor,
+            chc.turno AS Turno,
+            chc.hora_inicio AS HoraInicioTurno,
+            t.unidadasig AS Unidadasig
+        FROM servicio s
+        INNER JOIN subservicio su ON s.codservicio = su.codservicio
+        INNER JOIN cliente c ON su.codcliente = c.codcliente
+        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+        INNER JOIN taxi t ON s.codconductor = t.codtaxi
+        LEFT JOIN conductor_horario_calendario chc 
+            ON chc.id_conductor = s.codconductor
+            AND chc.fecha = STR_TO_DATE(@Fecha, '%d/%m/%Y')
+        CROSS JOIN LATERAL (
+            SELECT 
+                STR_TO_DATE(CONCAT(@Fecha, ' ', @HoraInicio), '%d/%m/%Y %H:%i') AS fecha_inicio,
+                STR_TO_DATE(CONCAT(@FechaFin, ' ', @HoraFin), '%d/%m/%Y %H:%i') AS fecha_fin
+        ) params
+        CROSS JOIN LATERAL (
+            SELECT 
+                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+        ) dates
+        WHERE s.codconductor = @CodConductor
+          AND dates.fecha_dt BETWEEN params.fecha_inicio AND params.fecha_fin
+          AND su.codcliente NOT IN (39953, 4175)
+          AND su.orden > 0
+          AND s.estado <> 'C'
+        ORDER BY dates.fecha_dt";
 
             var parameters = new
             {
@@ -4236,69 +4429,82 @@ namespace VelsatBackendAPI.Data.Repositories
         //Reporte de servicios por conductor rangos
         public async Task<List<ServicioDetalle>> ReporteConductorServicioRango(string codConductor, string fechaini, string fechafin)
         {
-            // Validación previa: obtener horainicio del conductor
-            string sqlValidacion = @"SELECT turno, horainicio FROM taxi WHERE codtaxi = @CodConductor";
-
-            var conductor = await _doConnection.QueryFirstOrDefaultAsync<dynamic>(
-                sqlValidacion,
-                new { CodConductor = codConductor },
-                transaction: _doTransaction
-            );
-
-            string horainicio = (conductor == null || string.IsNullOrWhiteSpace((string)conductor.horainicio)) ? null : (string)conductor.horainicio;
-
+            // Para rango, tomamos el horario del primer día del rango
+            // Cada día se filtra individualmente abajo con su horario real
             string fechaIniCompleta, fechaFinCompleta;
 
-            if (horainicio == null)
+            // Traemos todos los horarios del conductor en el rango para el filtro posterior
+            string sqlHorarios = @"
+        SELECT fecha AS Fecha, hora_inicio AS HoraInicio, turno AS Turno
+        FROM conductor_horario_calendario
+        WHERE id_conductor = @CodConductor
+          AND fecha BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y') 
+                       AND STR_TO_DATE(@FechaFin, '%d/%m/%Y')
+        ORDER BY fecha";
+
+            var horariosRango = (await _doConnection.QueryAsync<dynamic>(
+                sqlHorarios,
+                new { CodConductor = codConductor, FechaIni = fechaini, FechaFin = fechafin },
+                transaction: _doTransaction
+            )).ToList();
+
+            // Usamos el horario del primer día para definir el rango de búsqueda en BD
+            string horaInicioPrimerDia = horariosRango.Any()
+                ? (string)horariosRango.First().HoraInicio
+                : null;
+
+            if (horaInicioPrimerDia == null)
             {
                 fechaIniCompleta = $"{fechaini} 00:00";
                 fechaFinCompleta = $"{fechafin} 23:59";
             }
             else
             {
-                fechaIniCompleta = $"{fechaini} {horainicio}";
-                fechaFinCompleta = DateTime.ParseExact($"{fechafin} {horainicio}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                fechaIniCompleta = $"{fechaini} {horaInicioPrimerDia}";
+                fechaFinCompleta = DateTime.ParseExact($"{fechafin} {horaInicioPrimerDia}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
                                            .AddHours(12)
                                            .ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
             }
 
-            // Consulta principal
             string sql = @"
-                SELECT 
-                    s.codservicio,
-                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-                    s.empresa AS Empresa, 
-                    s.tipo AS Tipo, 
-                    s.numero AS Numero, 
-                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-                    c.apellidos AS Apellidos, 
-                    l.direccion AS Direccion, 
-                    l.distrito AS Distrito, 
-                    s.unidad AS Unidad, 
-                    t.apellidos AS ApellidosConductor,
-                    t.turno AS Turno,
-                    t.horainicio AS HoraInicioTurno,
-                    t.unidadasig AS Unidadasig
-                FROM servicio s
-                INNER JOIN subservicio su ON s.codservicio = su.codservicio
-                INNER JOIN cliente c ON su.codcliente = c.codcliente
-                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-                INNER JOIN taxi t ON s.codconductor = t.codtaxi
-                CROSS JOIN LATERAL (
-                    SELECT 
-                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-                ) dates
-                WHERE s.codconductor = @CodConductor
-                  AND dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
-                  AND su.codcliente NOT IN (39953, 4175)
-                  AND su.orden > 0
-                  AND s.estado <> 'C'
-                ORDER BY dates.fecha_dt";
+        SELECT 
+            s.codservicio,
+            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+            s.empresa AS Empresa, 
+            s.tipo AS Tipo, 
+            s.numero AS Numero, 
+            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+            c.apellidos AS Apellidos, 
+            l.direccion AS Direccion, 
+            l.distrito AS Distrito, 
+            s.unidad AS Unidad, 
+            t.apellidos AS ApellidosConductor,
+            chc.turno AS Turno,
+            chc.hora_inicio AS HoraInicioTurno,
+            t.unidadasig AS Unidadasig
+        FROM servicio s
+        INNER JOIN subservicio su ON s.codservicio = su.codservicio
+        INNER JOIN cliente c ON su.codcliente = c.codcliente
+        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+        INNER JOIN taxi t ON s.codconductor = t.codtaxi
+        LEFT JOIN conductor_horario_calendario chc 
+            ON chc.id_conductor = s.codconductor
+            AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
+        CROSS JOIN LATERAL (
+            SELECT 
+                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+        ) dates
+        WHERE s.codconductor = @CodConductor
+          AND dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                                 AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+          AND su.codcliente NOT IN (39953, 4175)
+          AND su.orden > 0
+          AND s.estado <> 'C'
+        ORDER BY dates.fecha_dt";
 
             var parameters = new
             {
@@ -4308,48 +4514,80 @@ namespace VelsatBackendAPI.Data.Repositories
             };
 
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
-            return resultado.ToList();
+
+            // Diccionario de horarios por fecha para filtro preciso día a día
+            var horariosPorFecha = horariosRango.ToDictionary(
+                h => ((DateTime)h.Fecha).ToString("dd/MM/yyyy"),
+                h => (string)h.HoraInicio
+            );
+
+            DateTime fechaBaseIni = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
+            DateTime fechaBaseFin = DateTime.ParseExact(fechafin, "dd/MM/yyyy", null);
+
+            var resultadoFiltrado = resultado.Where(s =>
+            {
+                if (!DateTime.TryParseExact($"{s.Fecha} {s.HoraTurno}", "dd/MM/yyyy HH:mm",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDtServicio))
+                    return false;
+
+                // Buscar el horario exacto del día del servicio en el calendario
+                if (horariosPorFecha.TryGetValue(s.Fecha, out string horaDelDia))
+                {
+                    DateTime inicioTurno = DateTime.ParseExact(
+                        $"{s.Fecha} {horaDelDia}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                    DateTime finTurno = inicioTurno.AddHours(12);
+                    return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
+                }
+
+                // Si no tiene registro en el calendario ese día → rango completo del día
+                return fechaDtServicio >= fechaBaseIni && fechaDtServicio <= fechaBaseFin.AddHours(23).AddMinutes(59);
+            }).ToList();
+
+            return resultadoFiltrado;
         }
 
         //Reporte de servicios todos conductores una fecha
         public async Task<List<ServicioDetalle>> ReporteTodosConductores(string fechaini, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
-                SELECT 
-                    s.codservicio,
-                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-                    s.empresa AS Empresa, 
-                    s.tipo AS Tipo, 
-                    s.numero AS Numero, 
-                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-                    c.apellidos AS Apellidos, 
-                    l.direccion AS Direccion, 
-                    l.distrito AS Distrito, 
-                    s.unidad AS Unidad, 
-                    t.apellidos AS ApellidosConductor,
-                    t.turno AS Turno,
-                    t.horainicio AS HoraInicioTurno,
-                    t.unidadasig AS Unidadasig,
-                    s.codconductor AS CodConductor
-                FROM servicio s
-                INNER JOIN subservicio su ON s.codservicio = su.codservicio
-                INNER JOIN cliente c ON su.codcliente = c.codcliente
-                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-                INNER JOIN taxi t ON s.codconductor = t.codtaxi
-                CROSS JOIN LATERAL (
-                    SELECT 
-                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-                ) dates
-                WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
-                  AND su.codcliente NOT IN (39953, 4175)
-                  AND su.orden > 0 
-                  AND s.codusuario = @Codusuario
-                  AND s.estado <> 'C'";
+        SELECT 
+            s.codservicio,
+            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+            s.empresa AS Empresa, 
+            s.tipo AS Tipo, 
+            s.numero AS Numero, 
+            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+            c.apellidos AS Apellidos, 
+            l.direccion AS Direccion, 
+            l.distrito AS Distrito, 
+            s.unidad AS Unidad, 
+            t.apellidos AS ApellidosConductor,
+            chc.turno AS Turno,
+            chc.hora_inicio AS HoraInicioTurno,
+            t.unidadasig AS Unidadasig,
+            s.codconductor AS CodConductor
+        FROM servicio s
+        INNER JOIN subservicio su ON s.codservicio = su.codservicio
+        INNER JOIN cliente c ON su.codcliente = c.codcliente
+        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+        INNER JOIN taxi t ON s.codconductor = t.codtaxi
+        LEFT JOIN conductor_horario_calendario chc 
+            ON chc.id_conductor = s.codconductor
+            AND chc.fecha = STR_TO_DATE(@FechaBase, '%d/%m/%Y')
+        CROSS JOIN LATERAL (
+            SELECT 
+                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+        ) dates
+        WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                                 AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+          AND su.codcliente NOT IN (39953, 4175)
+          AND su.orden > 0 
+          AND s.codusuario = @Codusuario
+          AND s.estado <> 'C'";
 
             if (codtaxis != null && codtaxis.Any())
                 sql += " AND s.codconductor IN @CodTaxis";
@@ -4358,11 +4596,11 @@ namespace VelsatBackendAPI.Data.Repositories
 
             DateTime fechaBase = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
             string fechaIniCompleta = $"{fechaini} 00:00";
-            DateTime fechaFinDt = fechaBase.AddDays(1).AddHours(12); // día siguiente 12:00
-            string fechaFinCompleta = fechaFinDt.ToString("dd/MM/yyyy HH:mm");
+            string fechaFinCompleta = fechaBase.AddDays(1).AddHours(12).ToString("dd/MM/yyyy HH:mm");
 
             var parameters = new
             {
+                FechaBase = fechaini,
                 FechaIni = fechaIniCompleta,
                 FechaFin = fechaFinCompleta,
                 Codusuario = usuario,
@@ -4372,44 +4610,25 @@ namespace VelsatBackendAPI.Data.Repositories
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
 
             string fechaini_str = fechaBase.ToString("dd/MM/yyyy");
-            string fechaSiguiente = fechaBase.AddDays(1).ToString("dd/MM/yyyy");
 
-            // Filtro por conductor: evaluar individualmente según turno y horainicio
-            var resultadoFiltrado = resultado
-            .Where(s =>
+            var resultadoFiltrado = resultado.Where(s =>
             {
-                bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
                 bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
 
-                if (tieneTurno && tieneHoraInicio)
+                if (!DateTime.TryParseExact($"{s.Fecha} {s.HoraTurno}", "dd/MM/yyyy HH:mm",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDtServicio))
+                    return false;
+
+                if (tieneHoraInicio)
                 {
-                    // Reconstruir el rango exacto igual que ReporteConductorServicio
                     DateTime inicioTurno = DateTime.ParseExact(
-                        $"{fechaini} {s.HoraInicioTurno}",
-                        "dd/MM/yyyy HH:mm",
-                        CultureInfo.InvariantCulture
-                    );
+                        $"{fechaini} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
                     DateTime finTurno = inicioTurno.AddHours(12);
-
-                    // Parsear la fecha+hora del servicio para comparar con el rango
-                    string fechaHoraServicio = $"{s.Fecha} {s.HoraTurno}";
-                    if (!DateTime.TryParseExact(
-                        fechaHoraServicio,
-                        "dd/MM/yyyy HH:mm",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out DateTime fechaDtServicio))
-                        return false;
-
                     return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
                 }
 
-                // Sin turno/horainicio → rango por defecto: solo el día base completo
-                if (s.Fecha == fechaini_str) return true;
-
-                return false;
-            })
-            .ToList();
+                return s.Fecha == fechaini_str;
+            }).ToList();
 
             return resultadoFiltrado;
         }
@@ -4418,41 +4637,44 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
-                SELECT 
-                    s.codservicio,
-                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-                    s.empresa AS Empresa, 
-                    s.tipo AS Tipo, 
-                    s.numero AS Numero, 
-                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-                    c.apellidos AS Apellidos, 
-                    l.direccion AS Direccion, 
-                    l.distrito AS Distrito, 
-                    s.unidad AS Unidad, 
-                    t.apellidos AS ApellidosConductor,
-                    t.turno AS Turno,
-                    t.horainicio AS HoraInicioTurno,
-                    t.unidadasig AS Unidadasig,
-                    s.codconductor AS CodConductor
-                FROM servicio s
-                INNER JOIN subservicio su ON s.codservicio = su.codservicio
-                INNER JOIN cliente c ON su.codcliente = c.codcliente
-                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-                INNER JOIN taxi t ON s.codconductor = t.codtaxi
-                CROSS JOIN LATERAL (
-                    SELECT 
-                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-                ) dates
-                WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
-                  AND su.codcliente NOT IN (39953, 4175)
-                  AND su.orden > 0 
-                  AND s.codusuario = @Codusuario 
-                  AND s.estado <> 'C'";
+        SELECT 
+            s.codservicio,
+            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+            s.empresa AS Empresa, 
+            s.tipo AS Tipo, 
+            s.numero AS Numero, 
+            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+            c.apellidos AS Apellidos, 
+            l.direccion AS Direccion, 
+            l.distrito AS Distrito, 
+            s.unidad AS Unidad, 
+            t.apellidos AS ApellidosConductor,
+            chc.turno AS Turno,
+            chc.hora_inicio AS HoraInicioTurno,
+            t.unidadasig AS Unidadasig,
+            s.codconductor AS CodConductor
+        FROM servicio s
+        INNER JOIN subservicio su ON s.codservicio = su.codservicio
+        INNER JOIN cliente c ON su.codcliente = c.codcliente
+        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+        INNER JOIN taxi t ON s.codconductor = t.codtaxi
+        LEFT JOIN conductor_horario_calendario chc 
+            ON chc.id_conductor = s.codconductor
+            AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
+        CROSS JOIN LATERAL (
+            SELECT 
+                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+        ) dates
+        WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                                 AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+          AND su.codcliente NOT IN (39953, 4175)
+          AND su.orden > 0 
+          AND s.codusuario = @Codusuario 
+          AND s.estado <> 'C'";
 
             if (codtaxis != null && codtaxis.Any())
                 sql += " AND s.codconductor IN @CodTaxis";
@@ -4463,8 +4685,7 @@ namespace VelsatBackendAPI.Data.Repositories
             DateTime fechaBaseFin = DateTime.ParseExact(fechafin, "dd/MM/yyyy", null);
 
             string fechaIniCompleta = $"{fechaini} 00:00";
-            DateTime fechaFinDt = fechaBaseFin.AddDays(1).AddHours(12); // día siguiente a fechafin 12:00
-            string fechaFinCompleta = fechaFinDt.ToString("dd/MM/yyyy HH:mm");
+            string fechaFinCompleta = fechaBaseFin.AddDays(1).AddHours(12).ToString("dd/MM/yyyy HH:mm");
 
             var parameters = new
             {
@@ -4476,55 +4697,28 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
 
-            // Fechas válidas del rango principal
-            var fechasValidas = Enumerable
-                .Range(0, (fechaBaseFin - fechaBaseIni).Days + 1)
-                .Select(d => fechaBaseIni.AddDays(d).ToString("dd/MM/yyyy"))
-                .ToHashSet();
-
-            string fechaSiguienteAFin = fechaBaseFin.AddDays(1).ToString("dd/MM/yyyy");
-
-            var resultadoFiltrado = resultado
-            .Where(s =>
+            var resultadoFiltrado = resultado.Where(s =>
             {
-                bool tieneTurno = !string.IsNullOrWhiteSpace(s.Turno);
-                bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
-
-                if (!DateTime.TryParseExact(
-                    $"{s.Fecha} {s.HoraTurno}",
-                    "dd/MM/yyyy HH:mm",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out DateTime fechaDtServicio))
+                if (!DateTime.TryParseExact($"{s.Fecha} {s.HoraTurno}", "dd/MM/yyyy HH:mm",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDtServicio))
                     return false;
 
-                if (tieneTurno && tieneHoraInicio)
+                if (!string.IsNullOrWhiteSpace(s.HoraInicioTurno))
                 {
-                    // Evaluar contra cada día del rango: el servicio debe caer en algún
-                    // turno válido que comience en ese día
-                    return Enumerable
-                        .Range(0, (fechaBaseFin - fechaBaseIni).Days + 1)
-                        .Select(d => fechaBaseIni.AddDays(d))
-                        .Any(diaBase =>
-                        {
-                            DateTime inicioTurno = DateTime.ParseExact(
-                                $"{diaBase:dd/MM/yyyy} {s.HoraInicioTurno}",
-                                "dd/MM/yyyy HH:mm",
-                                CultureInfo.InvariantCulture
-                            );
-                            DateTime finTurno = inicioTurno.AddHours(12);
-                            return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
-                        });
+                    // El JOIN ya trajo el horario exacto del día del servicio desde el calendario
+                    DateTime inicioTurno = DateTime.ParseExact(
+                        $"{s.Fecha} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                    DateTime finTurno = inicioTurno.AddHours(12);
+                    return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
                 }
 
-                // Sin turno/horainicio → solo días exactos del rango, hora 00:00-23:59
                 return fechaDtServicio >= fechaBaseIni &&
                        fechaDtServicio <= fechaBaseFin.AddHours(23).AddMinutes(59);
-            })
-            .ToList();
+            }).ToList();
 
             return resultadoFiltrado;
         }
+
 
         //Reporte de alertas de velocidad
         public async Task<int> InsertarAlertaVelocidad(SpeedAlert alerta)

@@ -29,7 +29,6 @@ namespace VelsatBackendAPI.Data.Repositories
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error al obtener documentos de unidad por DeviceID");
                 throw;
             }
         }
