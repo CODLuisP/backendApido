@@ -4580,7 +4580,7 @@ namespace VelsatBackendAPI.Data.Repositories
         INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
         INNER JOIN taxi t ON s.codconductor = t.codtaxi
         LEFT JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = s.codconductor
+            ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
             AND chc.fecha = STR_TO_DATE(@FechaBase, '%d/%m/%Y')
         CROSS JOIN LATERAL (
             SELECT 
@@ -4667,7 +4667,7 @@ namespace VelsatBackendAPI.Data.Repositories
         INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
         INNER JOIN taxi t ON s.codconductor = t.codtaxi
         LEFT JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = s.codconductor
+            ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
             AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
         CROSS JOIN LATERAL (
             SELECT 
