@@ -4350,10 +4350,10 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             // Obtener horario del conductor en esa fecha específica desde el calendario
             string sqlValidacion = @"
-        SELECT chc.turno, chc.hora_inicio AS horainicio 
-        FROM conductor_horario_calendario chc
-        WHERE chc.id_conductor = @CodConductor
-          AND chc.fecha = STR_TO_DATE(@Fecha, '%d/%m/%Y')";
+                SELECT chc.turno, chc.hora_inicio AS horainicio 
+                FROM conductor_horario_calendario chc
+                WHERE chc.id_conductor = @CodConductor
+                  AND chc.fecha = STR_TO_DATE(@Fecha, '%d/%m/%Y')";
 
             var conductor = await _doConnection.QueryFirstOrDefaultAsync<dynamic>(
                 sqlValidacion,
@@ -4376,48 +4376,48 @@ namespace VelsatBackendAPI.Data.Repositories
             string fechaFinParam = fechaFinDt.ToString("dd/MM/yyyy");
 
             string sql = @"
-        SELECT 
-            s.codservicio,
-            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-            s.empresa AS Empresa, 
-            s.tipo AS Tipo, 
-            s.numero AS Numero, 
-            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-            c.apellidos AS Apellidos, 
-            l.direccion AS Direccion, 
-            l.distrito AS Distrito, 
-            s.unidad AS Unidad, 
-            t.apellidos AS ApellidosConductor,
-            chc.turno AS Turno,
-            chc.hora_inicio AS HoraInicioTurno,
-            t.unidadasig AS Unidadasig
-        FROM servicio s
-        INNER JOIN subservicio su ON s.codservicio = su.codservicio
-        INNER JOIN cliente c ON su.codcliente = c.codcliente
-        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-        INNER JOIN taxi t ON s.codconductor = t.codtaxi
-        LEFT JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = s.codconductor
-            AND chc.fecha = STR_TO_DATE(@Fecha, '%d/%m/%Y')
-        CROSS JOIN LATERAL (
-            SELECT 
-                STR_TO_DATE(CONCAT(@Fecha, ' ', @HoraInicio), '%d/%m/%Y %H:%i') AS fecha_inicio,
-                STR_TO_DATE(CONCAT(@FechaFin, ' ', @HoraFin), '%d/%m/%Y %H:%i') AS fecha_fin
-        ) params
-        CROSS JOIN LATERAL (
-            SELECT 
-                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-        ) dates
-        WHERE s.codconductor = @CodConductor
-          AND dates.fecha_dt BETWEEN params.fecha_inicio AND params.fecha_fin
-          AND su.codcliente NOT IN (39953, 4175)
-          AND su.orden > 0
-          AND s.estado <> 'C'
-        ORDER BY dates.fecha_dt";
+                SELECT 
+                    s.codservicio,
+                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+                    s.empresa AS Empresa, 
+                    s.tipo AS Tipo, 
+                    s.numero AS Numero, 
+                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+                    c.apellidos AS Apellidos, 
+                    l.direccion AS Direccion, 
+                    l.distrito AS Distrito, 
+                    s.unidad AS Unidad, 
+                    t.apellidos AS ApellidosConductor,
+                    chc.turno AS Turno,
+                    chc.hora_inicio AS HoraInicioTurno,
+                    t.unidadasig AS Unidadasig
+                FROM servicio s
+                INNER JOIN subservicio su ON s.codservicio = su.codservicio
+                INNER JOIN cliente c ON su.codcliente = c.codcliente
+                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+                INNER JOIN taxi t ON s.codconductor = t.codtaxi
+                LEFT JOIN conductor_horario_calendario chc 
+                    ON chc.id_conductor = s.codconductor
+                    AND chc.fecha = STR_TO_DATE(@Fecha, '%d/%m/%Y')
+                CROSS JOIN LATERAL (
+                    SELECT 
+                        STR_TO_DATE(CONCAT(@Fecha, ' ', @HoraInicio), '%d/%m/%Y %H:%i') AS fecha_inicio,
+                        STR_TO_DATE(CONCAT(@FechaFin, ' ', @HoraFin), '%d/%m/%Y %H:%i') AS fecha_fin
+                ) params
+                CROSS JOIN LATERAL (
+                    SELECT 
+                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+                ) dates
+                WHERE s.codconductor = @CodConductor
+                  AND dates.fecha_dt BETWEEN params.fecha_inicio AND params.fecha_fin
+                  AND su.codcliente NOT IN (39953, 4175)
+                  AND su.orden > 0
+                  AND s.estado <> 'C'
+                ORDER BY dates.fecha_dt";
 
             var parameters = new
             {
@@ -4473,44 +4473,44 @@ namespace VelsatBackendAPI.Data.Repositories
             }
 
             string sql = @"
-        SELECT 
-            s.codservicio,
-            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-            s.empresa AS Empresa, 
-            s.tipo AS Tipo, 
-            s.numero AS Numero, 
-            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-            c.apellidos AS Apellidos, 
-            l.direccion AS Direccion, 
-            l.distrito AS Distrito, 
-            s.unidad AS Unidad, 
-            t.apellidos AS ApellidosConductor,
-            chc.turno AS Turno,
-            chc.hora_inicio AS HoraInicioTurno,
-            t.unidadasig AS Unidadasig
-        FROM servicio s
-        INNER JOIN subservicio su ON s.codservicio = su.codservicio
-        INNER JOIN cliente c ON su.codcliente = c.codcliente
-        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-        INNER JOIN taxi t ON s.codconductor = t.codtaxi
-        LEFT JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = s.codconductor
-            AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
-        CROSS JOIN LATERAL (
-            SELECT 
-                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-        ) dates
-        WHERE s.codconductor = @CodConductor
-          AND dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                 AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
-          AND su.codcliente NOT IN (39953, 4175)
-          AND su.orden > 0
-          AND s.estado <> 'C'
-        ORDER BY dates.fecha_dt";
+                SELECT 
+                    s.codservicio,
+                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+                    s.empresa AS Empresa, 
+                    s.tipo AS Tipo, 
+                    s.numero AS Numero, 
+                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+                    c.apellidos AS Apellidos, 
+                    l.direccion AS Direccion, 
+                    l.distrito AS Distrito, 
+                    s.unidad AS Unidad, 
+                    t.apellidos AS ApellidosConductor,
+                    chc.turno AS Turno,
+                    chc.hora_inicio AS HoraInicioTurno,
+                    t.unidadasig AS Unidadasig
+                FROM servicio s
+                INNER JOIN subservicio su ON s.codservicio = su.codservicio
+                INNER JOIN cliente c ON su.codcliente = c.codcliente
+                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+                INNER JOIN taxi t ON s.codconductor = t.codtaxi
+                LEFT JOIN conductor_horario_calendario chc 
+                    ON chc.id_conductor = s.codconductor
+                    AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
+                CROSS JOIN LATERAL (
+                    SELECT 
+                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+                ) dates
+                WHERE s.codconductor = @CodConductor
+                  AND dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+                  AND su.codcliente NOT IN (39953, 4175)
+                  AND su.orden > 0
+                  AND s.estado <> 'C'
+                ORDER BY dates.fecha_dt";
 
             var parameters = new
             {
@@ -4556,44 +4556,44 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<List<ServicioDetalle>> ReporteTodosConductores(string fechaini, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
-        SELECT 
-            s.codservicio,
-            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-            s.empresa AS Empresa, 
-            s.tipo AS Tipo, 
-            s.numero AS Numero, 
-            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-            c.apellidos AS Apellidos, 
-            l.direccion AS Direccion, 
-            l.distrito AS Distrito, 
-            s.unidad AS Unidad, 
-            t.apellidos AS ApellidosConductor,
-            chc.turno AS Turno,
-            chc.hora_inicio AS HoraInicioTurno,
-            t.unidadasig AS Unidadasig,
-            s.codconductor AS CodConductor
-        FROM servicio s
-        INNER JOIN subservicio su ON s.codservicio = su.codservicio
-        INNER JOIN cliente c ON su.codcliente = c.codcliente
-        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-        INNER JOIN taxi t ON s.codconductor = t.codtaxi
-        LEFT JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = s.codconductor
-            AND chc.fecha = STR_TO_DATE(@FechaBase, '%d/%m/%Y')
-        CROSS JOIN LATERAL (
-            SELECT 
-                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-        ) dates
-        WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                 AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
-          AND su.codcliente NOT IN (39953, 4175)
-          AND su.orden > 0 
-          AND s.codusuario = @Codusuario
-          AND s.estado <> 'C'";
+                SELECT 
+                    s.codservicio,
+                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+                    s.empresa AS Empresa, 
+                    s.tipo AS Tipo, 
+                    s.numero AS Numero, 
+                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+                    c.apellidos AS Apellidos, 
+                    l.direccion AS Direccion, 
+                    l.distrito AS Distrito, 
+                    s.unidad AS Unidad, 
+                    t.apellidos AS ApellidosConductor,
+                    chc.turno AS Turno,
+                    chc.hora_inicio AS HoraInicioTurno,
+                    t.unidadasig AS Unidadasig,
+                    s.codconductor AS CodConductor
+                FROM servicio s
+                INNER JOIN subservicio su ON s.codservicio = su.codservicio
+                INNER JOIN cliente c ON su.codcliente = c.codcliente
+                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+                INNER JOIN taxi t ON s.codconductor = t.codtaxi
+               INNER JOIN conductor_horario_calendario chc 
+            ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
+            AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
+                CROSS JOIN LATERAL (
+                    SELECT 
+                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+                ) dates
+                WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+                  AND su.codcliente NOT IN (39953, 4175)
+                  AND su.orden > 0 
+                  AND s.codusuario = @Codusuario
+                  AND s.estado <> 'C'";
 
             if (codtaxis != null && codtaxis.Any())
                 sql += " AND s.codconductor IN @CodTaxis";
@@ -4602,11 +4602,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
             DateTime fechaBase = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
             string fechaIniCompleta = $"{fechaini} 00:00";
-            string fechaFinCompleta = fechaBase.AddDays(1).AddHours(12).ToString("dd/MM/yyyy HH:mm");
+            string fechaFinCompleta = $"{fechaini} 23:59";
 
             var parameters = new
             {
-                FechaBase = fechaini,
                 FechaIni = fechaIniCompleta,
                 FechaFin = fechaFinCompleta,
                 Codusuario = usuario,
@@ -4619,21 +4618,14 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var resultadoFiltrado = resultado.Where(s =>
             {
-                bool tieneHoraInicio = !string.IsNullOrWhiteSpace(s.HoraInicioTurno);
-
                 if (!DateTime.TryParseExact($"{s.Fecha} {s.HoraTurno}", "dd/MM/yyyy HH:mm",
                     CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDtServicio))
                     return false;
 
-                if (tieneHoraInicio)
-                {
-                    DateTime inicioTurno = DateTime.ParseExact(
-                        $"{fechaini} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                    DateTime finTurno = inicioTurno.AddHours(12);
-                    return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
-                }
-
-                return s.Fecha == fechaini_str;
+                DateTime inicioTurno = DateTime.ParseExact(
+                    $"{s.Fecha} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                DateTime finTurno = inicioTurno.AddHours(12);
+                return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
             }).ToList();
 
             return resultadoFiltrado;
@@ -4643,44 +4635,44 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
-        SELECT 
-            s.codservicio,
-            DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
-            s.empresa AS Empresa, 
-            s.tipo AS Tipo, 
-            s.numero AS Numero, 
-            DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
-            DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
-            DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
-            c.apellidos AS Apellidos, 
-            l.direccion AS Direccion, 
-            l.distrito AS Distrito, 
-            s.unidad AS Unidad, 
-            t.apellidos AS ApellidosConductor,
-            chc.turno AS Turno,
-            chc.hora_inicio AS HoraInicioTurno,
-            t.unidadasig AS Unidadasig,
-            s.codconductor AS CodConductor
-        FROM servicio s
-        INNER JOIN subservicio su ON s.codservicio = su.codservicio
-        INNER JOIN cliente c ON su.codcliente = c.codcliente
-        INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
-        INNER JOIN taxi t ON s.codconductor = t.codtaxi
-        LEFT JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = s.codconductor
+                SELECT 
+                    s.codservicio,
+                    DATE_FORMAT(dates.fecha_dt, '%d/%m/%Y') AS Fecha,
+                    s.empresa AS Empresa, 
+                    s.tipo AS Tipo, 
+                    s.numero AS Numero, 
+                    DATE_FORMAT(dates.fecha_dt, '%H:%i') AS HoraTurno,
+                    DATE_FORMAT(dates.fechaini_dt, '%H:%i') AS HoraInicio,
+                    DATE_FORMAT(dates.fechafin_dt, '%H:%i') AS HoraAto,
+                    c.apellidos AS Apellidos, 
+                    l.direccion AS Direccion, 
+                    l.distrito AS Distrito, 
+                    s.unidad AS Unidad, 
+                    t.apellidos AS ApellidosConductor,
+                    chc.turno AS Turno,
+                    chc.hora_inicio AS HoraInicioTurno,
+                    t.unidadasig AS Unidadasig,
+                    s.codconductor AS CodConductor
+                FROM servicio s
+                INNER JOIN subservicio su ON s.codservicio = su.codservicio
+                INNER JOIN cliente c ON su.codcliente = c.codcliente
+                INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
+                INNER JOIN taxi t ON s.codconductor = t.codtaxi
+                INNER JOIN conductor_horario_calendario chc 
+            ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
             AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
-        CROSS JOIN LATERAL (
-            SELECT 
-                STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
-                STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
-                STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
-        ) dates
-        WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                 AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
-          AND su.codcliente NOT IN (39953, 4175)
-          AND su.orden > 0 
-          AND s.codusuario = @Codusuario 
-          AND s.estado <> 'C'";
+                CROSS JOIN LATERAL (
+                    SELECT 
+                        STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
+                        STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
+                        STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
+                ) dates
+                WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
+                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+                  AND su.codcliente NOT IN (39953, 4175)
+                  AND su.orden > 0 
+                  AND s.codusuario = @Codusuario 
+                  AND s.estado <> 'C'";
 
             if (codtaxis != null && codtaxis.Any())
                 sql += " AND s.codconductor IN @CodTaxis";
@@ -4691,7 +4683,7 @@ namespace VelsatBackendAPI.Data.Repositories
             DateTime fechaBaseFin = DateTime.ParseExact(fechafin, "dd/MM/yyyy", null);
 
             string fechaIniCompleta = $"{fechaini} 00:00";
-            string fechaFinCompleta = fechaBaseFin.AddDays(1).AddHours(12).ToString("dd/MM/yyyy HH:mm");
+            string fechaFinCompleta = $"{fechafin} 23:59";
 
             var parameters = new
             {
@@ -4709,17 +4701,10 @@ namespace VelsatBackendAPI.Data.Repositories
                     CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDtServicio))
                     return false;
 
-                if (!string.IsNullOrWhiteSpace(s.HoraInicioTurno))
-                {
-                    // El JOIN ya trajo el horario exacto del día del servicio desde el calendario
-                    DateTime inicioTurno = DateTime.ParseExact(
-                        $"{s.Fecha} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                    DateTime finTurno = inicioTurno.AddHours(12);
-                    return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
-                }
-
-                return fechaDtServicio >= fechaBaseIni &&
-                       fechaDtServicio <= fechaBaseFin.AddHours(23).AddMinutes(59);
+                DateTime inicioTurno = DateTime.ParseExact(
+                    $"{s.Fecha} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+                DateTime finTurno = inicioTurno.AddHours(12);
+                return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
             }).ToList();
 
             return resultadoFiltrado;

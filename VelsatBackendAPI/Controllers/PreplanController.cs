@@ -3686,7 +3686,7 @@ namespace VelsatBackendAPI.Controllers
                         worksheet.Cell(filaActual, 16).Value = servicio.ApellidosConductor ?? "";
                         int cantServicios = conteoporConductor.TryGetValue(servicio.CodConductor, out var cnt) ? cnt : 0;
                         worksheet.Cell(filaActual, 17).Value = cantServicios;
-                        worksheet.Cell(filaActual, 18).Value = FormatearTurno(servicio.Turno, servicio.HoraInicioTurno);
+                        worksheet.Cell(filaActual, 18).Value = FormatearTurno(servicio.HoraInicioTurno);
 
                         var rango = worksheet.Range(filaActual, 2, filaActual, 18);
                         rango.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -3737,22 +3737,15 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        private string FormatearTurno(string turno, string horaInicio)
+        private string FormatearTurno(string horaInicio)
         {
-            // Tiene turno y hora → calcular periodo normal
-            if (!string.IsNullOrEmpty(turno) && !string.IsNullOrEmpty(horaInicio))
+            if (TimeSpan.TryParse(horaInicio, out var ts))
             {
-                if (TimeSpan.TryParse(horaInicio, out var ts))
-                {
-                    var fin = ts.Add(TimeSpan.FromHours(12));
-                    fin = new TimeSpan(fin.Ticks % TimeSpan.TicksPerDay);
-                    string nombre = turno.ToUpper() == "D" ? "Día" : "Noche";
-                    return $"{nombre} ({horaInicio} - {fin:hh\\:mm})";
-                }
+                var fin = ts.Add(TimeSpan.FromHours(12));
+                fin = new TimeSpan(fin.Ticks % TimeSpan.TicksPerDay);
+                return $"{horaInicio} - {fin:hh\\:mm}";
             }
-
-            // Fallback: no tienen turno u hora de inicio
-            return "00:00 - 23:59";
+            return "";
         }
 
         //Reporte de servicios todos conductores por rango de fechas
@@ -3982,7 +3975,7 @@ namespace VelsatBackendAPI.Controllers
 
                         int cantServicios = conteoporConductor.TryGetValue(servicio.CodConductor, out var cnt) ? cnt : 0;
                         worksheet.Cell(filaActual, 17).Value = cantServicios;
-                        worksheet.Cell(filaActual, 18).Value = FormatearTurno(servicio.Turno, servicio.HoraInicioTurno);
+                        worksheet.Cell(filaActual, 18).Value = FormatearTurno(servicio.HoraInicioTurno);
 
                         var rango = worksheet.Range(filaActual, 2, filaActual, 18);
                         rango.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
