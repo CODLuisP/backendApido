@@ -1373,7 +1373,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private async Task<List<Servicio>> ControlServiciosMovil(string fechaini, string fechafin, string usu)
         {
-            string sql = @"Select s.costototal, s.owner, s.numero, s.codservicio, s.tipoarea, s.tipo, s.totalpax, s.numeromovil, s.empresa, s.grupo, s.fecha, s.unidad, s.fechainifin, s.fechaini, s.fechafin, s.fecplan, s.atolatam, s.gourmetlatam, s.parqueolatam, s.lcclatam, s.codusuario, STR_TO_DATE(s.fecha,'%d/%m/%Y %H:%i') as formato, s.codconductor, s.estado as estadoservicio, s.tipoturismo, s.grupoturismo, s.destino from servicio s where STR_TO_DATE(s.fecha,'%d/%m/%Y %H:%i')>=STR_TO_DATE(@Fecini,'%d/%m/%Y %H:%i') and STR_TO_DATE(s.fecha,'%d/%m/%Y %H:%i')<=STR_TO_DATE(@Fecfin,'%d/%m/%Y %H:%i') and s.codusuario=@Usuario order by formato, codservicio";
+            string sql = @"Select s.costototal, s.owner, s.numero, s.codservicio, s.tipoarea, s.tipo, s.totalpax, s.numeromovil, s.empresa, s.grupo, s.fecha, s.unidad, s.fechainifin, s.fechaini, s.fechafin, s.horageoato, s.fecplan, s.atolatam, s.gourmetlatam, s.parqueolatam, s.lcclatam, s.codusuario, STR_TO_DATE(s.fecha,'%d/%m/%Y %H:%i') as formato, s.codconductor, s.estado as estadoservicio, s.tipoturismo, s.grupoturismo, s.destino from servicio s where STR_TO_DATE(s.fecha,'%d/%m/%Y %H:%i')>=STR_TO_DATE(@Fecini,'%d/%m/%Y %H:%i') and STR_TO_DATE(s.fecha,'%d/%m/%Y %H:%i')<=STR_TO_DATE(@Fecfin,'%d/%m/%Y %H:%i') and s.codusuario=@Usuario order by formato, codservicio";
 
             var parameters = new { Fecini = fechaini, Fecfin = fechafin, Usuario = usu };
 
@@ -1422,6 +1422,7 @@ namespace VelsatBackendAPI.Data.Repositories
                         Fecplan = row.fecplan ?? string.Empty,
                         Newfechaini = row.fechaini ?? string.Empty,
                         Newfechafni = row.fechafin ?? string.Empty,
+                        Horageoato = row.horageoato ?? string.Empty,
                         Estado = row.estadoservicio ?? string.Empty,
                         Area = row.tipoarea != null ? "TURISMO" : "TEP",
                         Tipo = row.tipoarea != null ? (row.tipoturismo ?? string.Empty) : (row.tipo ?? string.Empty),

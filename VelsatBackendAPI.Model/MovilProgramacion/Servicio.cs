@@ -28,6 +28,7 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string? Formathoraato {  get; set; }
         public string? Newfechaini { get; set; }
         public string? Newfechafni { get; set; }
+        public string? Horageoato { get; set; }
         public string? Fecasignacion { get; set; }
         public string? Grupo { get; set; }
         public string? Numguia { get; set; }
