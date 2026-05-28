@@ -4256,5 +4256,23 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, $"Error: {ex.Message}");
             }
         }
+
+        [HttpPut("horallegadageo")]
+        public async Task<IActionResult> InsertarHorarioLlegadaGeocerca([FromBody] List<GeocercaServicio> listaServicios)
+        {
+            if (listaServicios == null || !listaServicios.Any())
+                return BadRequest("La lista de servicios está vacía.");
+
+            try
+            {
+                var result = await _uow.PreplanRepository.InsertarHorarioLlegadaGeocerca(listaServicios);
+                _uow.SaveChanges();
+                return Ok(new { actualizados = result });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar horario geocerca", error = ex.Message });
+            }
+        }
     }
 }

@@ -149,5 +149,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         //Reporte para completar registros LATAM
         Task<CompletarServiciosLatamResult> CompletarServiciosLatam(List<RegistroLatam> registros, string fecha, string codusuario);
+
+        //Insertar horario de llegada por geocerca
+        Task<int> InsertarHorarioLlegadaGeocerca(List<GeocercaServicio> listaServicios);
     }
 }

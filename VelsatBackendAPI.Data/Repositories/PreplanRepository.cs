@@ -4838,5 +4838,18 @@ namespace VelsatBackendAPI.Data.Repositories
             public int Codservicio { get; set; }
             public string Numero { get; set; }
         }
+
+        public async Task<int> InsertarHorarioLlegadaGeocerca(List<GeocercaServicio> listaServicios)
+        {
+            const string sql = "UPDATE servicio SET horageoato = @FechaObtenida WHERE codservicio = @Codservicio";
+
+            var result = await _doConnection.ExecuteAsync(
+                sql,
+                listaServicios,
+                transaction: _doTransaction
+            );
+
+            return result;
+        }
     }
 }
