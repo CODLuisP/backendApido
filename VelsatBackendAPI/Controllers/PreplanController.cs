@@ -809,7 +809,7 @@ namespace VelsatBackendAPI.Controllers
 
                 // Cabeceras
                 var headers = new[]
-                {"ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV", "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO", "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO", "NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR"};
+                {"ITEM", "FECHA", "CLIENTE", "RECOJO/REPARTO", "N/SERV", "HORA TURNO", "HORA DE INICIO", "HORA LLEGADA ATO", "DIFERENCIA TIEMPO", "TIEMPO PROGRAMADO", "HORA GEOCERCA" ,"NOMBRES", "DIRECCIÓN", "DISTRITO", "PLACA", "CONDUCTOR"};
 
                 worksheet.Row(12).Height = 40;
 
@@ -834,11 +834,12 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Column(9).Width = 14;
                 worksheet.Column(10).Width = 14;
                 worksheet.Column(11).Width = 14;
-                worksheet.Column(12).Width = 45;
-                worksheet.Column(13).Width = 75;
-                worksheet.Column(14).Width = 18;
-                worksheet.Column(15).Width = 14;
-                worksheet.Column(16).Width = 40;
+                worksheet.Column(12).Width = 14;
+                worksheet.Column(13).Width = 45;
+                worksheet.Column(14).Width = 75;
+                worksheet.Column(15).Width = 18;
+                worksheet.Column(16).Width = 14;
+                worksheet.Column(17).Width = 40;
 
                 worksheet.ShowGridLines = false;
 
@@ -939,16 +940,16 @@ namespace VelsatBackendAPI.Controllers
                     // Columna 11: Diferencia entre columna 8 (Hora de Inicio) y columna 7 (Hora ATO)
                     string tiempoProgramado = CalcularDiferenciaTiempo(horaInicio, horaAto);
                     worksheet.Cell(fila, 11).Value = tiempoProgramado;
-
-                    worksheet.Cell(fila, 12).Value = pasajero?.Nombre ?? "";
-                    worksheet.Cell(fila, 13).Value = lugar?.Direccion ?? "";
-                    worksheet.Cell(fila, 14).Value = lugar?.Distrito ?? "";
-                    worksheet.Cell(fila, 15).Value = unidad?.Codunidad ?? "";
-                    worksheet.Cell(fila, 16).Value = conductor?.Apepate ?? "";
+                    worksheet.Cell(fila, 12).Value = servicio?.Horageoato?.Split(' ').ElementAtOrDefault(1) ?? "";
+                    worksheet.Cell(fila, 13).Value = pasajero?.Nombre ?? "";
+                    worksheet.Cell(fila, 14).Value = lugar?.Direccion ?? "";
+                    worksheet.Cell(fila, 15).Value = lugar?.Distrito ?? "";
+                    worksheet.Cell(fila, 16).Value = unidad?.Codunidad ?? "";
+                    worksheet.Cell(fila, 17).Value = conductor?.Apepate ?? "";
 
                     // Aplicar estilos de centrado y color por grupo de N/SERV
                     int colInicio = 2; // Columna B
-                    int colFin = 16;   // Última columna según tu estructura
+                    int colFin = 17;   // Última columna según tu estructura
 
                     var rango = worksheet.Range(fila, colInicio, fila, colFin);
 
@@ -1328,16 +1329,10 @@ namespace VelsatBackendAPI.Controllers
                             fechaValida = true;
                         }
 
-                        // Log para debug (puedes remover en producción)
-                        if (!fechaValida)
-                        {
-                            Console.WriteLine($"[WARNING] No se pudo parsear la fecha: '{servicio.Fecha}' para el servicio");
-                        }
                     }
                     worksheet.Cell(fila, 9).Value = horaAto;
-
                     worksheet.Cell(fila, 10).Value = servicio?.Formathorarec ?? "";
-                    worksheet.Cell(fila, 11).Value = servicio?.Gps?.Fecha ?? "";
+                    worksheet.Cell(fila, 11).Value = servicio?.Horageoato?.Split(' ').ElementAtOrDefault(1) ?? "";
                     worksheet.Cell(fila, 12).Value = pedido.Formathorarec ?? "";
                     worksheet.Cell(fila, 13).Value = "";
                     worksheet.Cell(fila, 14).Value = pedido.Orden ?? "";

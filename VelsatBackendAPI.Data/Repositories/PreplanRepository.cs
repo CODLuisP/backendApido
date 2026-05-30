@@ -2489,6 +2489,7 @@ namespace VelsatBackendAPI.Data.Repositories
             su.codpedido as codpedido, 
             s.fecha as fechaservicio, 
             s.fechafin as fecfinservicio, 
+            s.horageoato,
             s.empresa, 
             s.tipo, 
             su.fecha, 
@@ -2534,6 +2535,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     Numero = row.numero,
                     Fecha = row.fechaservicio,
                     Fecfin = row.fecfinservicio,
+                    Horageoato = row.horageoato,
                     Empresa = row.empresa,
                     Tipo = row.tipo,
                     Numeromovil = row.numeromovil,
@@ -2750,6 +2752,7 @@ namespace VelsatBackendAPI.Data.Repositories
             s.tipo, 
             s.numero, 
             FROM_UNIXTIME(s.fechainifin,'%H:%i') as fecgeo, 
+            s.horageoato,
             su.fecha, 
             su.fechafin as fechaaten, 
             c.codlan, 
@@ -2808,10 +2811,11 @@ namespace VelsatBackendAPI.Data.Repositories
                     Numeromovil = row.numeromovil,
                     Numpax = row.totalpax,
                     Codservicio = row.codservicio.ToString(),
-                    Gps = new Gps
-                    {
-                        Fecha = string.IsNullOrEmpty(row.fecgeo) ? "NO ATENDIDO" : row.fecgeo
-                    },
+                    //Gps = new Gps
+                    //{
+                    //    Fecha = string.IsNullOrEmpty(row.fecgeo) ? "NO ATENDIDO" : row.fecgeo
+                    //},
+                    Horageoato = string.IsNullOrEmpty(row.horageoato) ? "NO ATENDIDO" : row.horageoato,
                     Estado = string.IsNullOrEmpty(row.fecgeo) ? "P" : "A",
                     Zona = new Zona { Codigo = row.codzona },
                     Unidad = new Unidad { Codunidad = row.unidad },
