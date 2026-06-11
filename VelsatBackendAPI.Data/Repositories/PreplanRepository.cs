@@ -58,7 +58,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 "REP" => "REP",
                 "REP SI" => "REP SI",
                 "TALMA" => "TALMA",
-                "TERPEL" => "TERPEL",             
+                "TERPEL" => "TERPEL",
                 _ => "AVIANCA"
             };
         }
@@ -3326,7 +3326,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Fecvalidbrevete = conductor.FecValidBrevete,
                 Turno = conductor.Turno,
                 Horainicio = conductor.Horainicio,
-                Tipo =  conductor.Tipo,
+                Tipo = conductor.Tipo,
                 Unidadasig = conductor.Unidadasig
             };
 
@@ -4584,17 +4584,19 @@ namespace VelsatBackendAPI.Data.Repositories
                 INNER JOIN cliente c ON su.codcliente = c.codcliente
                 INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
                 INNER JOIN taxi t ON s.codconductor = t.codtaxi
-               INNER JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
-            AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
+                INNER JOIN conductor_horario_calendario chc 
+                    ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
+                    AND chc.fecha = DATE(STR_TO_DATE(@FechaBase, '%d/%m/%Y'))
                 CROSS JOIN LATERAL (
                     SELECT 
                         STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
                         STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
                         STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
                 ) dates
-                WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+                WHERE dates.fecha_dt BETWEEN 
+                        TIMESTAMP(DATE(STR_TO_DATE(@FechaBase, '%d/%m/%Y')), chc.hora_inicio)
+                    AND 
+                        TIMESTAMP(DATE(STR_TO_DATE(@FechaBase, '%d/%m/%Y')), chc.hora_inicio) + INTERVAL 12 HOUR
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0 
                   AND s.codusuario = @Codusuario
@@ -4605,39 +4607,19 @@ namespace VelsatBackendAPI.Data.Repositories
 
             sql += " ORDER BY t.apellidos, dates.fecha_dt";
 
-            DateTime fechaBase = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
-            string fechaIniCompleta = $"{fechaini} 00:00";
-            string fechaFinCompleta = $"{fechaini} 23:59";
-
             var parameters = new
             {
-                FechaIni = fechaIniCompleta,
-                FechaFin = fechaFinCompleta,
+                FechaBase = fechaini,
                 Codusuario = usuario,
                 CodTaxis = codtaxis
             };
 
-            var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
-
-            string fechaini_str = fechaBase.ToString("dd/MM/yyyy");
-
-            var resultadoFiltrado = resultado.Where(s =>
-            {
-                if (!DateTime.TryParseExact($"{s.Fecha} {s.HoraTurno}", "dd/MM/yyyy HH:mm",
-                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDtServicio))
-                    return false;
-
-                DateTime inicioTurno = DateTime.ParseExact(
-                    $"{s.Fecha} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                DateTime finTurno = inicioTurno.AddHours(12);
-                return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
-            }).ToList();
-
-            return resultadoFiltrado;
+            return (await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction)).ToList();
         }
 
         //Reporte de servicios todos conductores por rango de fechas
-        public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario, List<int>? codtaxis = null)
+        public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(
+    string fechaini, string fechafin, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
                 SELECT 
@@ -4663,17 +4645,22 @@ namespace VelsatBackendAPI.Data.Repositories
                 INNER JOIN cliente c ON su.codcliente = c.codcliente
                 INNER JOIN lugarcliente l ON su.codubicli = l.codlugar
                 INNER JOIN taxi t ON s.codconductor = t.codtaxi
-                INNER JOIN conductor_horario_calendario chc 
-            ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
-            AND chc.fecha = DATE(STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i'))
                 CROSS JOIN LATERAL (
                     SELECT 
                         STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS fecha_dt,
                         STR_TO_DATE(s.fechaini, '%d/%m/%Y %H:%i') AS fechaini_dt,
                         STR_TO_DATE(s.fechafin, '%d/%m/%Y %H:%i') AS fechafin_dt
                 ) dates
-                WHERE dates.fecha_dt BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') 
-                                         AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
+                INNER JOIN conductor_horario_calendario chc 
+                    ON chc.id_conductor = CAST(s.codconductor AS UNSIGNED)
+                    AND chc.fecha BETWEEN DATE(STR_TO_DATE(@FechaIni, '%d/%m/%Y'))
+                                      AND DATE(STR_TO_DATE(@FechaFin, '%d/%m/%Y'))
+                    AND dates.fecha_dt BETWEEN 
+                        TIMESTAMP(chc.fecha, chc.hora_inicio)
+                        AND TIMESTAMP(chc.fecha, chc.hora_inicio) + INTERVAL 12 HOUR
+                WHERE dates.fecha_dt BETWEEN 
+                          DATE(STR_TO_DATE(@FechaIni, '%d/%m/%Y'))
+                      AND DATE(STR_TO_DATE(@FechaFin, '%d/%m/%Y')) + INTERVAL 1 DAY
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0 
                   AND s.codusuario = @Codusuario 
@@ -4684,35 +4671,17 @@ namespace VelsatBackendAPI.Data.Repositories
 
             sql += " ORDER BY t.apellidos, dates.fecha_dt";
 
-            DateTime fechaBaseIni = DateTime.ParseExact(fechaini, "dd/MM/yyyy", null);
-            DateTime fechaBaseFin = DateTime.ParseExact(fechafin, "dd/MM/yyyy", null);
-
-            string fechaIniCompleta = $"{fechaini} 00:00";
-            string fechaFinCompleta = $"{fechafin} 23:59";
-
             var parameters = new
             {
-                FechaIni = fechaIniCompleta,
-                FechaFin = fechaFinCompleta,
+                FechaIni = fechaini,
+                FechaFin = fechafin,
                 Codusuario = usuario,
                 CodTaxis = codtaxis
             };
 
-            var resultado = await _doConnection.QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction);
-
-            var resultadoFiltrado = resultado.Where(s =>
-            {
-                if (!DateTime.TryParseExact($"{s.Fecha} {s.HoraTurno}", "dd/MM/yyyy HH:mm",
-                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDtServicio))
-                    return false;
-
-                DateTime inicioTurno = DateTime.ParseExact(
-                    $"{s.Fecha} {s.HoraInicioTurno}", "dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                DateTime finTurno = inicioTurno.AddHours(12);
-                return fechaDtServicio >= inicioTurno && fechaDtServicio <= finTurno;
-            }).ToList();
-
-            return resultadoFiltrado;
+            return (await _doConnection
+                .QueryAsync<ServicioDetalle>(sql, parameters, transaction: _doTransaction))
+                .ToList();
         }
 
 
