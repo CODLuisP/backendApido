@@ -167,5 +167,20 @@ namespace VelsatBackendAPI.Data.Repositories
 
             return resultado;
         }
+
+        public async Task<IEnumerable<AuditoriaSutran>> GetUltimosRegistrosAuditoriaSutran(string accountID, string deviceID)
+        {
+            var sql = @"SELECT id, accountID, deviceID, fecharegistro, lastenvio, lastrespuesta
+                        FROM auditoriasutran
+                        WHERE accountID = @AccountID AND deviceID = @DeviceID
+                        ORDER BY fecharegistro DESC
+                        LIMIT 5";
+
+            var resultado = await _defaultConnection.QueryAsync<AuditoriaSutran>(sql,
+                new { AccountID = accountID, DeviceID = deviceID },
+                transaction: _defaultTransaction);
+
+            return resultado;
+        }
     }
 }

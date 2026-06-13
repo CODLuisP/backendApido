@@ -35,5 +35,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<IEnumerable<ConexDevice>> GetConexDesconex();
 
+        Task<IEnumerable<AuditoriaSutran>> GetUltimosRegistrosAuditoriaSutran(string accountID, string deviceID);
+
     }
 }
