@@ -2420,19 +2420,19 @@ namespace VelsatBackendAPI.Data.Repositories
                     if (!string.IsNullOrEmpty(p.Fecha))
                     {
                         var fechapedido = p.Fecha.Split(' ');
-                        p.Formathorarec = fechapedido[1];
+                        p.Formathorarec = fechapedido.Length > 1 ? fechapedido[1] : "";
                     }
 
                     if (!string.IsNullOrEmpty(p.Fecaten))
                     {
                         var fechapedidoaten = p.Fecaten.Split(' ');
-                        p.Formatfecrec = fechapedidoaten[1];
+                        p.Formatfecrec = fechapedidoaten.Length > 1 ? fechapedidoaten[1] : "";
                     }
 
                     if (!string.IsNullOrEmpty(s.Fecfin))
                     {
                         var fecfinserv = s.Fecfin.Split(' ');
-                        s.Formathorarec = fecfinserv[1];
+                        s.Formathorarec = fecfinserv.Length > 1 ? fecfinserv[1] : "";
                     }
 
                     if (s.Tipo == "I") s.Tipo = "Recojo";
@@ -2637,19 +2637,19 @@ namespace VelsatBackendAPI.Data.Repositories
                     if (!string.IsNullOrEmpty(p.Fecha))
                     {
                         var fechapedido = p.Fecha.Split(' ');
-                        p.Formathorarec = fechapedido[1];
+                        p.Formathorarec = fechapedido.Length > 1 ? fechapedido[1] : "";
                     }
 
                     if (!string.IsNullOrEmpty(p.Fecaten))
                     {
                         var fechapedidoaten = p.Fecaten.Split(' ');
-                        p.Formatfecrec = fechapedidoaten[1];
+                        p.Formatfecrec = fechapedidoaten.Length > 1 ? fechapedidoaten[1] : "";
                     }
 
                     if (!string.IsNullOrEmpty(s.Fecfin))
                     {
                         var fecfinserv = s.Fecfin.Split(' ');
-                        s.Formathorarec = fecfinserv[1];
+                        s.Formathorarec = fecfinserv.Length > 1 ? fecfinserv[1] : "";
                     }
 
                     if (s.Tipo == "I") s.Tipo = "Recojo";
