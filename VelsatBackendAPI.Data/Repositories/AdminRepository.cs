@@ -168,6 +168,17 @@ namespace VelsatBackendAPI.Data.Repositories
             return resultado;
         }
 
+        public async Task<int> HabilitarSutran(string accountID, string deviceID, char valor)
+        {
+            var sql = @"UPDATE device SET sutran = @Valor WHERE accountID = @AccountID AND deviceID = @DeviceID";
+
+            var resultado = await _defaultConnection.ExecuteAsync(sql,
+                new { Valor = valor, AccountID = accountID, DeviceID = deviceID },
+                transaction: _defaultTransaction);
+
+            return resultado;
+        }
+
         public async Task<IEnumerable<AuditoriaSutran>> GetUltimosRegistrosAuditoriaSutran(string accountID, string deviceID)
         {
             var sql = @"SELECT id, accountID, deviceID, fecharegistro, lastenvio, lastrespuesta

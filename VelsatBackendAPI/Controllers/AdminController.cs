@@ -311,6 +311,33 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        [HttpPut("HabilitarSutran")]
+        public async Task<IActionResult> HabilitarSutran(string accountID, string deviceID, char valor)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(accountID) || string.IsNullOrEmpty(deviceID))
+                {
+                    return BadRequest(new { message = "El accountID y deviceID no pueden ser nulos o vacíos" });
+                }
+
+                var rowsAffected = await _uow.AdminRepository.HabilitarSutran(accountID, deviceID, valor);
+
+                if (rowsAffected == 0)
+                {
+                    return NotFound(new { message = "Dispositivo no encontrado" });
+                }
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Sutran actualizado correctamente", accountID, deviceID, valor });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar Sutran", error = ex.Message });
+            }
+        }
+
         [HttpGet("GetAuditoriaSutran")]
         public async Task<IActionResult> GetUltimosRegistrosAuditoriaSutran(string accountID, string deviceID)
         {
