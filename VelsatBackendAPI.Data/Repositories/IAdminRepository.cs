@@ -39,5 +39,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> HabilitarSutran(string accountID, string deviceID, char valor);
 
+        Task<IEnumerable<DeviceSutran>> GetUnidadesSutran();
+
     }
 }

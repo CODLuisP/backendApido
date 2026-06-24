@@ -311,6 +311,20 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        [HttpGet("GetUnidadesSutran")]
+        public async Task<IActionResult> GetUnidadesSutran()
+        {
+            try
+            {
+                var devices = await _readOnlyUow.AdminRepository.GetUnidadesSutran();
+                return Ok(devices);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener las unidades Sutran", error = ex.Message });
+            }
+        }
+
         [HttpPut("HabilitarSutran")]
         public async Task<IActionResult> HabilitarSutran(string accountID, string deviceID, char valor)
         {
