@@ -4468,10 +4468,10 @@ namespace VelsatBackendAPI.Controllers
                     celdaTM.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
 
                     // PROM
-                    decimal prom = diasConServicio > 0 ? Math.Round((decimal)total / diasConServicio, 3) : 0;
+                    int prom = diasConServicio > 0 ? (int)Math.Round((decimal)total / diasConServicio, MidpointRounding.AwayFromZero) : 0;
                     var celdaProm = ws.Cell(fila, colProm);
-                    celdaProm.Value = (double)prom;
-                    celdaProm.Style.NumberFormat.Format = "0.000";
+                    celdaProm.Value = prom;
+                    celdaProm.Style.NumberFormat.Format = "0";
                     celdaProm.Style.Font.FontName = "Calibri";
                     celdaProm.Style.Font.FontSize = 10;
                     celdaProm.Style.Font.SetBold();
