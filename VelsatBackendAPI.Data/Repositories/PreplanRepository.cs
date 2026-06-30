@@ -4827,63 +4827,107 @@ namespace VelsatBackendAPI.Data.Repositories
         // Resumen mensual de cantidad de servicios por conductor por día
         public async Task<List<ResumenServicioConductorDia>> ResumenServiciosMesConductores(int anio, int mes, string usuario, int? codConductor = null)
         {
-            string sql = @"
+            // Query 1: calendario del mes — tabla pequeña, respuesta rápida
+            string sqlCalendario = @"
                 SELECT
-                    CAST(t.codtaxi AS CHAR) AS CodConductor,
-                    t.apellidos AS Conductor,
-                    COALESCE(t.unidadasig, '') AS Placa,
-                    CONCAT(
-                        CASE chc.turno
-                            WHEN 'DIA' THEN 'DIA'
-                            WHEN 'NOCHE' THEN 'NOCHE'
-                            ELSE chc.turno
-                        END,
-                        ' (',
-                        TIME_FORMAT(chc.hora_inicio, '%H:%i'),
-                        ' - ',
-                        TIME_FORMAT(ADDTIME(chc.hora_inicio, '12:00:00'), '%H:%i'),
-                        ')'
-                    ) AS Turno,
-                    TIME_FORMAT(chc.hora_inicio, '%H:%i') AS HoraInicioTurno,
-                    DAY(chc.fecha) AS Dia,
-                    COUNT(DISTINCT s.numero) AS Cantidad
+                    chc.id_conductor                                         AS IdConductor,
+                    CAST(t.codtaxi AS CHAR)                                  AS CodConductor,
+                    t.apellidos                                              AS Conductor,
+                    COALESCE(t.unidadasig, '')                               AS Placa,
+                    CONCAT(chc.turno,
+                           ' (', TIME_FORMAT(chc.hora_inicio, '%H:%i'),
+                           ' - ', TIME_FORMAT(ADDTIME(chc.hora_inicio, '12:00:00'), '%H:%i'),
+                           ')')                                              AS Turno,
+                    TIME_FORMAT(chc.hora_inicio, '%H:%i')                    AS HoraInicioTurno,
+                    DAY(chc.fecha)                                           AS Dia,
+                    TIMESTAMP(chc.fecha, chc.hora_inicio)                    AS TurnoInicio,
+                    TIMESTAMP(chc.fecha, chc.hora_inicio) + INTERVAL 12 HOUR AS TurnoFin
                 FROM conductor_horario_calendario chc
                 INNER JOIN taxi t ON t.codtaxi = chc.id_conductor
-                    AND t.estado = 'A'
+                    AND t.estado    = 'A'
                     AND t.codusuario = @Usuario
-                LEFT JOIN servicio s
-                    ON CAST(s.codconductor AS UNSIGNED) = chc.id_conductor
-                    AND s.codusuario = @Usuario
-                    AND s.estado <> 'C'
-                    AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') BETWEEN
-                        TIMESTAMP(chc.fecha, chc.hora_inicio)
-                        AND TIMESTAMP(chc.fecha, chc.hora_inicio) + INTERVAL 12 HOUR
-                    AND EXISTS (
-                        SELECT 1 FROM subservicio su
-                        WHERE su.codservicio = s.codservicio
-                          AND su.codcliente NOT IN (39953, 4175)
-                          AND su.orden > 0
-                    )
                 WHERE YEAR(chc.fecha) = @Anio
                   AND MONTH(chc.fecha) = @Mes";
 
             if (codConductor.HasValue)
-                sql += " AND chc.id_conductor = @CodConductor";
+                sqlCalendario += " AND chc.id_conductor = @CodConductor";
 
-            sql += @"
-                GROUP BY t.codtaxi, t.apellidos, t.unidadasig, chc.turno, chc.hora_inicio, chc.fecha
-                ORDER BY t.apellidos, chc.fecha";
+            var calendario = (await _doConnection.QueryAsync<dynamic>(
+                sqlCalendario,
+                new { Anio = anio, Mes = mes, Usuario = usuario, CodConductor = codConductor },
+                transaction: _doTransaction)).ToList();
 
-            var parameters = new
+            if (!calendario.Any())
+                return new List<ResumenServicioConductorDia>();
+
+            // Query 2: servicios del mes filtrados por los conductores del calendario
+            // Al filtrar por IN (lista de conductores) + rango de fechas aproximado,
+            // el motor puede usar el índice de codconductor y reducir drásticamente las filas
+            var conductorIds = calendario
+                .Select(r => (long)r.IdConductor)
+                .Distinct()
+                .ToList();
+
+            // Rango exacto derivado del calendario: cubre desde el primer turno hasta el último (incluyendo nocturnos que pasan al día siguiente)
+            DateTime rangoInicio = calendario.Min(r => (DateTime)r.TurnoInicio);
+            DateTime rangoFin    = calendario.Max(r => (DateTime)r.TurnoFin);
+            string fechaIniStr = rangoInicio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+            string fechaFinStr = rangoFin.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
+            string sqlServicios = @"
+                SELECT s.codconductor, s.numero,
+                       STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') AS FechaDt
+                FROM servicio s
+                INNER JOIN subservicio su ON su.codservicio = s.codservicio
+                    AND su.codcliente NOT IN (39953, 4175)
+                    AND su.orden > 0
+                WHERE s.codusuario = @Usuario
+                  AND s.estado    <> 'C'
+                  AND CAST(s.codconductor AS UNSIGNED) IN @ConductorIds
+                  AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i')
+                      BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i')
+                          AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')";
+
+            var servicios = (await _doConnection.QueryAsync<dynamic>(
+                sqlServicios,
+                new { Usuario = usuario, ConductorIds = conductorIds, FechaIni = fechaIniStr, FechaFin = fechaFinStr },
+                transaction: _doTransaction)).ToList();
+
+            // Join en memoria: O(calendario × servicios_del_mes) — ambos conjuntos son pequeños
+            var resultado = new List<ResumenServicioConductorDia>();
+
+            foreach (var cal in calendario)
             {
-                Anio = anio,
-                Mes = mes,
-                Usuario = usuario,
-                CodConductor = codConductor
-            };
+                DateTime turnoInicio = (DateTime)cal.TurnoInicio;
+                DateTime turnoFin    = (DateTime)cal.TurnoFin;
+                string   codCond     = (string)cal.CodConductor;
 
-            var resultado = await _doConnection.QueryAsync<ResumenServicioConductorDia>(sql, parameters, transaction: _doTransaction);
-            return resultado.ToList();
+                int cantidad = servicios
+                    .Where(s =>
+                        (string)s.codconductor == codCond &&
+                        s.FechaDt != null &&
+                        (DateTime)s.FechaDt >= turnoInicio &&
+                        (DateTime)s.FechaDt <= turnoFin)
+                    .Select(s => (string)s.numero)
+                    .Distinct()
+                    .Count();
+
+                resultado.Add(new ResumenServicioConductorDia
+                {
+                    CodConductor   = codCond,
+                    Conductor      = (string)cal.Conductor,
+                    Placa          = (string)cal.Placa,
+                    Turno          = (string)cal.Turno,
+                    HoraInicioTurno = (string)cal.HoraInicioTurno,
+                    Dia            = (int)cal.Dia,
+                    Cantidad       = cantidad
+                });
+            }
+
+            return resultado
+                .OrderBy(r => r.Conductor)
+                .ThenBy(r => r.Dia)
+                .ToList();
         }
     }
 }
