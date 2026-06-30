@@ -4830,7 +4830,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = @"
                 SELECT
                     CAST(t.codtaxi AS CHAR) AS CodConductor,
-                    CONCAT(t.apellidos, ' - (', t.codtaxi, ')') AS Conductor,
+                    t.apellidos AS Conductor,
                     COALESCE(t.unidadasig, '') AS Placa,
                     CONCAT(
                         CASE chc.turno

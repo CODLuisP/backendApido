@@ -4337,26 +4337,26 @@ namespace VelsatBackendAPI.Controllers
                 rangoTitulo.Style.Font.FontSize = 16;
                 rangoTitulo.Style.Font.SetBold();
 
-                ws.Cell("J7").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-                ws.Cell("J7").Style.Font.FontName = "Calibri";
-                ws.Cell("J7").Style.Font.FontSize = 10;
-                ws.Cell("J7").Style.Font.SetBold();
-                ws.Cell("J7").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                ws.Cell("N7").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                ws.Cell("N7").Style.Font.FontName = "Calibri";
+                ws.Cell("N7").Style.Font.FontSize = 10;
+                ws.Cell("N7").Style.Font.SetBold();
+                ws.Cell("N7").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
-                ws.Cell("J8").Value = $"PERIODO : {nombreMes} {anio}";
-                ws.Cell("J8").Style.Font.FontName = "Calibri";
-                ws.Cell("J8").Style.Font.FontSize = 13;
-                ws.Cell("J8").Style.Font.SetBold();
-                ws.Cell("J8").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                ws.Cell("N8").Value = $"PERIODO : {nombreMes}. {anio}";
+                ws.Cell("N8").Style.Font.FontName = "Calibri";
+                ws.Cell("N8").Style.Font.FontSize = 13;
+                ws.Cell("N8").Style.Font.SetBold();
+                ws.Cell("N8").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
-                ws.Cell("J9").Value = "USUARIO : " + (usuario?.ToUpper() ?? "N/A");
-                ws.Cell("J9").Style.Font.FontName = "Calibri";
-                ws.Cell("J9").Style.Font.FontSize = 10;
-                ws.Cell("J9").Style.Font.SetBold();
-                ws.Cell("J9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                ws.Cell("N9").Value = "USUARIO : " + (usuario?.ToUpper() ?? "N/A");
+                ws.Cell("N9").Style.Font.FontName = "Calibri";
+                ws.Cell("N9").Style.Font.FontSize = 10;
+                ws.Cell("N9").Style.Font.SetBold();
+                ws.Cell("N9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
 
-                ws.Range("B9:J9").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
-                ws.Range("B9:J9").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+                ws.Range("B9:N9").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                ws.Range("B9:N9").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
 
                 // Imágenes
                 string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
@@ -4367,7 +4367,7 @@ namespace VelsatBackendAPI.Controllers
                 string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
                 byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
                 using (var ms2 = new MemoryStream(imageBytes2))
-                    ws.AddPicture(ms2).MoveTo(ws.Cell("I2")).WithSize(240, 80);
+                    ws.AddPicture(ms2).MoveTo(ws.Cell("K2")).WithSize(240, 80);
 
                 // ── ENCABEZADOS DE TABLA ──────────────────────────────────────
                 int filaEncabezado = 11;
