@@ -4269,5 +4269,234 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, new { message = "Error al actualizar horario geocerca", error = ex.Message });
             }
         }
+
+        // Resumen mensual de servicios por conductor
+        [HttpGet("ExcelResumenServiciosMes")]
+        public async Task<IActionResult> ExcelResumenServiciosMes(
+            [FromQuery] string usuario,
+            [FromQuery] int anio,
+            [FromQuery] int mes,
+            [FromQuery] int? codConductor = null)
+        {
+            if (string.IsNullOrEmpty(usuario))
+                return BadRequest(new { mensaje = "El usuario es obligatorio." });
+            if (anio <= 0 || mes < 1 || mes > 12)
+                return BadRequest(new { mensaje = "Año y mes deben ser válidos." });
+
+            try
+            {
+                var resultado = await _readOnlyUow.PreplanRepository.ResumenServiciosMesConductores(anio, mes, usuario, codConductor);
+
+                if (resultado == null || !resultado.Any())
+                    return NotFound(new { mensaje = "No se encontraron datos para los parámetros indicados." });
+
+                var excelBytes = await GenerarExcelResumenMes(resultado, anio, mes, usuario);
+                string fileName = $"Resumen_Servicios_{new DateTime(anio, mes, 1):yyyy-MM}.xlsx";
+
+                return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al generar el resumen mensual.", detalle = ex.Message });
+            }
+        }
+
+        private async Task<byte[]> GenerarExcelResumenMes(List<ResumenServicioConductorDia> datos, int anio, int mes, string usuario)
+        {
+            int diasEnMes = DateTime.DaysInMonth(anio, mes);
+            string nombreMes = new DateTime(anio, mes, 1).ToString("MMM", new System.Globalization.CultureInfo("es-PE")).ToUpper();
+
+            // Agrupar por conductor (clave: CodConductor)
+            var conductores = datos
+                .GroupBy(d => d.CodConductor)
+                .Select(g => new
+                {
+                    CodConductor = g.Key,
+                    Conductor = g.First().Conductor,
+                    Placa = g.First().Placa,
+                    Turno = g.First().Turno,
+                    Dias = g.ToDictionary(d => d.Dia, d => d.Cantidad)
+                })
+                .OrderBy(c => c.Conductor)
+                .ToList();
+
+            using (var workbook = new XLWorkbook())
+            {
+                var ws = workbook.Worksheets.Add("Resumen Mensual");
+
+                // ── CABECERA ──────────────────────────────────────────────────
+                int lastHeaderCol = 3 + diasEnMes + 2; // PLACA(2) CONDUCTOR(3) TURNO(4) días(5..5+días-1) TM PROM
+                var rangoTitulo = ws.Range(2, 3, 5, Math.Min(lastHeaderCol, 12));
+                rangoTitulo.Merge();
+                rangoTitulo.Value = "RESUMEN DE SERVICIOS POR CONDUCTOR - MES";
+                rangoTitulo.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoTitulo.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                rangoTitulo.Style.Font.FontColor = XLColor.White;
+                rangoTitulo.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoTitulo.Style.Font.FontName = "Calibri";
+                rangoTitulo.Style.Font.FontSize = 16;
+                rangoTitulo.Style.Font.SetBold();
+
+                ws.Cell("J7").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                ws.Cell("J7").Style.Font.FontName = "Calibri";
+                ws.Cell("J7").Style.Font.FontSize = 10;
+                ws.Cell("J7").Style.Font.SetBold();
+                ws.Cell("J7").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                ws.Cell("J8").Value = $"PERIODO : {nombreMes} {anio}";
+                ws.Cell("J8").Style.Font.FontName = "Calibri";
+                ws.Cell("J8").Style.Font.FontSize = 13;
+                ws.Cell("J8").Style.Font.SetBold();
+                ws.Cell("J8").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                ws.Cell("J9").Value = "USUARIO : " + (usuario?.ToUpper() ?? "N/A");
+                ws.Cell("J9").Style.Font.FontName = "Calibri";
+                ws.Cell("J9").Style.Font.FontSize = 10;
+                ws.Cell("J9").Style.Font.SetBold();
+                ws.Cell("J9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                ws.Range("B9:J9").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                ws.Range("B9:J9").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+
+                // Imágenes
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                    ws.AddPicture(ms1).MoveTo(ws.Cell("B2")).WithSize(81, 81);
+
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                    ws.AddPicture(ms2).MoveTo(ws.Cell("I2")).WithSize(240, 80);
+
+                // ── ENCABEZADOS DE TABLA ──────────────────────────────────────
+                int filaEncabezado = 11;
+                int colInicio = 2; // columna B
+
+                var colorCabecera = XLColor.FromHtml("#1a3446");
+
+                void EstiloEncabezado(IXLCell cell, string valor, double ancho = 0)
+                {
+                    cell.Value = valor;
+                    cell.Style.Font.FontColor = XLColor.White;
+                    cell.Style.Fill.BackgroundColor = colorCabecera;
+                    cell.Style.Font.FontName = "Calibri";
+                    cell.Style.Font.FontSize = 10;
+                    cell.Style.Font.SetBold();
+                    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    cell.Style.Border.OutsideBorderColor = XLColor.White;
+                    if (ancho > 0) ws.Column(cell.Address.ColumnNumber).Width = ancho;
+                }
+
+                EstiloEncabezado(ws.Cell(filaEncabezado, colInicio), "PLACA", 12);
+                EstiloEncabezado(ws.Cell(filaEncabezado, colInicio + 1), "CONDUCTOR", 35);
+                EstiloEncabezado(ws.Cell(filaEncabezado, colInicio + 2), "TURNO", 20);
+
+                int colDia1 = colInicio + 3;
+                for (int dia = 1; dia <= diasEnMes; dia++)
+                {
+                    string etiqueta = $"{dia}-{nombreMes}";
+                    EstiloEncabezado(ws.Cell(filaEncabezado, colDia1 + dia - 1), etiqueta, 8);
+                }
+
+                int colTM = colDia1 + diasEnMes;
+                int colProm = colTM + 1;
+                EstiloEncabezado(ws.Cell(filaEncabezado, colTM), "TM", 7);
+                EstiloEncabezado(ws.Cell(filaEncabezado, colProm), "PROM", 7);
+
+                // ── FILAS DE DATOS ────────────────────────────────────────────
+                int fila = filaEncabezado + 1;
+                bool filaPar = false;
+                var colorFila1 = XLColor.White;
+                var colorFila2 = XLColor.FromHtml("#dce6f1");
+
+                foreach (var cond in conductores)
+                {
+                    var colorFondo = filaPar ? colorFila2 : colorFila1;
+                    filaPar = !filaPar;
+
+                    void EstiloDato(IXLCell cell, bool centrado = false)
+                    {
+                        cell.Style.Font.FontName = "Calibri";
+                        cell.Style.Font.FontSize = 10;
+                        cell.Style.Fill.BackgroundColor = colorFondo;
+                        cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#b8cce4");
+                        cell.Style.Alignment.Horizontal = centrado
+                            ? XLAlignmentHorizontalValues.Center
+                            : XLAlignmentHorizontalValues.Left;
+                        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    }
+
+                    var celdaPlaca = ws.Cell(fila, colInicio);
+                    celdaPlaca.Value = cond.Placa;
+                    EstiloDato(celdaPlaca, true);
+
+                    var celdaCond = ws.Cell(fila, colInicio + 1);
+                    celdaCond.Value = cond.Conductor;
+                    EstiloDato(celdaCond);
+
+                    var celdaTurno = ws.Cell(fila, colInicio + 2);
+                    celdaTurno.Value = cond.Turno;
+                    EstiloDato(celdaTurno, true);
+
+                    int total = 0;
+                    int diasConServicio = 0;
+
+                    for (int dia = 1; dia <= diasEnMes; dia++)
+                    {
+                        int cantidad = cond.Dias.TryGetValue(dia, out int c) ? c : 0;
+                        var celdaDia = ws.Cell(fila, colDia1 + dia - 1);
+                        celdaDia.Value = cantidad;
+                        EstiloDato(celdaDia, true);
+                        total += cantidad;
+                        if (cantidad > 0) diasConServicio++;
+                    }
+
+                    // TM
+                    var celdaTM = ws.Cell(fila, colTM);
+                    celdaTM.Value = total;
+                    celdaTM.Style.Font.FontName = "Calibri";
+                    celdaTM.Style.Font.FontSize = 10;
+                    celdaTM.Style.Font.SetBold();
+                    celdaTM.Style.Fill.BackgroundColor = colorFondo;
+                    celdaTM.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    celdaTM.Style.Border.OutsideBorderColor = XLColor.FromHtml("#b8cce4");
+                    celdaTM.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    celdaTM.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                    // PROM
+                    decimal prom = diasConServicio > 0 ? Math.Round((decimal)total / diasConServicio, 3) : 0;
+                    var celdaProm = ws.Cell(fila, colProm);
+                    celdaProm.Value = (double)prom;
+                    celdaProm.Style.NumberFormat.Format = "0.000";
+                    celdaProm.Style.Font.FontName = "Calibri";
+                    celdaProm.Style.Font.FontSize = 10;
+                    celdaProm.Style.Font.SetBold();
+                    celdaProm.Style.Fill.BackgroundColor = colorFondo;
+                    celdaProm.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    celdaProm.Style.Border.OutsideBorderColor = XLColor.FromHtml("#b8cce4");
+                    celdaProm.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    celdaProm.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                    ws.Row(fila).Height = 16;
+                    fila++;
+                }
+
+                // Altura de fila de encabezado
+                ws.Row(filaEncabezado).Height = 30;
+
+                // Congelar panel en la fila de datos y columna TURNO
+                ws.SheetView.Freeze(filaEncabezado, colInicio + 3);
+
+                using (var ms = new MemoryStream())
+                {
+                    workbook.SaveAs(ms);
+                    return ms.ToArray();
+                }
+            }
+        }
     }
 }

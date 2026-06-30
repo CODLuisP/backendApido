@@ -139,6 +139,8 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<List<ServicioDetalle>> ReporteTodosConductores(string fechaini, string usuario, List<int>? codtaxis = null);
 
         Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario, List<int>? codtaxis = null);
+
+        Task<List<ResumenServicioConductorDia>> ResumenServiciosMesConductores(int anio, int mes, string usuario, int? codConductor = null);
         //------------------
 
 

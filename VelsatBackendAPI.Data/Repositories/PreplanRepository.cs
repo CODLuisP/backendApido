@@ -4618,8 +4618,7 @@ namespace VelsatBackendAPI.Data.Repositories
         }
 
         //Reporte de servicios todos conductores por rango de fechas
-        public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(
-    string fechaini, string fechafin, string usuario, List<int>? codtaxis = null)
+        public async Task<List<ServicioDetalle>> ReporteTodosConductoresRango(string fechaini, string fechafin, string usuario, List<int>? codtaxis = null)
         {
             string sql = @"
                 SELECT 
@@ -4823,6 +4822,68 @@ namespace VelsatBackendAPI.Data.Repositories
             );
 
             return result;
+        }
+
+        // Resumen mensual de cantidad de servicios por conductor por día
+        public async Task<List<ResumenServicioConductorDia>> ResumenServiciosMesConductores(int anio, int mes, string usuario, int? codConductor = null)
+        {
+            string sql = @"
+                SELECT
+                    CAST(t.codtaxi AS CHAR) AS CodConductor,
+                    CONCAT(t.apellidos, ' - (', t.codtaxi, ')') AS Conductor,
+                    COALESCE(t.unidadasig, '') AS Placa,
+                    CONCAT(
+                        CASE chc.turno
+                            WHEN 'DIA' THEN 'DIA'
+                            WHEN 'NOCHE' THEN 'NOCHE'
+                            ELSE chc.turno
+                        END,
+                        ' (',
+                        TIME_FORMAT(chc.hora_inicio, '%H:%i'),
+                        ' - ',
+                        TIME_FORMAT(ADDTIME(chc.hora_inicio, '12:00:00'), '%H:%i'),
+                        ')'
+                    ) AS Turno,
+                    TIME_FORMAT(chc.hora_inicio, '%H:%i') AS HoraInicioTurno,
+                    DAY(chc.fecha) AS Dia,
+                    COUNT(DISTINCT s.numero) AS Cantidad
+                FROM conductor_horario_calendario chc
+                INNER JOIN taxi t ON t.codtaxi = chc.id_conductor
+                    AND t.estado = 'A'
+                    AND t.codusuario = @Usuario
+                LEFT JOIN servicio s
+                    ON CAST(s.codconductor AS UNSIGNED) = chc.id_conductor
+                    AND s.codusuario = @Usuario
+                    AND s.estado <> 'C'
+                    AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') BETWEEN
+                        TIMESTAMP(chc.fecha, chc.hora_inicio)
+                        AND TIMESTAMP(chc.fecha, chc.hora_inicio) + INTERVAL 12 HOUR
+                    AND EXISTS (
+                        SELECT 1 FROM subservicio su
+                        WHERE su.codservicio = s.codservicio
+                          AND su.codcliente NOT IN (39953, 4175)
+                          AND su.orden > 0
+                    )
+                WHERE YEAR(chc.fecha) = @Anio
+                  AND MONTH(chc.fecha) = @Mes";
+
+            if (codConductor.HasValue)
+                sql += " AND chc.id_conductor = @CodConductor";
+
+            sql += @"
+                GROUP BY t.codtaxi, t.apellidos, t.unidadasig, chc.turno, chc.hora_inicio, chc.fecha
+                ORDER BY t.apellidos, chc.fecha";
+
+            var parameters = new
+            {
+                Anio = anio,
+                Mes = mes,
+                Usuario = usuario,
+                CodConductor = codConductor
+            };
+
+            var resultado = await _doConnection.QueryAsync<ResumenServicioConductorDia>(sql, parameters, transaction: _doTransaction);
+            return resultado.ToList();
         }
     }
 }
