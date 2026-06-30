@@ -4485,11 +4485,54 @@ namespace VelsatBackendAPI.Controllers
                     fila++;
                 }
 
+                // ── FILA DE TOTALES ───────────────────────────────────────────
+                var colorTotal = XLColor.FromHtml("#1a3446");
+
+                void EstiloTotal(IXLCell cell, bool centrado = true)
+                {
+                    cell.Style.Font.FontName = "Calibri";
+                    cell.Style.Font.FontSize = 10;
+                    cell.Style.Font.SetBold();
+                    cell.Style.Font.FontColor = XLColor.White;
+                    cell.Style.Fill.BackgroundColor = colorTotal;
+                    cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    cell.Style.Border.OutsideBorderColor = XLColor.White;
+                    cell.Style.Alignment.Horizontal = centrado
+                        ? XLAlignmentHorizontalValues.Center
+                        : XLAlignmentHorizontalValues.Left;
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                }
+
+                var celdaLabelTotal = ws.Cell(fila, colInicio + 1);
+                celdaLabelTotal.Value = "TOTAL";
+                EstiloTotal(ws.Cell(fila, colInicio));
+                EstiloTotal(celdaLabelTotal, false);
+                EstiloTotal(ws.Cell(fila, colInicio + 2));
+
+                int granTotal = 0;
+                for (int dia = 1; dia <= diasEnMes; dia++)
+                {
+                    int colDia = colDia1 + dia - 1;
+                    int sumaCol = conductores.Sum(c => c.Dias.TryGetValue(dia, out int v) ? v : 0);
+                    var celdaSuma = ws.Cell(fila, colDia);
+                    celdaSuma.Value = sumaCol;
+                    EstiloTotal(celdaSuma);
+                    granTotal += sumaCol;
+                }
+
+                var celdaTotalTM = ws.Cell(fila, colTM);
+                celdaTotalTM.Value = granTotal;
+                EstiloTotal(celdaTotalTM);
+
+                EstiloTotal(ws.Cell(fila, colProm));
+
+                ws.Row(fila).Height = 18;
+
                 // Altura de fila de encabezado
                 ws.Row(filaEncabezado).Height = 30;
 
-                // Congelar panel en la fila de datos y columna TURNO
-                ws.SheetView.Freeze(filaEncabezado, colInicio + 3);
+                // Congelar: fijar filas del encabezado y las 3 columnas fijas (PLACA, CONDUCTOR, TURNO)
+                ws.SheetView.Freeze(filaEncabezado, colInicio + 2);
 
                 using (var ms = new MemoryStream())
                 {
