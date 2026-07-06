@@ -4929,5 +4929,45 @@ namespace VelsatBackendAPI.Data.Repositories
                 .ThenBy(r => r.Dia)
                 .ToList();
         }
+
+        // Reporte de observaciones de subservicio para un día específico
+        public async Task<List<ObservacionServicio>> GetObservaciones(string fecha, string usuario)
+        {
+            DateTime fec1;
+            if (!DateTime.TryParseExact(fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out fec1))
+            {
+                throw new FormatException("Formato de fecha incorrecto");
+            }
+
+            string fechaLike = fec1.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) + "%";
+
+            string sql = @"
+                SELECT
+                    s.numero AS Numero,
+                    s.tipo AS Tipo,
+                    s.unidad AS Unidad,
+                    t.apellidos AS ApellidosConductor,
+                    s.fecha AS Fecha,
+                    s.empresa AS Empresa,
+                    c.apellidos AS ApellidosCliente,
+                    su.observacion AS Observacion
+                FROM servicio s, subservicio su, taxi t, cliente c
+                WHERE s.estado != 'C'
+                  AND s.codusuario = @Usuario
+                  AND s.fecha LIKE @FechaLike
+                  AND su.observacion IS NOT NULL
+                  AND s.codservicio = su.codservicio
+                  AND s.codconductor = t.codtaxi
+                  AND su.codcliente = c.codcliente";
+
+            var parameters = new
+            {
+                Usuario = usuario,
+                FechaLike = fechaLike
+            };
+
+            var resultado = await _doConnection.QueryAsync<ObservacionServicio>(sql, parameters, transaction: _doTransaction);
+            return resultado.ToList();
+        }
     }
 }

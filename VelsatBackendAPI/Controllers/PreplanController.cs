@@ -2380,6 +2380,31 @@ namespace VelsatBackendAPI.Controllers
             return Ok(new { filasAfectadas = filas });
         }
 
+        [HttpGet("observaciones")]
+        public async Task<IActionResult> GetObservaciones([FromQuery] string fecha, [FromQuery] string usuario)
+        {
+            if (string.IsNullOrEmpty(fecha) || string.IsNullOrEmpty(usuario))
+            {
+                return BadRequest(new { mensaje = "Los parámetros fecha y usuario son requeridos" });
+            }
+
+            try
+            {
+                var observaciones = await _readOnlyUow.PreplanRepository.GetObservaciones(fecha, usuario);
+
+                return Ok(observaciones);
+            }
+            catch (FormatException ex)
+            {
+                return BadRequest(new { mensaje = "Formato de fecha incorrecto. Debe ser yyyy-MM-dd", error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener las observaciones", error = ex.Message });
+            }
+
+        }
+
         //REPORTES CONDUCTORES
         [HttpGet("ExcelServiciosConductor")]
         public async Task<IActionResult> ExcelServiciosConductor([FromQuery] string codConductor, [FromQuery] string fecha, [FromQuery] string usuario)

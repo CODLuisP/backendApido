@@ -154,5 +154,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         //Insertar horario de llegada por geocerca
         Task<int> InsertarHorarioLlegadaGeocerca(List<GeocercaServicio> listaServicios);
+
+        //Reporte de observaciones de un día
+        Task<List<ObservacionServicio>> GetObservaciones(string fecha, string usuario);
     }
 }
