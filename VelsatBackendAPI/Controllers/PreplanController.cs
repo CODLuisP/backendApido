@@ -2392,7 +2392,15 @@ namespace VelsatBackendAPI.Controllers
             {
                 var observaciones = await _readOnlyUow.PreplanRepository.GetObservaciones(fecha, usuario);
 
-                return Ok(observaciones);
+                if (observaciones == null || observaciones.Count == 0)
+                {
+                    return NotFound(new { mensaje = "No se encontraron observaciones para los parámetros proporcionados." });
+                }
+
+                var excelBytes = await ConvertDataExcelObservaciones(observaciones, fecha, usuario);
+                string fileName = $"Observaciones_{usuario}_{fecha}.xlsx";
+
+                return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
             catch (FormatException ex)
             {
@@ -2400,9 +2408,132 @@ namespace VelsatBackendAPI.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { mensaje = "Error al obtener las observaciones", error = ex.Message });
+                return StatusCode(500, new { mensaje = "Error al generar el reporte de observaciones", error = ex.Message });
             }
 
+        }
+
+        private async Task<byte[]> ConvertDataExcelObservaciones(List<ObservacionServicio> observaciones, string fecha, string usuario)
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Observaciones");
+
+                // Título principal
+                var rangoTitulo = worksheet.Range("B4:I7");
+                rangoTitulo.Merge();
+                rangoTitulo.Value = "REPORTE DE OBSERVACIONES DE SERVICIOS";
+                rangoTitulo.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoTitulo.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                rangoTitulo.Style.Font.FontColor = XLColor.White;
+                rangoTitulo.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoTitulo.Style.Font.FontName = "Calibri";
+                rangoTitulo.Style.Font.FontSize = 16;
+                rangoTitulo.Style.Font.SetBold();
+
+                // Fecha consultada
+                worksheet.Range("B9:C9").Merge();
+                worksheet.Cell(9, 2).Value = "Fecha:";
+                worksheet.Cell(9, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(9, 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                worksheet.Cell(9, 2).Style.Font.FontColor = XLColor.White;
+                worksheet.Cell(9, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                worksheet.Cell(9, 2).Style.Font.FontName = "Calibri";
+                worksheet.Cell(9, 2).Style.Font.FontSize = 10;
+                worksheet.Cell(9, 2).Style.Font.SetBold();
+
+                worksheet.Range("D9:E9").Merge();
+                worksheet.Cell(9, 4).Value = fecha;
+                worksheet.Cell(9, 4).Style = worksheet.Cell(9, 2).Style;
+
+                // Fecha y usuario de generación
+                worksheet.Cell("I9").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                worksheet.Cell("I9").Style.Font.FontName = "Calibri";
+                worksheet.Cell("I9").Style.Font.FontSize = 10;
+                worksheet.Cell("I9").Style.Font.SetBold();
+                worksheet.Cell("I9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                worksheet.Cell("I10").Value = "USUARIO: " + usuario.ToUpper();
+                worksheet.Cell("I10").Style.Font.FontName = "Calibri";
+                worksheet.Cell("I10").Style.Font.FontSize = 10;
+                worksheet.Cell("I10").Style.Font.SetBold();
+                worksheet.Cell("I10").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+
+                worksheet.Range("B9:E9").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("B9:E9").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+                worksheet.Range("F9:I10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("F9:I10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+
+                // Imágenes
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                {
+                    worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                }
+
+                // Cabeceras
+                var headers = new[] { "N° SERVICIO", "TIPO", "FECHA", "EMPRESA", "UNIDAD", "CONDUCTOR", "CLIENTE", "OBSERVACIÓN" };
+
+                worksheet.Row(12).Height = 40;
+
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    worksheet.Cell(12, i + 2).Value = headers[i];
+                    worksheet.Cell(12, i + 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                    worksheet.Cell(12, i + 2).Style.Font.Bold = true;
+                    worksheet.Cell(12, i + 2).Style.Font.FontColor = XLColor.White;
+                    worksheet.Cell(12, i + 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(12, i + 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                }
+
+                // Ancho de columnas
+                worksheet.Column(2).Width = 14;  // N° SERVICIO
+                worksheet.Column(3).Width = 12;  // TIPO
+                worksheet.Column(4).Width = 16;  // FECHA
+                worksheet.Column(5).Width = 16;  // EMPRESA
+                worksheet.Column(6).Width = 12;  // UNIDAD
+                worksheet.Column(7).Width = 30;  // CONDUCTOR
+                worksheet.Column(8).Width = 30;  // CLIENTE
+                worksheet.Column(9).Width = 60;  // OBSERVACIÓN
+
+                worksheet.ShowGridLines = false;
+
+                // Llenar datos
+                int fila = 13;
+
+                foreach (var obs in observaciones)
+                {
+                    string tipoDescripcion = obs.Tipo == "S" ? "Reparto" : "Recojo";
+
+                    worksheet.Cell(fila, 2).Value = obs.Numero ?? "";
+                    worksheet.Cell(fila, 3).Value = tipoDescripcion;
+                    worksheet.Cell(fila, 4).Value = obs.Fecha ?? "";
+                    worksheet.Cell(fila, 5).Value = obs.Empresa ?? "";
+                    worksheet.Cell(fila, 6).Value = obs.Unidad ?? "";
+                    worksheet.Cell(fila, 7).Value = obs.ApellidosConductor ?? "";
+                    worksheet.Cell(fila, 8).Value = obs.ApellidosCliente ?? "";
+                    worksheet.Cell(fila, 9).Value = obs.Observacion ?? "";
+
+                    var rango = worksheet.Range(fila, 2, fila, 9);
+                    rango.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    rango.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    worksheet.Cell(fila, 9).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                    worksheet.Cell(fila, 9).Style.Alignment.WrapText = true;
+
+                    rango.Style.Fill.BackgroundColor = ((fila - 13) % 2 == 0)
+                        ? XLColor.FromHtml("#f2f2f2")
+                        : XLColor.White;
+
+                    fila++;
+                }
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    return stream.ToArray();
+                }
+            }
         }
 
         //REPORTES CONDUCTORES
