@@ -2,10 +2,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS base
 WORKDIR /app
 EXPOSE 80
 
-# LibreOffice headless: usado por AdminController.GenerarMembretePdf para convertir xlsx -> pdf
-RUN apt-get update && apt-get install -y --no-install-recommends libreoffice-calc \
-    && rm -rf /var/lib/apt/lists/*
-
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 WORKDIR /src
 
