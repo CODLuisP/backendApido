@@ -2381,24 +2381,25 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpGet("observaciones")]
-        public async Task<IActionResult> GetObservaciones([FromQuery] string fecha, [FromQuery] string usuario)
+        public async Task<IActionResult> GetObservaciones([FromQuery] string fechaInicio, [FromQuery] string fechaFin, [FromQuery] string usuario)
         {
-            if (string.IsNullOrEmpty(fecha) || string.IsNullOrEmpty(usuario))
+            if (string.IsNullOrEmpty(fechaInicio) || string.IsNullOrEmpty(fechaFin) || string.IsNullOrEmpty(usuario))
             {
-                return BadRequest(new { mensaje = "Los parámetros fecha y usuario son requeridos" });
+                return BadRequest(new { mensaje = "Los parámetros fechaInicio, fechaFin y usuario son requeridos" });
             }
 
             try
             {
-                var observaciones = await _readOnlyUow.PreplanRepository.GetObservaciones(fecha, usuario);
+                var observaciones = await _readOnlyUow.PreplanRepository.GetObservaciones(fechaInicio, fechaFin, usuario);
 
                 if (observaciones == null || observaciones.Count == 0)
                 {
                     return NotFound(new { mensaje = "No se encontraron observaciones para los parámetros proporcionados." });
                 }
 
-                var excelBytes = await ConvertDataExcelObservaciones(observaciones, fecha, usuario);
-                string fileName = $"Observaciones_{usuario}_{fecha}.xlsx";
+                string rangoFecha = fechaInicio == fechaFin ? fechaInicio : $"{fechaInicio} - {fechaFin}";
+                var excelBytes = await ConvertDataExcelObservaciones(observaciones, rangoFecha, usuario);
+                string fileName = $"Observaciones_{usuario}_{fechaInicio}_a_{fechaFin}.xlsx";
 
                 return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }

@@ -4930,16 +4930,18 @@ namespace VelsatBackendAPI.Data.Repositories
                 .ToList();
         }
 
-        // Reporte de observaciones de subservicio para un día específico
-        public async Task<List<ObservacionServicio>> GetObservaciones(string fecha, string usuario)
+        // Reporte de observaciones de subservicio para un rango de fechas
+        public async Task<List<ObservacionServicio>> GetObservaciones(string fechaInicio, string fechaFin, string usuario)
         {
-            DateTime fec1;
-            if (!DateTime.TryParseExact(fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out fec1))
+            DateTime fecIni, fecFin;
+            if (!DateTime.TryParseExact(fechaInicio, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out fecIni)
+                || !DateTime.TryParseExact(fechaFin, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out fecFin))
             {
                 throw new FormatException("Formato de fecha incorrecto");
             }
 
-            string fechaLike = fec1.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) + "%";
+            string fechaIniStr = fecIni.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) + " 00:00";
+            string fechaFinStr = fecFin.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) + " 23:59";
 
             string sql = @"
                 SELECT
@@ -4954,7 +4956,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 FROM servicio s, subservicio su, taxi t, cliente c
                 WHERE s.estado != 'C'
                   AND s.codusuario = @Usuario
-                  AND s.fecha LIKE @FechaLike
+                  AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') BETWEEN STR_TO_DATE(@FechaIni, '%d/%m/%Y %H:%i') AND STR_TO_DATE(@FechaFin, '%d/%m/%Y %H:%i')
                   AND su.observacion IS NOT NULL
                   AND s.codservicio = su.codservicio
                   AND s.codconductor = t.codtaxi
@@ -4963,7 +4965,8 @@ namespace VelsatBackendAPI.Data.Repositories
             var parameters = new
             {
                 Usuario = usuario,
-                FechaLike = fechaLike
+                FechaIni = fechaIniStr,
+                FechaFin = fechaFinStr
             };
 
             var resultado = await _doConnection.QueryAsync<ObservacionServicio>(sql, parameters, transaction: _doTransaction);
