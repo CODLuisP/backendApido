@@ -36,6 +36,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IGacelaRepository> _gacelaRepository;
         private readonly Lazy<ITalmaRepository> _talmaRepository;
         private readonly Lazy<IAdminRepository> _adminRepository;
+        private readonly Lazy<IServTurismoRepository> _servTurismoRepository;
 
         private bool _disposed = false;
         private bool _committed = false;
@@ -91,6 +92,9 @@ namespace VelsatBackendAPI.Data.Repositories
 
             //ADMIN
             _adminRepository = new Lazy<IAdminRepository>(() => new AdminRepository(DefaultConnection, _defaultTransaction));
+
+            _servTurismoRepository = new Lazy<IServTurismoRepository>(() =>
+                new ServTurismoRepository(DOConnection, _doTransaction));
         }
 
         // ✅ Conexión principal con inicialización thread-safe y retry logic
@@ -400,6 +404,15 @@ namespace VelsatBackendAPI.Data.Repositories
             }
         }
 
+        public IServTurismoRepository ServTurismoRepository
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+                return _servTurismoRepository.Value;
+            }
+        }
+
         // ✅ SaveChanges optimizado
         public void SaveChanges()
         {
@@ -582,6 +595,7 @@ namespace VelsatBackendAPI.Data.Repositories
             TryDisposeRepository(_kmServicioRepository);
             TryDisposeRepository(_gacelaRepository);
             TryDisposeRepository(_adminRepository);
+            TryDisposeRepository(_servTurismoRepository);
         }
 
         private void TryDisposeRepository<T>(Lazy<T> lazyRepo)

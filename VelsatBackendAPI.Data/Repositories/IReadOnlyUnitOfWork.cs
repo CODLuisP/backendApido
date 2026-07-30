@@ -39,5 +39,7 @@ namespace VelsatBackendAPI.Data.Repositories
         IAdminRepository AdminRepository { get; }
 
         IDocRepository DocRepository { get; }
+
+        IServTurismoRepository ServTurismoRepository { get; }
     }
 }

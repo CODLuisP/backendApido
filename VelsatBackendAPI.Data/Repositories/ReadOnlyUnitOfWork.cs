@@ -34,6 +34,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<ITalmaRepository> _talmaRepository;
         private readonly Lazy<IAdminRepository> _adminRepository;
         private readonly Lazy<IDocRepository> _docRepository;
+        private readonly Lazy<IServTurismoRepository> _servTurismoRepository;
 
 
         private bool _disposed = false;
@@ -68,6 +69,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
             //ADMIN
             _adminRepository = new Lazy<IAdminRepository>(() => new AdminRepository(DefaultConnection, null));
+
+            _servTurismoRepository = new Lazy<IServTurismoRepository>(() => new ServTurismoRepository(DOConnection, null));
         }
 
         private MySqlConnection DefaultConnection
@@ -279,6 +282,16 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (_disposed)
                     throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
                 return _docRepository.Value;
+            }
+        }
+
+        public IServTurismoRepository ServTurismoRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _servTurismoRepository.Value;
             }
         }
 

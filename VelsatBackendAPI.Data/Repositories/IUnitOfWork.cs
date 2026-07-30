@@ -37,6 +37,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         IAdminRepository AdminRepository { get; }
 
+        IServTurismoRepository ServTurismoRepository { get; }
+
         void SaveChanges();
 
     }
