@@ -25,7 +25,6 @@ using VelsatBackendAPI.Model.Cgcela;
 using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
-using VelsatBackendAPI.Model.Turismo;
 using VelsatBackendAPI.Model.Turnos;
 
 namespace VelsatBackendAPI.Data.Repositories
@@ -4974,110 +4973,5 @@ namespace VelsatBackendAPI.Data.Repositories
             return resultado.ToList();
         }
 
-        // ===================== TAXI (CONDUCTORES) CRUD =====================
-
-        private const string ColumnasTaxi = @"codtaxi, nombres, apellidos, imagen, login, clave, sexo, estado,
-                                                servicioactual, codusuario, telefono, dni, brevete, turismo, turno,
-                                                horainicio, tipo, email, sctr, planilla, catbrevete, estbrevete,
-                                                fecvalidbrevete, fecsegvial, fecgtu, puntos, habilitado, calificacion, unidadasig";
-
-        public async Task<List<ConductorTurismo>> GetTaxis(string codusuario)
-        {
-            string sql = $"SELECT {ColumnasTaxi} FROM taxi WHERE codusuario = @Codusuario ORDER BY apellidos, nombres";
-
-            var resultado = await _doConnection.QueryAsync<ConductorTurismo>(sql, new { Codusuario = codusuario }, transaction: _doTransaction);
-            return resultado.ToList();
-        }
-
-        public async Task<ConductorTurismo?> GetTaxiById(int codtaxi)
-        {
-            string sql = $"SELECT {ColumnasTaxi} FROM taxi WHERE codtaxi = @Codtaxi";
-
-            return await _doConnection.QueryFirstOrDefaultAsync<ConductorTurismo>(sql, new { Codtaxi = codtaxi }, transaction: _doTransaction);
-        }
-
-        public async Task<int> InsertTaxi(ConductorTurismo taxi)
-        {
-            string sql = @"INSERT INTO taxi
-                            (nombres, apellidos, imagen, login, clave, sexo, estado, servicioactual, codusuario,
-                             telefono, dni, brevete, turismo, turno, horainicio, tipo, email, sctr, planilla,
-                             catbrevete, estbrevete, fecvalidbrevete, fecsegvial, fecgtu, puntos, habilitado,
-                             calificacion, unidadasig)
-                            VALUES
-                            (@Nombres, @Apellidos, @Imagen, @Login, @Clave, @Sexo, @Estado, @Servicioactual, @Codusuario,
-                             @Telefono, @Dni, @Brevete, @Turismo, @Turno, @Horainicio, @Tipo, @Email, @Sctr, @Planilla,
-                             @Catbrevete, @Estbrevete, @Fecvalidbrevete, @Fecsegvial, @Fecgtu, @Puntos, @Habilitado,
-                             @Calificacion, @Unidadasig);
-                            SELECT LAST_INSERT_ID();";
-
-            var codtaxi = await _doConnection.QuerySingleAsync<int>(sql, taxi, transaction: _doTransaction);
-            return codtaxi;
-        }
-
-        // Actualiza únicamente las propiedades de "campos" que vengan con valor (no nulas).
-        // Las propiedades no enviadas (null) se ignoran y no modifican el registro.
-        public async Task<int> PatchTaxi(int codtaxi, ConductorTurismo campos)
-        {
-            var parameters = new DynamicParameters();
-            parameters.Add("Codtaxi", codtaxi);
-
-            var setClauses = new List<string>();
-
-            void AgregarSiPresente(string columna, string? valor)
-            {
-                if (valor == null)
-                {
-                    return;
-                }
-
-                setClauses.Add($"{columna} = @{columna}");
-                parameters.Add(columna, valor);
-            }
-
-            AgregarSiPresente("nombres", campos.Nombres);
-            AgregarSiPresente("apellidos", campos.Apellidos);
-            AgregarSiPresente("imagen", campos.Imagen);
-            AgregarSiPresente("login", campos.Login);
-            AgregarSiPresente("clave", campos.Clave);
-            AgregarSiPresente("sexo", campos.Sexo);
-            AgregarSiPresente("estado", campos.Estado);
-            AgregarSiPresente("servicioactual", campos.Servicioactual);
-            AgregarSiPresente("codusuario", campos.Codusuario);
-            AgregarSiPresente("telefono", campos.Telefono);
-            AgregarSiPresente("dni", campos.Dni);
-            AgregarSiPresente("brevete", campos.Brevete);
-            AgregarSiPresente("turismo", campos.Turismo);
-            AgregarSiPresente("turno", campos.Turno);
-            AgregarSiPresente("horainicio", campos.Horainicio);
-            AgregarSiPresente("tipo", campos.Tipo);
-            AgregarSiPresente("email", campos.Email);
-            AgregarSiPresente("sctr", campos.Sctr);
-            AgregarSiPresente("planilla", campos.Planilla);
-            AgregarSiPresente("catbrevete", campos.Catbrevete);
-            AgregarSiPresente("estbrevete", campos.Estbrevete);
-            AgregarSiPresente("fecvalidbrevete", campos.Fecvalidbrevete);
-            AgregarSiPresente("fecsegvial", campos.Fecsegvial);
-            AgregarSiPresente("fecgtu", campos.Fecgtu);
-            AgregarSiPresente("puntos", campos.Puntos);
-            AgregarSiPresente("habilitado", campos.Habilitado);
-            AgregarSiPresente("calificacion", campos.Calificacion);
-            AgregarSiPresente("unidadasig", campos.Unidadasig);
-
-            if (!setClauses.Any())
-            {
-                return 0;
-            }
-
-            string sql = $"UPDATE taxi SET {string.Join(", ", setClauses)} WHERE codtaxi = @Codtaxi";
-
-            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
-        }
-
-        public async Task<int> DeleteTaxi(int codtaxi)
-        {
-            string sql = "DELETE FROM taxi WHERE codtaxi = @Codtaxi";
-
-            return await _doConnection.ExecuteAsync(sql, new { Codtaxi = codtaxi }, transaction: _doTransaction);
-        }
     }
 }

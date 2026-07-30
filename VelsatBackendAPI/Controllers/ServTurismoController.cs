@@ -144,5 +144,125 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, new { mensaje = "Error al eliminar el servicio de turismo.", error = ex.Message });
             }
         }
+
+        // ===================== TAXI (CONDUCTORES) CRUD =====================
+
+        // GET api/servturismo/taxi?codusuario=...
+        [HttpGet("taxi")]
+        public async Task<IActionResult> GetTaxis([FromQuery] string codusuario)
+        {
+            if (string.IsNullOrEmpty(codusuario))
+            {
+                return BadRequest(new { mensaje = "El parámetro codusuario es requerido" });
+            }
+
+            try
+            {
+                var taxis = await _readOnlyUow.ServTurismoRepository.GetTaxis(codusuario);
+
+                if (taxis == null || taxis.Count == 0)
+                {
+                    return NotFound(new { mensaje = "No se encontraron conductores." });
+                }
+
+                return Ok(taxis);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener los conductores.", error = ex.Message });
+            }
+        }
+
+        // GET api/servturismo/taxi/{codtaxi}
+        [HttpGet("taxi/{codtaxi}")]
+        public async Task<IActionResult> GetTaxiById(int codtaxi)
+        {
+            try
+            {
+                var taxi = await _readOnlyUow.ServTurismoRepository.GetTaxiById(codtaxi);
+
+                if (taxi == null)
+                {
+                    return NotFound(new { mensaje = "No se encontró el conductor." });
+                }
+
+                return Ok(taxi);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener el conductor.", error = ex.Message });
+            }
+        }
+
+        // POST api/servturismo/taxi
+        [HttpPost("taxi")]
+        public async Task<IActionResult> InsertTaxi([FromBody] ConductorTurismo taxi)
+        {
+            if (taxi == null)
+            {
+                return BadRequest(new { mensaje = "El conductor no puede ser nulo." });
+            }
+
+            try
+            {
+                int codtaxi = await _uow.ServTurismoRepository.InsertTaxi(taxi);
+                _uow.SaveChanges();
+
+                return Ok(new { mensaje = "Conductor creado correctamente.", codtaxi });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al crear el conductor.", error = ex.Message });
+            }
+        }
+
+        // PATCH api/servturismo/taxi/{codtaxi}
+        [HttpPatch("taxi/{codtaxi}")]
+        public async Task<IActionResult> PatchTaxi(int codtaxi, [FromBody] ConductorTurismo campos)
+        {
+            if (campos == null)
+            {
+                return BadRequest(new { mensaje = "El conductor no puede ser nulo." });
+            }
+
+            try
+            {
+                int filasAfectadas = await _uow.ServTurismoRepository.PatchTaxi(codtaxi, campos);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new { mensaje = "Conductor actualizado correctamente.", filasAfectadas });
+                }
+
+                return NotFound(new { mensaje = "No se encontró el conductor o no se realizaron cambios." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al actualizar el conductor.", error = ex.Message });
+            }
+        }
+
+        // DELETE api/servturismo/taxi/{codtaxi}
+        [HttpDelete("taxi/{codtaxi}")]
+        public async Task<IActionResult> DeleteTaxi(int codtaxi)
+        {
+            try
+            {
+                int filasAfectadas = await _uow.ServTurismoRepository.DeleteTaxi(codtaxi);
+                _uow.SaveChanges();
+
+                if (filasAfectadas > 0)
+                {
+                    return Ok(new { mensaje = "Conductor eliminado correctamente." });
+                }
+
+                return NotFound(new { mensaje = "No se encontró el conductor a eliminar." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al eliminar el conductor.", error = ex.Message });
+            }
+        }
     }
 }

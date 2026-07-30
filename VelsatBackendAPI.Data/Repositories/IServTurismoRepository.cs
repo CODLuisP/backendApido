@@ -16,5 +16,16 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> Patch(int idservicio, ServTurismo campos);
 
         Task<int> Delete(int idservicio);
+
+        //CRUD tabla taxi (conductores)
+        Task<List<ConductorTurismo>> GetTaxis(string codusuario);
+
+        Task<ConductorTurismo?> GetTaxiById(int codtaxi);
+
+        Task<int> InsertTaxi(ConductorTurismo taxi);
+
+        Task<int> PatchTaxi(int codtaxi, ConductorTurismo campos);
+
+        Task<int> DeleteTaxi(int codtaxi);
     }
 }

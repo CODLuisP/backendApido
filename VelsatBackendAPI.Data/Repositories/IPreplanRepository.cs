@@ -8,7 +8,6 @@ using VelsatBackendAPI.Model;
 using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Latam;
 using VelsatBackendAPI.Model.MovilProgramacion;
-using VelsatBackendAPI.Model.Turismo;
 
 namespace VelsatBackendAPI.Data.Repositories
 {
@@ -158,16 +157,5 @@ namespace VelsatBackendAPI.Data.Repositories
 
         //Reporte de observaciones en un rango de fechas
         Task<List<ObservacionServicio>> GetObservaciones(string fechaInicio, string fechaFin, string usuario);
-
-        //CRUD tabla taxi (conductores)
-        Task<List<ConductorTurismo>> GetTaxis(string codusuario);
-
-        Task<ConductorTurismo?> GetTaxiById(int codtaxi);
-
-        Task<int> InsertTaxi(ConductorTurismo taxi);
-
-        Task<int> PatchTaxi(int codtaxi, ConductorTurismo campos);
-
-        Task<int> DeleteTaxi(int codtaxi);
     }
 }
