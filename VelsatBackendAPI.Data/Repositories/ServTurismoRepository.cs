@@ -196,10 +196,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         // ===================== TAXI (CONDUCTORES) CRUD =====================
 
-        private const string ColumnasTaxi = @"codtaxi, nombres, apellidos, imagen, login, clave, sexo, estado,
-                                                servicioactual, codusuario, telefono, dni, brevete, turismo, turno,
-                                                horainicio, tipo, email, sctr, planilla, catbrevete, estbrevete,
-                                                fecvalidbrevete, fecsegvial, fecgtu, puntos, habilitado, calificacion, unidadasig";
+        private const string ColumnasTaxi = @"codtaxi, apellidos, login, clave, sexo, codusuario, telefono, brevete, turismo";
 
         public async Task<List<ConductorTurismo>> GetTaxis(string codusuario)
         {
@@ -224,15 +221,9 @@ namespace VelsatBackendAPI.Data.Repositories
             }
 
             string sql = @"INSERT INTO taxi
-                            (nombres, apellidos, imagen, login, clave, sexo, estado, servicioactual, codusuario,
-                             telefono, dni, brevete, turismo, turno, horainicio, tipo, email, sctr, planilla,
-                             catbrevete, estbrevete, fecvalidbrevete, fecsegvial, fecgtu, puntos, habilitado,
-                             calificacion, unidadasig)
+                            (apellidos, login, clave, sexo, codusuario, telefono, brevete, turismo)
                             VALUES
-                            (@Nombres, @Apellidos, @Imagen, @Login, @Clave, @Sexo, @Estado, @Servicioactual, @Codusuario,
-                             @Telefono, @Dni, @Brevete, @Turismo, @Turno, @Horainicio, @Tipo, @Email, @Sctr, @Planilla,
-                             @Catbrevete, @Estbrevete, @Fecvalidbrevete, @Fecsegvial, @Fecgtu, @Puntos, @Habilitado,
-                             @Calificacion, @Unidadasig);
+                            (@Apellidos, @Login, @Clave, @Sexo, @Codusuario, @Telefono, @Brevete, @Turismo);
                             SELECT LAST_INSERT_ID();";
 
             var codtaxi = await _doConnection.QuerySingleAsync<int>(sql, taxi, transaction: _doTransaction);
@@ -259,34 +250,14 @@ namespace VelsatBackendAPI.Data.Repositories
                 parameters.Add(columna, valor);
             }
 
-            AgregarSiPresente("nombres", campos.Nombres);
             AgregarSiPresente("apellidos", campos.Apellidos);
-            AgregarSiPresente("imagen", campos.Imagen);
             AgregarSiPresente("login", campos.Login);
             AgregarSiPresente("clave", campos.Clave);
             AgregarSiPresente("sexo", campos.Sexo);
-            AgregarSiPresente("estado", campos.Estado);
-            AgregarSiPresente("servicioactual", campos.Servicioactual);
             AgregarSiPresente("codusuario", campos.Codusuario);
             AgregarSiPresente("telefono", campos.Telefono);
-            AgregarSiPresente("dni", campos.Dni);
             AgregarSiPresente("brevete", campos.Brevete);
             AgregarSiPresente("turismo", campos.Turismo);
-            AgregarSiPresente("turno", campos.Turno);
-            AgregarSiPresente("horainicio", campos.Horainicio);
-            AgregarSiPresente("tipo", campos.Tipo);
-            AgregarSiPresente("email", campos.Email);
-            AgregarSiPresente("sctr", campos.Sctr);
-            AgregarSiPresente("planilla", campos.Planilla);
-            AgregarSiPresente("catbrevete", campos.Catbrevete);
-            AgregarSiPresente("estbrevete", campos.Estbrevete);
-            AgregarSiPresente("fecvalidbrevete", campos.Fecvalidbrevete);
-            AgregarSiPresente("fecsegvial", campos.Fecsegvial);
-            AgregarSiPresente("fecgtu", campos.Fecgtu);
-            AgregarSiPresente("puntos", campos.Puntos);
-            AgregarSiPresente("habilitado", campos.Habilitado);
-            AgregarSiPresente("calificacion", campos.Calificacion);
-            AgregarSiPresente("unidadasig", campos.Unidadasig);
 
             if (!setClauses.Any())
             {
