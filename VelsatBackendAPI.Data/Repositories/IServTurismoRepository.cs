@@ -13,7 +13,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> InsertBatch(IEnumerable<ServTurismo> servicios);
 
-        Task<int> Patch(int idservicio, ServTurismo campos);
+        Task<int> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false);
 
         Task<int> Delete(int idservicio);
 

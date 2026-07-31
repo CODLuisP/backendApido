@@ -54,9 +54,12 @@ namespace VelsatBackendAPI.Data.Repositories
             return idservicio;
         }
 
-        // Actualiza únicamente las propiedades de "campos" que vengan con valor (no nulas).
-        // Las propiedades no enviadas (null) se ignoran y no modifican el registro.
-        public async Task<int> Patch(int idservicio, ServTurismo campos)
+        // Por defecto (limpiarNulos = false) solo actualiza las propiedades de "campos" que vengan con
+        // valor (no nulas); las no enviadas (null) se ignoran y no modifican el registro.
+        // Con limpiarNulos = true, un valor null SÍ se aplica y borra el campo (lo deja NULL en la BD);
+        // pensado para un formulario de edición que envía el objeto completo y donde un campo vacío
+        // significa "el usuario lo borró".
+        public async Task<int> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false)
         {
             var parameters = new DynamicParameters();
             parameters.Add("Idservicio", idservicio);
@@ -65,19 +68,26 @@ namespace VelsatBackendAPI.Data.Repositories
 
             void AgregarSiPresente(string columna, string? valor)
             {
-                if (valor == null)
+                if (valor == null && !limpiarNulos)
                 {
                     return;
                 }
 
                 setClauses.Add($"{columna} = @{columna}");
-                parameters.Add(columna, valor);
+                parameters.Add(columna, (object?)valor ?? DBNull.Value);
             }
 
             void AgregarValorSiPresente<T>(string columna, T? valor) where T : struct
             {
                 if (!valor.HasValue)
                 {
+                    if (!limpiarNulos)
+                    {
+                        return;
+                    }
+
+                    setClauses.Add($"{columna} = @{columna}");
+                    parameters.Add(columna, DBNull.Value);
                     return;
                 }
 

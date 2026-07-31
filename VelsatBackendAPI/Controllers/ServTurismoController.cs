@@ -96,9 +96,11 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        // PATCH api/servturismo/{idservicio}
+        // PATCH api/servturismo/{idservicio}?limpiarNulos=true
+        // limpiarNulos=true: los campos que llegan en null SÍ se aplican (borran el dato en la BD).
+        // Pensado para el formulario de edición del front, que siempre envía el objeto completo.
         [HttpPatch("{idservicio}")]
-        public async Task<IActionResult> Patch(int idservicio, [FromBody] ServTurismo campos)
+        public async Task<IActionResult> Patch(int idservicio, [FromBody] ServTurismo campos, [FromQuery] bool limpiarNulos = false)
         {
             if (campos == null)
             {
@@ -107,7 +109,7 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                int filasAfectadas = await _uow.ServTurismoRepository.Patch(idservicio, campos);
+                int filasAfectadas = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos);
                 _uow.SaveChanges();
 
                 if (filasAfectadas > 0)
