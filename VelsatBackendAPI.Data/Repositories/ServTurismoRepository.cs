@@ -74,11 +74,18 @@ namespace VelsatBackendAPI.Data.Repositories
                 }
 
                 setClauses.Add($"{columna} = @{columna}");
-                parameters.Add(columna, (object?)valor ?? DBNull.Value);
+                // dbType explícito: si el valor es DBNull, Dapper no puede inferir el tipo del parámetro solo.
+                parameters.Add(columna, (object?)valor ?? DBNull.Value, dbType: DbType.String);
             }
 
             void AgregarValorSiPresente<T>(string columna, T? valor) where T : struct
             {
+                DbType? dbType = typeof(T) == typeof(DateTime)
+                    ? DbType.Date
+                    : typeof(T) == typeof(TimeSpan)
+                        ? DbType.Time
+                        : (DbType?)null;
+
                 if (!valor.HasValue)
                 {
                     if (!limpiarNulos)
@@ -87,12 +94,12 @@ namespace VelsatBackendAPI.Data.Repositories
                     }
 
                     setClauses.Add($"{columna} = @{columna}");
-                    parameters.Add(columna, DBNull.Value);
+                    parameters.Add(columna, DBNull.Value, dbType: dbType);
                     return;
                 }
 
                 setClauses.Add($"{columna} = @{columna}");
-                parameters.Add(columna, valor.Value);
+                parameters.Add(columna, valor.Value, dbType: dbType);
             }
 
             AgregarValorSiPresente("fechainicio", campos.Fechainicio);
