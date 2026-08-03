@@ -40,5 +40,11 @@ namespace VelsatBackendAPI.Model.Turismo
         public string? Observaciones { get; set; }
         public string? Ejecutivo { get; set; }
         public string? Cotizacion { get; set; }
+
+        // Acuse de recibo del conductor desde la app móvil (reemplaza el doble check azul de WhatsApp).
+        // Visto: se marca solo, cuando el servicio se muestra en pantalla.
+        // Confirmado: se marca cuando el conductor desliza la tarjeta del servicio.
+        public byte? Visto { get; set; }
+        public byte? Confirmado { get; set; }
     }
 }

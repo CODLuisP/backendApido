@@ -17,6 +17,12 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> Delete(int idservicio);
 
+        // Acuse de recibo del conductor. Devuelven false solo si el idservicio no existe;
+        // volver a marcar un servicio ya marcado es una operación válida (no cambia nada).
+        Task<bool> MarcarVisto(int idservicio);
+
+        Task<bool> MarcarConfirmado(int idservicio);
+
         //CRUD tabla taxi (conductores)
         Task<List<ConductorTurismo>> GetTaxis(string codusuario);
 

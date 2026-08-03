@@ -29,7 +29,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion
+                                   ejecutivo, cotizacion, visto, confirmado
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
                             {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete")}
@@ -129,6 +129,8 @@ namespace VelsatBackendAPI.Data.Repositories
             AgregarSiPresente("observaciones", campos.Observaciones);
             AgregarSiPresente("ejecutivo", campos.Ejecutivo);
             AgregarSiPresente("cotizacion", campos.Cotizacion);
+            AgregarValorSiPresente("visto", campos.Visto);
+            AgregarValorSiPresente("confirmado", campos.Confirmado);
 
             if (!setClauses.Any())
             {
@@ -213,6 +215,36 @@ namespace VelsatBackendAPI.Data.Repositories
 
             return await _doConnection.ExecuteAsync(sql, new { Idservicio = idservicio }, transaction: _doTransaction);
         }
+
+        // ===================== ACUSE DE RECIBO DEL CONDUCTOR =====================
+
+        // El UPDATE va condicionado a que el campo no valga ya 1, porque MySQL informa 0 filas
+        // afectadas cuando el valor no cambia; por eso la existencia del servicio se comprueba
+        // aparte y no se deduce de las filas afectadas. Así, marcar dos veces el mismo servicio
+        // (la app reintenta) sigue devolviendo éxito en lugar de un 404 falso.
+        private async Task<bool> MarcarAcuse(int idservicio, string sqlUpdate)
+        {
+            int existe = await _doConnection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM servturismo WHERE idservicio = @Idservicio",
+                new { Idservicio = idservicio },
+                transaction: _doTransaction);
+
+            if (existe == 0)
+            {
+                return false;
+            }
+
+            await _doConnection.ExecuteAsync(sqlUpdate, new { Idservicio = idservicio }, transaction: _doTransaction);
+            return true;
+        }
+
+        public Task<bool> MarcarVisto(int idservicio) =>
+            MarcarAcuse(idservicio,
+                "UPDATE servturismo SET visto = 1 WHERE idservicio = @Idservicio AND (visto IS NULL OR visto <> 1)");
+
+        public Task<bool> MarcarConfirmado(int idservicio) =>
+            MarcarAcuse(idservicio,
+                "UPDATE servturismo SET confirmado = 1 WHERE idservicio = @Idservicio AND (confirmado IS NULL OR confirmado <> 1)");
 
         // ===================== TAXI (CONDUCTORES) CRUD =====================
 

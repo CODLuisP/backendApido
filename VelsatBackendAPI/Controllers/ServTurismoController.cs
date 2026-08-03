@@ -126,6 +126,54 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // PATCH api/servturismo/{idservicio}/visto
+        // La app móvil lo llama automáticamente cuando el servicio se muestra en pantalla
+        // (equivale al doble check azul de WhatsApp). Es idempotente.
+        [HttpPatch("{idservicio}/visto")]
+        public async Task<IActionResult> MarcarVisto(int idservicio)
+        {
+            try
+            {
+                bool existe = await _uow.ServTurismoRepository.MarcarVisto(idservicio);
+                _uow.SaveChanges();
+
+                if (!existe)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                return Ok(new { mensaje = "Servicio marcado como visto.", idservicio, visto = 1 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al marcar el servicio como visto.", error = ex.Message });
+            }
+        }
+
+        // PATCH api/servturismo/{idservicio}/confirmado
+        // La app móvil lo llama cuando el conductor desliza la tarjeta del servicio,
+        // confirmando que lo recibió. Es idempotente.
+        [HttpPatch("{idservicio}/confirmado")]
+        public async Task<IActionResult> MarcarConfirmado(int idservicio)
+        {
+            try
+            {
+                bool existe = await _uow.ServTurismoRepository.MarcarConfirmado(idservicio);
+                _uow.SaveChanges();
+
+                if (!existe)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                return Ok(new { mensaje = "Servicio confirmado por el conductor.", idservicio, confirmado = 1 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al confirmar el servicio.", error = ex.Message });
+            }
+        }
+
         // DELETE api/servturismo/{idservicio}
         [HttpDelete("{idservicio}")]
         public async Task<IActionResult> Delete(int idservicio)
