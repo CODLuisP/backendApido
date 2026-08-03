@@ -18,9 +18,10 @@ namespace VelsatBackendAPI.Controllers
             _uow = uow;
         }
 
-        // GET api/servturismo?fechaInicio=01/07/2026&fechaFin=31/07/2026
+        // GET api/servturismo?fechaInicio=01/07/2026&fechaFin=31/07/2026&brevete=Q12345678
+        // "brevete" es opcional: lo usa la app móvil para traer solo los servicios del conductor logueado.
         [HttpGet]
-        public async Task<IActionResult> Get([FromQuery] string fechaInicio, [FromQuery] string fechaFin)
+        public async Task<IActionResult> Get([FromQuery] string fechaInicio, [FromQuery] string fechaFin, [FromQuery] string? brevete = null)
         {
             if (string.IsNullOrEmpty(fechaInicio) || string.IsNullOrEmpty(fechaFin))
             {
@@ -35,7 +36,7 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var servicios = await _readOnlyUow.ServTurismoRepository.GetByFechas(fechaInicioDt, fechaFinDt);
+                var servicios = await _readOnlyUow.ServTurismoRepository.GetByFechas(fechaInicioDt, fechaFinDt, brevete);
 
                 if (servicios == null || servicios.Count == 0)
                 {

@@ -7,7 +7,7 @@ namespace VelsatBackendAPI.Data.Repositories
 {
     public interface IServTurismoRepository
     {
-        Task<List<ServTurismo>> GetByFechas(DateTime fechaInicio, DateTime fechaFin);
+        Task<List<ServTurismo>> GetByFechas(DateTime fechaInicio, DateTime fechaFin, string? brevete = null);
 
         Task<int> Insert(ServTurismo servicio);
 

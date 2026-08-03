@@ -22,17 +22,20 @@ namespace VelsatBackendAPI.Data.Repositories
         // fechainicio y horainicio ya son columnas DATE/TIME reales (ver servturismo_migracion_fecha_hora.sql),
         // así que el filtro compara directamente contra el índice idx_servturismo_fecha_hora, sin necesidad
         // de envolver la columna en ninguna función de conversión.
-        public async Task<List<ServTurismo>> GetByFechas(DateTime fechaInicio, DateTime fechaFin)
+        // brevete opcional: permite a la app móvil pedir solo los servicios del conductor logueado
+        // (se identifica por brevete, no hay FK al conductor en esta tabla).
+        public async Task<List<ServTurismo>> GetByFechas(DateTime fechaInicio, DateTime fechaFin, string? brevete = null)
         {
-            string sql = @"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
+            string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
                                    ejecutivo, cotizacion
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
+                            {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete")}
                             ORDER BY fechainicio, horainicio";
 
-            var parameters = new { FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date };
+            var parameters = new { FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date, Brevete = brevete };
 
             var resultado = await _doConnection.QueryAsync<ServTurismo>(sql, parameters, transaction: _doTransaction);
             return resultado.ToList();
