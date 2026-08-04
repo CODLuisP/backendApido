@@ -87,7 +87,9 @@ namespace VelsatBackendAPI.Data.Repositories
                     ? DbType.Date
                     : typeof(T) == typeof(TimeSpan)
                         ? DbType.Time
-                        : (DbType?)null;
+                        : typeof(T) == typeof(byte)
+                            ? DbType.Byte
+                            : (DbType?)null;
 
                 if (!valor.HasValue)
                 {
