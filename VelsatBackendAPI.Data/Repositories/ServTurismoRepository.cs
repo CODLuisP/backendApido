@@ -29,7 +29,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion, visto, confirmado
+                                   ejecutivo, cotizacion, visto, confirmado, estado
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
                             {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete")}
@@ -133,6 +133,23 @@ namespace VelsatBackendAPI.Data.Repositories
             AgregarSiPresente("cotizacion", campos.Cotizacion);
             AgregarValorSiPresente("visto", campos.Visto);
             AgregarValorSiPresente("confirmado", campos.Confirmado);
+
+            // Reprogramación: si el PATCH cambia fechainicio a un día distinto del que tenía el servicio,
+            // se marca automáticamente como "Reprogramado" (salvo que el propio caller ya haya enviado un
+            // estado explícito, ej. al cancelar un servicio y cambiarle la fecha en la misma llamada).
+            if (campos.Fechainicio.HasValue && campos.Estado == null)
+            {
+                DateTime? fechaActual = await _doConnection.ExecuteScalarAsync<DateTime?>(
+                    "SELECT fechainicio FROM servturismo WHERE idservicio = @Idservicio",
+                    new { Idservicio = idservicio },
+                    transaction: _doTransaction);
+
+                if (fechaActual.HasValue && fechaActual.Value.Date != campos.Fechainicio.Value.Date)
+                {
+                    setClauses.Add("estado = @EstadoReprogramado");
+                    parameters.Add("EstadoReprogramado", "Reprogramado", dbType: DbType.String);
+                }
+            }
 
             if (!setClauses.Any())
             {
@@ -240,13 +257,24 @@ namespace VelsatBackendAPI.Data.Repositories
             return true;
         }
 
+        // El estado solo sube de nivel con "visto" (no pisa un Confirmado/Cancelado/Reprogramado ya existente);
+        // "confirmado" y "cancelado" sí se imponen porque son estados finales que la app dispara a propósito.
         public Task<bool> MarcarVisto(int idservicio) =>
             MarcarAcuse(idservicio,
-                "UPDATE servturismo SET visto = 1 WHERE idservicio = @Idservicio AND (visto IS NULL OR visto <> 1)");
+                @"UPDATE servturismo
+                  SET visto = 1,
+                      estado = CASE WHEN estado IS NULL OR estado = 'Pendiente' THEN 'Visto por Conductor' ELSE estado END
+                  WHERE idservicio = @Idservicio AND (visto IS NULL OR visto <> 1)");
 
         public Task<bool> MarcarConfirmado(int idservicio) =>
             MarcarAcuse(idservicio,
-                "UPDATE servturismo SET confirmado = 1 WHERE idservicio = @Idservicio AND (confirmado IS NULL OR confirmado <> 1)");
+                @"UPDATE servturismo
+                  SET confirmado = 1, estado = 'Confirmado por Conductor'
+                  WHERE idservicio = @Idservicio AND (confirmado IS NULL OR confirmado <> 1)");
+
+        public Task<bool> MarcarCancelado(int idservicio) =>
+            MarcarAcuse(idservicio,
+                "UPDATE servturismo SET estado = 'Cancelado' WHERE idservicio = @Idservicio AND (estado IS NULL OR estado <> 'Cancelado')");
 
         // ===================== TAXI (CONDUCTORES) CRUD =====================
 

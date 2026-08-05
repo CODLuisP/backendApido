@@ -174,6 +174,29 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // PATCH api/servturismo/{idservicio}/cancelar
+        // Cancela el servicio (estado = "Cancelado") en vez de eliminarlo físicamente. Es idempotente.
+        [HttpPatch("{idservicio}/cancelar")]
+        public async Task<IActionResult> MarcarCancelado(int idservicio)
+        {
+            try
+            {
+                bool existe = await _uow.ServTurismoRepository.MarcarCancelado(idservicio);
+                _uow.SaveChanges();
+
+                if (!existe)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                return Ok(new { mensaje = "Servicio cancelado correctamente.", idservicio, estado = "Cancelado" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al cancelar el servicio.", error = ex.Message });
+            }
+        }
+
         // DELETE api/servturismo/{idservicio}
         [HttpDelete("{idservicio}")]
         public async Task<IActionResult> Delete(int idservicio)
