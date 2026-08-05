@@ -29,7 +29,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion, visto, confirmado, estado
+                                   ejecutivo, cotizacion, visto, confirmado, estado, reprogramado
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
                             {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete")}
@@ -62,8 +62,27 @@ namespace VelsatBackendAPI.Data.Repositories
         // Con limpiarNulos = true, un valor null SÍ se aplica y borra el campo (lo deja NULL en la BD);
         // pensado para un formulario de edición que envía el objeto completo y donde un campo vacío
         // significa "el usuario lo borró".
+        // Devuelve -1 (sentinela) cuando el servicio está Cancelado: un servicio cancelado ya no se
+        // puede editar, así que el caller (controller) debe convertir eso en un 409 en vez de aplicar el patch.
         public async Task<int> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false)
         {
+            var actual = await _doConnection.QueryFirstOrDefaultAsync(
+                "SELECT fechainicio, estado FROM servturismo WHERE idservicio = @Idservicio",
+                new { Idservicio = idservicio },
+                transaction: _doTransaction);
+
+            if (actual == null)
+            {
+                return 0;
+            }
+
+            if ((string?)actual.estado == "Cancelado")
+            {
+                return -1;
+            }
+
+            DateTime? fechaActual = (DateTime?)actual.fechainicio;
+
             var parameters = new DynamicParameters();
             parameters.Add("Idservicio", idservicio);
 
@@ -135,20 +154,12 @@ namespace VelsatBackendAPI.Data.Repositories
             AgregarValorSiPresente("confirmado", campos.Confirmado);
 
             // Reprogramación: si el PATCH cambia fechainicio a un día distinto del que tenía el servicio,
-            // se marca automáticamente como "Reprogramado" (salvo que el propio caller ya haya enviado un
-            // estado explícito, ej. al cancelar un servicio y cambiarle la fecha en la misma llamada).
-            if (campos.Fechainicio.HasValue && campos.Estado == null)
+            // se marca "reprogramado" como flag independiente de "estado" (igual que visto/confirmado),
+            // para que un servicio reprogramado y luego visto/confirmado muestre ambas etiquetas a la vez.
+            if (campos.Fechainicio.HasValue && fechaActual.HasValue
+                && fechaActual.Value.Date != campos.Fechainicio.Value.Date)
             {
-                DateTime? fechaActual = await _doConnection.ExecuteScalarAsync<DateTime?>(
-                    "SELECT fechainicio FROM servturismo WHERE idservicio = @Idservicio",
-                    new { Idservicio = idservicio },
-                    transaction: _doTransaction);
-
-                if (fechaActual.HasValue && fechaActual.Value.Date != campos.Fechainicio.Value.Date)
-                {
-                    setClauses.Add("estado = @EstadoReprogramado");
-                    parameters.Add("EstadoReprogramado", "Reprogramado", dbType: DbType.String);
-                }
+                setClauses.Add("reprogramado = 1");
             }
 
             if (!setClauses.Any())
@@ -259,18 +270,24 @@ namespace VelsatBackendAPI.Data.Repositories
 
         // El estado solo sube de nivel con "visto" (no pisa un Confirmado/Cancelado/Reprogramado ya existente);
         // "confirmado" y "cancelado" sí se imponen porque son estados finales que la app dispara a propósito.
+        // Ninguno de los dos toca un servicio Cancelado: si lo cancelaron, el acuse del conductor
+        // (que puede llegar tarde, ya en camino) ya no debe reabrirlo ni pisar ese estado.
         public Task<bool> MarcarVisto(int idservicio) =>
             MarcarAcuse(idservicio,
                 @"UPDATE servturismo
                   SET visto = 1,
                       estado = CASE WHEN estado IS NULL OR estado = 'Pendiente' THEN 'Visto por Conductor' ELSE estado END
-                  WHERE idservicio = @Idservicio AND (visto IS NULL OR visto <> 1)");
+                  WHERE idservicio = @Idservicio
+                    AND (estado IS NULL OR estado <> 'Cancelado')
+                    AND ((visto IS NULL OR visto <> 1) OR estado IS NULL OR estado = 'Pendiente')");
 
         public Task<bool> MarcarConfirmado(int idservicio) =>
             MarcarAcuse(idservicio,
                 @"UPDATE servturismo
                   SET confirmado = 1, estado = 'Confirmado por Conductor'
-                  WHERE idservicio = @Idservicio AND (confirmado IS NULL OR confirmado <> 1)");
+                  WHERE idservicio = @Idservicio
+                    AND (estado IS NULL OR estado <> 'Cancelado')
+                    AND ((confirmado IS NULL OR confirmado <> 1) OR estado <> 'Confirmado por Conductor' OR estado IS NULL)");
 
         public Task<bool> MarcarCancelado(int idservicio) =>
             MarcarAcuse(idservicio,

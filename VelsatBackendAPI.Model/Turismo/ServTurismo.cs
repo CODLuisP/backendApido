@@ -47,9 +47,14 @@ namespace VelsatBackendAPI.Model.Turismo
         public byte? Visto { get; set; }
         public byte? Confirmado { get; set; }
 
-        // Estado visible del servicio: null/"Pendiente", "Visto por Conductor", "Confirmado por Conductor",
-        // "Cancelado", "Reprogramado". Se actualiza automáticamente desde MarcarVisto/MarcarConfirmado/
-        // MarcarCancelado y, al reprogramar (cambiar fechainicio vía Patch), se fuerza a "Reprogramado".
+        // Estado visible del servicio: null/"Pendiente", "Visto por Conductor", "Confirmado por Conductor"
+        // o "Cancelado". Se actualiza automáticamente desde MarcarVisto/MarcarConfirmado/MarcarCancelado.
+        // Un servicio con estado "Cancelado" ya no admite ediciones (ver ServTurismoRepository.Patch).
         public string? Estado { get; set; }
+
+        // Flag independiente de "estado" (igual patrón que Visto/Confirmado): se marca en 1 cuando el
+        // servicio se reprograma (Patch cambia fechainicio a otro día). Es independiente para que un
+        // servicio reprogramado y luego visto/confirmado por el conductor muestre ambas etiquetas a la vez.
+        public byte? Reprogramado { get; set; }
     }
 }

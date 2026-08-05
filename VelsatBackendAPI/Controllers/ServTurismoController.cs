@@ -111,6 +111,12 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 int filasAfectadas = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos);
+
+                if (filasAfectadas == -1)
+                {
+                    return Conflict(new { mensaje = "El servicio está cancelado y ya no se puede editar." });
+                }
+
                 _uow.SaveChanges();
 
                 if (filasAfectadas > 0)
