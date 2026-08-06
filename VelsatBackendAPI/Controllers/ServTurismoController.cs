@@ -180,6 +180,30 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // PATCH api/servturismo/{idservicio}/finalizar
+        // La app móvil lo llama cuando el conductor desliza la tarjeta hacia la derecha y confirma
+        // el modal de advertencia (acción irreversible). Es idempotente.
+        [HttpPatch("{idservicio}/finalizar")]
+        public async Task<IActionResult> MarcarFinalizado(int idservicio)
+        {
+            try
+            {
+                bool existe = await _uow.ServTurismoRepository.MarcarFinalizado(idservicio);
+                _uow.SaveChanges();
+
+                if (!existe)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                return Ok(new { mensaje = "Servicio finalizado por el conductor.", idservicio, finalizado = 1 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al finalizar el servicio.", error = ex.Message });
+            }
+        }
+
         // PATCH api/servturismo/{idservicio}/cancelar
         // Cancela el servicio (estado = "Cancelado") en vez de eliminarlo físicamente. Es idempotente.
         [HttpPatch("{idservicio}/cancelar")]

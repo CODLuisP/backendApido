@@ -23,6 +23,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<bool> MarcarConfirmado(int idservicio);
 
+        Task<bool> MarcarFinalizado(int idservicio);
+
         Task<bool> MarcarCancelado(int idservicio);
 
         //CRUD tabla taxi (conductores)

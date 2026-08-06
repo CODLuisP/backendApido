@@ -47,8 +47,13 @@ namespace VelsatBackendAPI.Model.Turismo
         public byte? Visto { get; set; }
         public byte? Confirmado { get; set; }
 
-        // Estado visible del servicio: null/"Pendiente", "Visto por Conductor", "Confirmado por Conductor"
-        // o "Cancelado". Se actualiza automáticamente desde MarcarVisto/MarcarConfirmado/MarcarCancelado.
+        // Se marca cuando el conductor desliza la tarjeta hacia la derecha (acción irreversible,
+        // confirmada con un modal en la app). Es el estado final del ciclo de vida del servicio.
+        public byte? Finalizado { get; set; }
+
+        // Estado visible del servicio: null/"Pendiente", "Visto por Conductor", "Confirmado por Conductor",
+        // "Finalizado por Conductor" o "Cancelado". Se actualiza automáticamente desde
+        // MarcarVisto/MarcarConfirmado/MarcarFinalizado/MarcarCancelado.
         // Un servicio con estado "Cancelado" ya no admite ediciones (ver ServTurismoRepository.Patch).
         public string? Estado { get; set; }
 

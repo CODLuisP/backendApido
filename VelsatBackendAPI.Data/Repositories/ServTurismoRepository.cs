@@ -29,7 +29,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion, visto, confirmado, estado, reprogramado
+                                   ejecutivo, cotizacion, visto, confirmado, finalizado, estado, reprogramado
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
                             {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete")}
@@ -152,6 +152,7 @@ namespace VelsatBackendAPI.Data.Repositories
             AgregarSiPresente("cotizacion", campos.Cotizacion);
             AgregarValorSiPresente("visto", campos.Visto);
             AgregarValorSiPresente("confirmado", campos.Confirmado);
+            AgregarValorSiPresente("finalizado", campos.Finalizado);
 
             // Reprogramación: si el PATCH cambia fechainicio a un día distinto del que tenía el servicio,
             // se marca "reprogramado" como flag independiente de "estado" (igual que visto/confirmado),
@@ -292,6 +293,17 @@ namespace VelsatBackendAPI.Data.Repositories
         public Task<bool> MarcarCancelado(int idservicio) =>
             MarcarAcuse(idservicio,
                 "UPDATE servturismo SET estado = 'Cancelado' WHERE idservicio = @Idservicio AND (estado IS NULL OR estado <> 'Cancelado')");
+
+        // Estado final del ciclo del servicio, disparado por el deslizamiento a la derecha en la app
+        // (con modal de confirmación porque es irreversible). No toca un servicio ya Cancelado ni
+        // uno ya Finalizado (idempotente ante reintentos).
+        public Task<bool> MarcarFinalizado(int idservicio) =>
+            MarcarAcuse(idservicio,
+                @"UPDATE servturismo
+                  SET finalizado = 1, estado = 'Finalizado por Conductor'
+                  WHERE idservicio = @Idservicio
+                    AND (estado IS NULL OR estado <> 'Cancelado')
+                    AND (finalizado IS NULL OR finalizado <> 1)");
 
         // ===================== TAXI (CONDUCTORES) CRUD =====================
 
