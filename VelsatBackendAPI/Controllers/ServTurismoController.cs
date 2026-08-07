@@ -219,7 +219,7 @@ namespace VelsatBackendAPI.Controllers
                     return NotFound(new { mensaje = "No se encontró el servicio." });
                 }
 
-                return Ok(new { mensaje = "Servicio cancelado correctamente.", idservicio, estado = "Cancelado" });
+                return Ok(new { mensaje = "Servicio cancelado correctamente.", idservicio, cancelado = 1 });
             }
             catch (Exception ex)
             {

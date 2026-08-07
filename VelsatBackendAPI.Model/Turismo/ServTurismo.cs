@@ -51,15 +51,14 @@ namespace VelsatBackendAPI.Model.Turismo
         // confirmada con un modal en la app). Es el estado final del ciclo de vida del servicio.
         public byte? Finalizado { get; set; }
 
-        // Estado visible del servicio: null/"Pendiente", "Visto por Conductor", "Confirmado por Conductor",
-        // "Finalizado por Conductor" o "Cancelado". Se actualiza automáticamente desde
-        // MarcarVisto/MarcarConfirmado/MarcarFinalizado/MarcarCancelado.
-        // Un servicio con estado "Cancelado" ya no admite ediciones (ver ServTurismoRepository.Patch).
-        public string? Estado { get; set; }
-
-        // Flag independiente de "estado" (igual patrón que Visto/Confirmado): se marca en 1 cuando el
-        // servicio se reprograma (Patch cambia fechainicio a otro día). Es independiente para que un
-        // servicio reprogramado y luego visto/confirmado por el conductor muestre ambas etiquetas a la vez.
+        // Se marca en 1 cuando el servicio se reprograma (Patch cambia fechainicio a otro día).
+        // Al reprogramar, el repositorio limpia visto/confirmado/finalizado (ver ServTurismoRepository.Patch)
+        // para que solo quede visible la etiqueta "Reprogramado" hasta que el conductor vuelva a actuar.
         public byte? Reprogramado { get; set; }
+
+        // Cancelado (1 = cancelado) reemplaza al antiguo campo de texto "estado". Un servicio cancelado
+        // ya no admite ediciones (ver ServTurismoRepository.Patch) y no se devuelve en las consultas
+        // filtradas por conductor (brevete) para que no aparezca en la app móvil.
+        public byte? Cancelado { get; set; }
     }
 }

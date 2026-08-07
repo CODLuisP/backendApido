@@ -24,15 +24,18 @@ namespace VelsatBackendAPI.Data.Repositories
         // de envolver la columna en ninguna función de conversión.
         // brevete opcional: permite a la app móvil pedir solo los servicios del conductor logueado
         // (se identifica por brevete, no hay FK al conductor en esta tabla).
+        // Cuando se filtra por brevete (consulta de la app móvil) se excluyen los servicios cancelados:
+        // el conductor no tiene nada que hacer con un servicio cancelado y no debe verlo. Sin brevete
+        // (consultas de administración/despacho) sí se devuelven, para poder gestionarlos.
         public async Task<List<ServTurismo>> GetByFechas(DateTime fechaInicio, DateTime fechaFin, string? brevete = null)
         {
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion, visto, confirmado, finalizado, estado, reprogramado
+                                   ejecutivo, cotizacion, visto, confirmado, finalizado, reprogramado, cancelado
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
-                            {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete")}
+                            {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete AND (cancelado IS NULL OR cancelado <> 1)")}
                             ORDER BY fechainicio, horainicio";
 
             var parameters = new { FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date, Brevete = brevete };
@@ -67,7 +70,7 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<int> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false)
         {
             var actual = await _doConnection.QueryFirstOrDefaultAsync(
-                "SELECT fechainicio, estado FROM servturismo WHERE idservicio = @Idservicio",
+                "SELECT fechainicio, cancelado FROM servturismo WHERE idservicio = @Idservicio",
                 new { Idservicio = idservicio },
                 transaction: _doTransaction);
 
@@ -76,7 +79,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 return 0;
             }
 
-            if ((string?)actual.estado == "Cancelado")
+            if (Convert.ToByte(actual.cancelado ?? (byte)0) == 1)
             {
                 return -1;
             }
@@ -150,17 +153,26 @@ namespace VelsatBackendAPI.Data.Repositories
             AgregarSiPresente("observaciones", campos.Observaciones);
             AgregarSiPresente("ejecutivo", campos.Ejecutivo);
             AgregarSiPresente("cotizacion", campos.Cotizacion);
-            AgregarValorSiPresente("visto", campos.Visto);
-            AgregarValorSiPresente("confirmado", campos.Confirmado);
-            AgregarValorSiPresente("finalizado", campos.Finalizado);
-
             // Reprogramación: si el PATCH cambia fechainicio a un día distinto del que tenía el servicio,
-            // se marca "reprogramado" como flag independiente de "estado" (igual que visto/confirmado),
-            // para que un servicio reprogramado y luego visto/confirmado muestre ambas etiquetas a la vez.
-            if (campos.Fechainicio.HasValue && fechaActual.HasValue
-                && fechaActual.Value.Date != campos.Fechainicio.Value.Date)
+            // se marca "reprogramado" y se limpian visto/confirmado/finalizado para que en la columna
+            // Estado del conductor solo quede "Reprogramado" hasta que vuelva a ver/confirmar/finalizar
+            // el servicio ya con la fecha nueva. Se decide antes de aplicar "campos.Visto/Confirmado/Finalizado"
+            // para que la limpieza gane siempre y no queden dos SET del mismo campo en la consulta.
+            bool esReprogramacion = campos.Fechainicio.HasValue && fechaActual.HasValue
+                && fechaActual.Value.Date != campos.Fechainicio.Value.Date;
+
+            if (esReprogramacion)
             {
                 setClauses.Add("reprogramado = 1");
+                setClauses.Add("visto = 0");
+                setClauses.Add("confirmado = 0");
+                setClauses.Add("finalizado = 0");
+            }
+            else
+            {
+                AgregarValorSiPresente("visto", campos.Visto);
+                AgregarValorSiPresente("confirmado", campos.Confirmado);
+                AgregarValorSiPresente("finalizado", campos.Finalizado);
             }
 
             if (!setClauses.Any())
@@ -269,30 +281,27 @@ namespace VelsatBackendAPI.Data.Repositories
             return true;
         }
 
-        // El estado solo sube de nivel con "visto" (no pisa un Confirmado/Cancelado/Reprogramado ya existente);
-        // "confirmado" y "cancelado" sí se imponen porque son estados finales que la app dispara a propósito.
-        // Ninguno de los dos toca un servicio Cancelado: si lo cancelaron, el acuse del conductor
-        // (que puede llegar tarde, ya en camino) ya no debe reabrirlo ni pisar ese estado.
+        // Ninguno de estos toca un servicio Cancelado: si lo cancelaron, el acuse del conductor
+        // (que puede llegar tarde, ya en camino) ya no debe reabrirlo.
         public Task<bool> MarcarVisto(int idservicio) =>
             MarcarAcuse(idservicio,
                 @"UPDATE servturismo
-                  SET visto = 1,
-                      estado = CASE WHEN estado IS NULL OR estado = 'Pendiente' THEN 'Visto por Conductor' ELSE estado END
+                  SET visto = 1
                   WHERE idservicio = @Idservicio
-                    AND (estado IS NULL OR estado <> 'Cancelado')
-                    AND ((visto IS NULL OR visto <> 1) OR estado IS NULL OR estado = 'Pendiente')");
+                    AND (cancelado IS NULL OR cancelado <> 1)
+                    AND (visto IS NULL OR visto <> 1)");
 
         public Task<bool> MarcarConfirmado(int idservicio) =>
             MarcarAcuse(idservicio,
                 @"UPDATE servturismo
-                  SET confirmado = 1, estado = 'Confirmado por Conductor'
+                  SET confirmado = 1
                   WHERE idservicio = @Idservicio
-                    AND (estado IS NULL OR estado <> 'Cancelado')
-                    AND ((confirmado IS NULL OR confirmado <> 1) OR estado <> 'Confirmado por Conductor' OR estado IS NULL)");
+                    AND (cancelado IS NULL OR cancelado <> 1)
+                    AND (confirmado IS NULL OR confirmado <> 1)");
 
         public Task<bool> MarcarCancelado(int idservicio) =>
             MarcarAcuse(idservicio,
-                "UPDATE servturismo SET estado = 'Cancelado' WHERE idservicio = @Idservicio AND (estado IS NULL OR estado <> 'Cancelado')");
+                "UPDATE servturismo SET cancelado = 1 WHERE idservicio = @Idservicio AND (cancelado IS NULL OR cancelado <> 1)");
 
         // Estado final del ciclo del servicio, disparado por el deslizamiento a la derecha en la app
         // (con modal de confirmación porque es irreversible). No toca un servicio ya Cancelado ni
@@ -300,9 +309,9 @@ namespace VelsatBackendAPI.Data.Repositories
         public Task<bool> MarcarFinalizado(int idservicio) =>
             MarcarAcuse(idservicio,
                 @"UPDATE servturismo
-                  SET finalizado = 1, estado = 'Finalizado por Conductor'
+                  SET finalizado = 1
                   WHERE idservicio = @Idservicio
-                    AND (estado IS NULL OR estado <> 'Cancelado')
+                    AND (cancelado IS NULL OR cancelado <> 1)
                     AND (finalizado IS NULL OR finalizado <> 1)");
 
         // ===================== TAXI (CONDUCTORES) CRUD =====================
