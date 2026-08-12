@@ -27,6 +27,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<bool> MarcarCancelado(int idservicio);
 
+        Task<bool> MarcarStandby(int idservicio);
+
+        Task<bool> MarcarReanudar(int idservicio);
+
         //CRUD tabla taxi (conductores)
         Task<List<ConductorTurismo>> GetTaxis(string codusuario);
 

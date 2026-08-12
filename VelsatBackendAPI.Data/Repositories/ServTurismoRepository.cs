@@ -24,18 +24,21 @@ namespace VelsatBackendAPI.Data.Repositories
         // de envolver la columna en ninguna función de conversión.
         // brevete opcional: permite a la app móvil pedir solo los servicios del conductor logueado
         // (se identifica por brevete, no hay FK al conductor en esta tabla).
-        // Cuando se filtra por brevete (consulta de la app móvil) se excluyen los servicios cancelados:
-        // el conductor no tiene nada que hacer con un servicio cancelado y no debe verlo. Sin brevete
-        // (consultas de administración/despacho) sí se devuelven, para poder gestionarlos.
+        // Cuando se filtra por brevete (consulta de la app móvil) se excluyen los servicios cancelados
+        // y los que están en Stand By: en ambos casos el conductor no tiene nada que hacer con ese
+        // servicio y no debe verlo. Sin brevete (consultas de administración/despacho) sí se devuelven,
+        // para poder gestionarlos (incluyendo reanudar un Stand By).
         public async Task<List<ServTurismo>> GetByFechas(DateTime fechaInicio, DateTime fechaFin, string? brevete = null)
         {
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion, visto, confirmado, finalizado, reprogramado, cancelado
+                                   ejecutivo, cotizacion, visto, confirmado, finalizado, reprogramado, cancelado, standby
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
-                            {(string.IsNullOrWhiteSpace(brevete) ? "" : "AND brevete = @Brevete AND (cancelado IS NULL OR cancelado <> 1)")}
+                            {(string.IsNullOrWhiteSpace(brevete)
+                                ? ""
+                                : "AND brevete = @Brevete AND (cancelado IS NULL OR cancelado <> 1) AND (standby IS NULL OR standby <> 1)")}
                             ORDER BY fechainicio, horainicio";
 
             var parameters = new { FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date, Brevete = brevete };
@@ -302,6 +305,24 @@ namespace VelsatBackendAPI.Data.Repositories
         public Task<bool> MarcarCancelado(int idservicio) =>
             MarcarAcuse(idservicio,
                 "UPDATE servturismo SET cancelado = 1 WHERE idservicio = @Idservicio AND (cancelado IS NULL OR cancelado <> 1)");
+
+        // Pausa reversible: no toca un servicio ya Cancelado (ese flujo es definitivo, no pasa por Stand By).
+        public Task<bool> MarcarStandby(int idservicio) =>
+            MarcarAcuse(idservicio,
+                @"UPDATE servturismo
+                  SET standby = 1
+                  WHERE idservicio = @Idservicio
+                    AND (cancelado IS NULL OR cancelado <> 1)
+                    AND (standby IS NULL OR standby <> 1)");
+
+        // Reanuda un servicio en Stand By: vuelve a estar visible para el conductor con el mismo
+        // acuse que tenía antes de pausarse (no se tocan visto/confirmado/finalizado).
+        public Task<bool> MarcarReanudar(int idservicio) =>
+            MarcarAcuse(idservicio,
+                @"UPDATE servturismo
+                  SET standby = 0
+                  WHERE idservicio = @Idservicio
+                    AND standby = 1");
 
         // Estado final del ciclo del servicio, disparado por el deslizamiento a la derecha en la app
         // (con modal de confirmación porque es irreversible). No toca un servicio ya Cancelado ni

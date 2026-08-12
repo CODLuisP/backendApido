@@ -227,6 +227,52 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // PATCH api/servturismo/{idservicio}/standby
+        // Pausa el servicio (el conductor deja de verlo) sin cancelarlo definitivamente. Es idempotente.
+        [HttpPatch("{idservicio}/standby")]
+        public async Task<IActionResult> MarcarStandby(int idservicio)
+        {
+            try
+            {
+                bool existe = await _uow.ServTurismoRepository.MarcarStandby(idservicio);
+                _uow.SaveChanges();
+
+                if (!existe)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                return Ok(new { mensaje = "Servicio puesto en Stand By correctamente.", idservicio, standby = 1 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al poner el servicio en Stand By.", error = ex.Message });
+            }
+        }
+
+        // PATCH api/servturismo/{idservicio}/reanudar
+        // Reanuda un servicio que estaba en Stand By, volviéndolo a mostrar al conductor. Es idempotente.
+        [HttpPatch("{idservicio}/reanudar")]
+        public async Task<IActionResult> MarcarReanudar(int idservicio)
+        {
+            try
+            {
+                bool existe = await _uow.ServTurismoRepository.MarcarReanudar(idservicio);
+                _uow.SaveChanges();
+
+                if (!existe)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                return Ok(new { mensaje = "Servicio reanudado correctamente.", idservicio, standby = 0 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al reanudar el servicio.", error = ex.Message });
+            }
+        }
+
         // DELETE api/servturismo/{idservicio}
         [HttpDelete("{idservicio}")]
         public async Task<IActionResult> Delete(int idservicio)

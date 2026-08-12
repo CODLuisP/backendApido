@@ -60,5 +60,10 @@ namespace VelsatBackendAPI.Model.Turismo
         // ya no admite ediciones (ver ServTurismoRepository.Patch) y no se devuelve en las consultas
         // filtradas por conductor (brevete) para que no aparezca en la app móvil.
         public byte? Cancelado { get; set; }
+
+        // Pausa reversible: el conductor deja de ver el servicio (igual que Cancelado se excluye de las
+        // consultas filtradas por brevete) pero, a diferencia de Cancelado, se puede "reanudar"
+        // (MarcarReanudar) para que vuelva a estar activo. No bloquea ediciones.
+        public byte? Standby { get; set; }
     }
 }
