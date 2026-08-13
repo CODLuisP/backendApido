@@ -4736,7 +4736,10 @@ namespace VelsatBackendAPI.Data.Repositories
             var mapaConductores = new Dictionary<string, string>();
             foreach (var nombre in registros.Select(r => r.Conductor).Distinct())
             {
+                if (string.IsNullOrWhiteSpace(nombre)) continue;
+
                 var match = conductores.FirstOrDefault(c =>
+                    !string.IsNullOrEmpty(c.Apellidos) &&
                     c.Apellidos.Contains(nombre, StringComparison.OrdinalIgnoreCase));
                 if (match != null)
                 {
@@ -4761,7 +4764,9 @@ namespace VelsatBackendAPI.Data.Repositories
                 commandTimeout: timeout
             );
 
-            var mapaServicios = servicios.ToDictionary(s => s.Numero, s => s.Codservicio);
+            var mapaServicios = servicios
+                .GroupBy(s => s.Numero)
+                .ToDictionary(g => g.Key, g => g.First().Codservicio);
 
             var updateServicio = new List<object>();
 
