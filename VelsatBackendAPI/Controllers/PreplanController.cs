@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using NPOI.SS.Formula.Functions;
 using System.Globalization;
 using VelsatBackendAPI.Data.Repositories;
+using VelsatBackendAPI.Data.Services;
 using VelsatBackendAPI.Model;
 using VelsatBackendAPI.Model.GestionPasajeros;
 using VelsatBackendAPI.Model.Latam;
@@ -19,12 +20,14 @@ namespace VelsatBackendAPI.Controllers
 
         private readonly IReadOnlyUnitOfWork _readOnlyUow;  // ✅ Para GET
         private readonly IUnitOfWork _uow;
+        private readonly IFirebaseService _firebaseService;
 
         // ✅ CAMBIO: Inyectar Factory en lugar de UnitOfWork
-        public PreplanController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow)
+        public PreplanController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow, IFirebaseService firebaseService)
         {
             _readOnlyUow = readOnlyUow;
             _uow = uow;
+            _firebaseService = firebaseService;
         }
 
         // POST api/preplan/insert
@@ -365,6 +368,7 @@ namespace VelsatBackendAPI.Controllers
 
                 if (resultado == "Servicio Asignado")
                 {
+                    await NotificarConductoresAsync(listaServicios);
                     return Ok(new { message = resultado });
                 }
                 else
@@ -377,6 +381,40 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, new { message = "Error en la asignación del servicio", error = ex.Message });
             }
 
+        }
+
+        // Notifica por push a los conductores a los que se les asignó un servicio en este lote.
+        // Se ejecuta después del SaveChanges: si falla el envío, no debe afectar la respuesta al cliente
+        // (el servicio ya quedó asignado en base de datos).
+        private async Task NotificarConductoresAsync(List<Servicio> listaServicios)
+        {
+            try
+            {
+                var codigos = listaServicios
+                    .Select(s => s.Conductor?.Codigo)
+                    .Where(codigo => !string.IsNullOrWhiteSpace(codigo))
+                    .Distinct()
+                    .ToList();
+
+                if (!codigos.Any())
+                {
+                    return;
+                }
+
+                var tokens = await _readOnlyUow.NotificacionesRepository.GetFCMTokensByCodigosAsync(codigos);
+
+                foreach (var token in tokens)
+                {
+                    await _firebaseService.SendPushNotificationAsync(
+                        token.FCMToken,
+                        "Nuevo servicio asignado",
+                        "Se te ha asignado un nuevo servicio. Revisa la app para ver el detalle.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error notificando asignación de servicio: {ex.Message}");
+            }
         }
 
         [HttpDelete("eliminacionmultiple")]

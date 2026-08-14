@@ -1584,8 +1584,11 @@ namespace VelsatBackendAPI.Data.Repositories
                 return "Lista de servicios vacía o nula.";
             }
 
-            string resultado = "";
-            int resultadoServicio = 0;
+            // resultado/todosAsignados se evalúan sobre TODOS los servicios del lote, no solo el último
+            // (antes, "resultadoServicio" se sobreescribía en cada vuelta y el mensaje final solo reflejaba
+            // el último servicio procesado, aunque uno anterior del mismo lote hubiera fallado).
+            string resultado = "Servicio Asignado";
+            bool todosAsignados = true;
 
             foreach (var servicio in listaServicios)
             {
@@ -1607,26 +1610,29 @@ namespace VelsatBackendAPI.Data.Repositories
                     string fechaAsignacion = DateTime.Now.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
                     servicio.Fecasignacion = fechaAsignacion;
 
-                    resultadoServicio = await AsignarServicio(servicio);
+                    int resultadoServicio = await AsignarServicio(servicio);
 
-                    var resultadoUnidad = await ActualizarUnidadConductorPreplan(servicio);
+                    await ActualizarUnidadConductorPreplan(servicio);
+
+                    if (resultadoServicio != 1)
+                    {
+                        todosAsignados = false;
+                    }
                 }
                 else
                 {
+                    todosAsignados = false;
                     resultado = "Unidad no encontrada o registrada.";
                 }
             }
 
-            if (resultadoServicio == 1)
-            {
-                resultado = "Servicio Asignado";
-            }
-            else
+            if (!todosAsignados)
             {
                 Console.WriteLine("Error en la asignación del servicio.");
+                return resultado;
             }
 
-            return resultado;
+            return "Servicio Asignado";
         }
 
         private async Task<int> AsignarServicio(Servicio servicio)

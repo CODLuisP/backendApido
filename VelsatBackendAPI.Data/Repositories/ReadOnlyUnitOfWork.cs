@@ -35,6 +35,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IAdminRepository> _adminRepository;
         private readonly Lazy<IDocRepository> _docRepository;
         private readonly Lazy<IServTurismoRepository> _servTurismoRepository;
+        private readonly Lazy<INotificacionesRepository> _notificacionesRepository;
 
 
         private bool _disposed = false;
@@ -71,6 +72,8 @@ namespace VelsatBackendAPI.Data.Repositories
             _adminRepository = new Lazy<IAdminRepository>(() => new AdminRepository(DefaultConnection, null));
 
             _servTurismoRepository = new Lazy<IServTurismoRepository>(() => new ServTurismoRepository(DOConnection, null));
+
+            _notificacionesRepository = new Lazy<INotificacionesRepository>(() => new NotificacionesRepository(DOConnection, null));
         }
 
         private MySqlConnection DefaultConnection
@@ -292,6 +295,16 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (_disposed)
                     throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
                 return _servTurismoRepository.Value;
+            }
+        }
+
+        public INotificacionesRepository NotificacionesRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _notificacionesRepository.Value;
             }
         }
 

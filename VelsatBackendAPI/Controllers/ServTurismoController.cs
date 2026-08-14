@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
 using VelsatBackendAPI.Data.Repositories;
+using VelsatBackendAPI.Data.Services;
 using VelsatBackendAPI.Model.Turismo;
 
 namespace VelsatBackendAPI.Controllers
@@ -11,11 +12,13 @@ namespace VelsatBackendAPI.Controllers
     {
         private readonly IReadOnlyUnitOfWork _readOnlyUow;  // ✅ Para GET
         private readonly IUnitOfWork _uow;
+        private readonly IFirebaseService _firebaseService;
 
-        public ServTurismoController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow)
+        public ServTurismoController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow, IFirebaseService firebaseService)
         {
             _readOnlyUow = readOnlyUow;
             _uow = uow;
+            _firebaseService = firebaseService;
         }
 
         // GET api/servturismo?fechaInicio=01/07/2026&fechaFin=31/07/2026&brevete=Q12345678
@@ -65,6 +68,8 @@ namespace VelsatBackendAPI.Controllers
                 int idservicio = await _uow.ServTurismoRepository.Insert(servicio);
                 _uow.SaveChanges();
 
+                await NotificarConductorAsync(servicio.Brevete);
+
                 return Ok(new { mensaje = "Servicio de turismo creado correctamente.", idservicio });
             }
             catch (Exception ex)
@@ -89,11 +94,50 @@ namespace VelsatBackendAPI.Controllers
                 int insertados = await _uow.ServTurismoRepository.InsertBatch(servicios);
                 _uow.SaveChanges();
 
+                var brevetes = servicios
+                    .Select(s => s.Brevete)
+                    .Where(brevete => !string.IsNullOrWhiteSpace(brevete))
+                    .Distinct();
+
+                foreach (var brevete in brevetes)
+                {
+                    await NotificarConductorAsync(brevete);
+                }
+
                 return Ok(new { mensaje = "Servicios de turismo insertados correctamente.", insertados });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { mensaje = "Error al insertar los servicios de turismo en lote.", error = ex.Message });
+            }
+        }
+
+        // Notifica por push al conductor dueño de "brevete". Se ejecuta después del SaveChanges: si falla
+        // el envío no debe afectar la respuesta al cliente (el servicio ya quedó insertado en base de datos).
+        private async Task NotificarConductorAsync(string? brevete)
+        {
+            if (string.IsNullOrWhiteSpace(brevete))
+            {
+                return;
+            }
+
+            try
+            {
+                var token = await _readOnlyUow.NotificacionesRepository.GetFCMTokenByBreveteAsync(brevete);
+
+                if (token == null)
+                {
+                    return;
+                }
+
+                await _firebaseService.SendPushNotificationAsync(
+                    token.FCMToken,
+                    "Nuevo servicio de turismo",
+                    "Se te ha asignado un nuevo servicio de turismo. Revisa la app para ver el detalle.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error notificando servicio de turismo: {ex.Message}");
             }
         }
 

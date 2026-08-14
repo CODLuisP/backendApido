@@ -53,6 +53,8 @@ builder.Services.AddSingleton(mysqlConfiguration);
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IReadOnlyUnitOfWork, ReadOnlyUnitOfWork>();
 
+builder.Services.AddHttpClient<IFirebaseService, FirebaseService>();
+
 // ✅ CORS configurado correctamente
 builder.Services.AddCors(options =>
 {
