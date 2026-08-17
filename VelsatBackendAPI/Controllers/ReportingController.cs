@@ -25,6 +25,7 @@ namespace VelsatBackendAPI.Controllers
             _readOnlyUow = readOnlyUow;
         }
 
+
         // Reporte general y Excel
         [HttpGet("general/{fechaini}/{fechafin}/{deviceID}/{accountID}")]
         public IActionResult GetDataReporting(string fechaini, string fechafin, string deviceID, string accountID)
