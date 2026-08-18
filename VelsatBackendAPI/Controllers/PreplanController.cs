@@ -428,6 +428,7 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 int resultado = await _uow.PreplanRepository.EliminacionMultiple(listaServicios);
+
                 _uow.SaveChanges();
 
                 if (resultado > 0)
