@@ -13,7 +13,9 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> InsertBatch(IEnumerable<ServTurismo> servicios);
 
-        Task<int> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false);
+        // BreveteAnterior: valor de "brevete" antes del patch, para que el caller pueda detectar
+        // un cambio de conductor y notificarlo (ver ServTurismoController.Patch).
+        Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false);
 
         Task<int> Delete(int idservicio);
 

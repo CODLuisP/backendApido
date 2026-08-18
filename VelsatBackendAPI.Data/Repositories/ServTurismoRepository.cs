@@ -70,21 +70,23 @@ namespace VelsatBackendAPI.Data.Repositories
         // significa "el usuario lo borró".
         // Devuelve -1 (sentinela) cuando el servicio está Cancelado: un servicio cancelado ya no se
         // puede editar, así que el caller (controller) debe convertir eso en un 409 en vez de aplicar el patch.
-        public async Task<int> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false)
+        public async Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false)
         {
             var actual = await _doConnection.QueryFirstOrDefaultAsync(
-                "SELECT fechainicio, cancelado FROM servturismo WHERE idservicio = @Idservicio",
+                "SELECT fechainicio, cancelado, brevete FROM servturismo WHERE idservicio = @Idservicio",
                 new { Idservicio = idservicio },
                 transaction: _doTransaction);
 
             if (actual == null)
             {
-                return 0;
+                return (0, null);
             }
+
+            string? breveteAnterior = (string?)actual.brevete;
 
             if (Convert.ToByte(actual.cancelado ?? (byte)0) == 1)
             {
-                return -1;
+                return (-1, breveteAnterior);
             }
 
             DateTime? fechaActual = (DateTime?)actual.fechainicio;
@@ -180,12 +182,14 @@ namespace VelsatBackendAPI.Data.Repositories
 
             if (!setClauses.Any())
             {
-                return 0;
+                return (0, breveteAnterior);
             }
 
             string sql = $"UPDATE servturismo SET {string.Join(", ", setClauses)} WHERE idservicio = @Idservicio";
 
-            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+            int filas = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+
+            return (filas, breveteAnterior);
         }
 
         // Inserta en lote usando sentencias INSERT multi-VALUES (por bloques) en vez de un INSERT por fila,
