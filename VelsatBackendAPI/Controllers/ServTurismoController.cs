@@ -154,7 +154,7 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                int filasAfectadas = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos);
+                var (filasAfectadas, breveteAnterior) = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos);
 
                 if (filasAfectadas == -1)
                 {
@@ -165,6 +165,14 @@ namespace VelsatBackendAPI.Controllers
 
                 if (filasAfectadas > 0)
                 {
+                    // Solo notifica al conductor NUEVO cuando el patch realmente cambió el brevete
+                    // (reasignación de conductor), no en cualquier edición del servicio.
+                    if (!string.IsNullOrWhiteSpace(campos.Brevete) &&
+                        !string.Equals(campos.Brevete, breveteAnterior, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await NotificarConductorAsync(campos.Brevete);
+                    }
+
                     return Ok(new { mensaje = "Servicio de turismo actualizado correctamente.", filasAfectadas });
                 }
 
