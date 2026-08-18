@@ -160,7 +160,6 @@ namespace VelsatBackendAPI.Controllers
                 {
                     return Conflict(new { mensaje = "El servicio está cancelado y ya no se puede editar." });
                 }
-
                 _uow.SaveChanges();
 
                 if (filasAfectadas > 0)
