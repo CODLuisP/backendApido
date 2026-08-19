@@ -132,7 +132,9 @@ namespace VelsatBackendAPI.Data.Repositories
         // realmente cambió de valor (comparando contra lo que había antes, no solo contra "vino en el body").
         public async Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false, string? usuario = null, string? motivo = null)
         {
-            string sqlActual = $"SELECT cancelado, brevete, {string.Join(", ", ColumnasAuditables)} FROM servturismo WHERE idservicio = @Idservicio";
+            // "brevete" ya está en ColumnasAuditables: no repetirla acá, dos columnas con el mismo
+            // nombre en el SELECT corrompen el mapeo por nombre del dynamic row de Dapper.
+            string sqlActual = $"SELECT cancelado, {string.Join(", ", ColumnasAuditables)} FROM servturismo WHERE idservicio = @Idservicio";
 
             var actual = await _doConnection.QueryFirstOrDefaultAsync(
                 sqlActual,
@@ -178,7 +180,7 @@ namespace VelsatBackendAPI.Data.Repositories
             void RegistrarSiCambio(string columna, string? nuevo)
             {
                 string? anterior = TextoActual(columna);
-                if (!string.Equals(anterior ?? "", nuevo ?? "", StringComparison.Ordinal))
+                if (!string.Equals((anterior ?? "").Trim(), (nuevo ?? "").Trim(), StringComparison.Ordinal))
                 {
                     cambios.Add((columna, anterior, nuevo));
                 }
