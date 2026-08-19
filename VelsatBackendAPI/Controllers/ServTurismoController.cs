@@ -130,10 +130,15 @@ namespace VelsatBackendAPI.Controllers
                     return;
                 }
 
-                await _firebaseService.SendPushNotificationAsync(
+                var resultado = await _firebaseService.SendPushNotificationAsync(
                     token.FCMToken,
                     "Nuevo servicio de turismo",
                     "Se te ha asignado un nuevo servicio de turismo. Revisa la app para ver el detalle.");
+
+                if (resultado.TokenInvalido)
+                {
+                    await _readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
+                }
             }
             catch (Exception ex)
             {

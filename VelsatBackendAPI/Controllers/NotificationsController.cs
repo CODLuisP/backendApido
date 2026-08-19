@@ -33,7 +33,10 @@ namespace VelsatBackendAPI.Controllers
                     (request.Platform != "android" && request.Platform != "ios"))
                     return BadRequest("El campo Platform debe ser 'android' o 'ios'.");
 
-                var resultado = await _uow.NotificacionesRepository.SaveFCMTokenAsync(request.Codigo, request.FCMToken, request.Platform);
+                if (string.IsNullOrWhiteSpace(request.DeviceId))
+                    return BadRequest("El campo deviceId es obligatorio.");
+
+                var resultado = await _uow.NotificacionesRepository.SaveFCMTokenAsync(request.Codigo, request.FCMToken, request.Platform, request.DeviceId);
 
                 _uow.SaveChanges();
 

@@ -6,7 +6,10 @@ namespace VelsatBackendAPI.Data.Repositories
 {
     public interface INotificacionesRepository
     {
-        Task<bool> SaveFCMTokenAsync(string codigo, string fcmToken, string platform);
+        Task<bool> SaveFCMTokenAsync(string codigo, string fcmToken, string platform, string deviceId);
+
+        // Limpieza cuando Firebase reporta el token como no registrado/inválido.
+        Task<bool> DeleteFCMTokenAsync(string fcmToken);
 
         // Batch: usado por AsignarServicio (varios conductores en un solo POST).
         Task<IEnumerable<UserFCMToken>> GetFCMTokensByCodigosAsync(IEnumerable<string> codigos);

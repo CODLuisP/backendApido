@@ -20,26 +20,35 @@ namespace VelsatBackendAPI.Data.Repositories
             _doTransaction = doTransaction;
         }
 
-        public async Task<bool> SaveFCMTokenAsync(string codigo, string fcmToken, string platform)
+        // Upsert por (Codigo, DeviceId): un conductor puede tener un token activo POR DISPOSITIVO,
+        // así que loguearse en un segundo celular no pisa el token del primero — ambos reciben la alerta.
+        // Requiere índice único en UserFCMTokens(Codigo, DeviceId).
+        public async Task<bool> SaveFCMTokenAsync(string codigo, string fcmToken, string platform, string deviceId)
         {
-            string sqlCheck = @"SELECT COUNT(1) FROM UserFCMTokens
-                                 WHERE Codigo = @Codigo AND FCMToken = @FCMToken";
-
-            int exists = await _doConnection.ExecuteScalarAsync<int>(
-                sqlCheck,
-                new { Codigo = codigo, FCMToken = fcmToken },
-                transaction: _doTransaction);
-
-            if (exists > 0)
-                return true;
-
-            string sqlInsert = @"INSERT INTO UserFCMTokens
-                                  (Codigo, FCMToken, Platform, CreatedAt, UpdatedAt)
-                                  VALUES (@Codigo, @FCMToken, @Platform, NOW(), NOW())";
+            string sqlUpsert = @"INSERT INTO UserFCMTokens
+                                  (Codigo, FCMToken, Platform, DeviceId, CreatedAt, UpdatedAt)
+                                  VALUES (@Codigo, @FCMToken, @Platform, @DeviceId, NOW(), NOW())
+                                  ON DUPLICATE KEY UPDATE
+                                      FCMToken = VALUES(FCMToken),
+                                      Platform = VALUES(Platform),
+                                      UpdatedAt = NOW()";
 
             int rows = await _doConnection.ExecuteAsync(
-                sqlInsert,
-                new { Codigo = codigo, FCMToken = fcmToken, Platform = platform },
+                sqlUpsert,
+                new { Codigo = codigo, FCMToken = fcmToken, Platform = platform, DeviceId = deviceId },
+                transaction: _doTransaction);
+
+            return rows > 0;
+        }
+
+        // Limpieza cuando Firebase reporta el token como no registrado/inválido.
+        public async Task<bool> DeleteFCMTokenAsync(string fcmToken)
+        {
+            string sql = @"DELETE FROM UserFCMTokens WHERE FCMToken = @FCMToken";
+
+            int rows = await _doConnection.ExecuteAsync(
+                sql,
+                new { FCMToken = fcmToken },
                 transaction: _doTransaction);
 
             return rows > 0;

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -10,9 +11,27 @@ using System.Threading.Tasks;
 
 namespace VelsatBackendAPI.Data.Services
 {
+    public readonly struct PushSendResult
+    {
+        public bool Success { get; }
+        // true cuando Firebase confirma que el token ya no es válido (UNREGISTERED/NOT_FOUND):
+        // el caller debe borrarlo de UserFCMTokens para no seguir intentando.
+        public bool TokenInvalido { get; }
+
+        public PushSendResult(bool success, bool tokenInvalido)
+        {
+            Success = success;
+            TokenInvalido = tokenInvalido;
+        }
+
+        public static readonly PushSendResult Ok = new PushSendResult(true, false);
+        public static readonly PushSendResult Fallo = new PushSendResult(false, false);
+        public static readonly PushSendResult TokenMuerto = new PushSendResult(false, true);
+    }
+
     public interface IFirebaseService
     {
-        Task<bool> SendPushNotificationAsync(string fcmToken, string titulo, string mensaje);
+        Task<PushSendResult> SendPushNotificationAsync(string fcmToken, string titulo, string mensaje);
     }
 
     // Réplica de VelsatMobile.Services.FirebaseService.FirebaseService (repo VelsatMobile/DocumentosNotificacionJob):
@@ -32,7 +51,7 @@ namespace VelsatBackendAPI.Data.Services
             _logger = logger;
         }
 
-        public async Task<bool> SendPushNotificationAsync(string fcmToken, string titulo, string mensaje)
+        public async Task<PushSendResult> SendPushNotificationAsync(string fcmToken, string titulo, string mensaje)
         {
             try
             {
@@ -66,15 +85,23 @@ namespace VelsatBackendAPI.Data.Services
                 {
                     string error = await response.Content.ReadAsStringAsync();
                     _logger.LogError($"Firebase error: {error}");
-                    return false;
+
+                    // FCM v1 responde 404/NOT_FOUND con errorCode UNREGISTERED cuando el token
+                    // ya no existe (app desinstalada, token rotado, etc.). Ese token está muerto
+                    // para siempre: no tiene sentido reintentarlo.
+                    bool tokenInvalido = response.StatusCode == HttpStatusCode.NotFound
+                        || error.Contains("UNREGISTERED")
+                        || error.Contains("INVALID_ARGUMENT");
+
+                    return tokenInvalido ? PushSendResult.TokenMuerto : PushSendResult.Fallo;
                 }
 
-                return true;
+                return PushSendResult.Ok;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error enviando notificación Firebase: {ex.Message}");
-                return false;
+                return PushSendResult.Fallo;
             }
         }
 
