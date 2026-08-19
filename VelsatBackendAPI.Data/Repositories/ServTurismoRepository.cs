@@ -161,10 +161,18 @@ namespace VelsatBackendAPI.Data.Repositories
             var setClauses = new List<string>();
             var cambios = new List<(string Campo, string? Anterior, string? Nuevo)>();
 
-            // Texto tal cual quedó guardado en la columna, para comparar contra el valor nuevo.
+            // Texto tal cual quedó guardado en la columna, normalizado al mismo formato que se usa
+            // para el valor nuevo (ver AgregarValorSiPresente): sin esto, DateTime.ToString() usa el
+            // formato de cultura por defecto (ej. "08/19/2026 00:00:00") y nunca coincide con el
+            // "dd/MM/yyyy" del valor nuevo, marcando como "cambiada" una fecha que no se tocó.
             string? TextoActual(string columna) =>
                 actualDict.TryGetValue(columna, out var valor) && valor != null && !(valor is DBNull)
-                    ? valor is TimeSpan ts ? ts.ToString(@"hh\:mm") : valor.ToString()
+                    ? valor switch
+                    {
+                        TimeSpan ts => ts.ToString(@"hh\:mm"),
+                        DateTime dt => dt.ToString("dd/MM/yyyy"),
+                        _ => valor.ToString(),
+                    }
                     : null;
 
             void RegistrarSiCambio(string columna, string? nuevo)
