@@ -300,7 +300,6 @@ namespace VelsatBackendAPI.Data.Repositories
 
             for (int i = 0; i < cambios.Count; i++)
             {
-                Console.WriteLine($"[AUDITORIA-DEBUG] idservicio={idservicio} campo={cambios[i].Campo} anterior='{cambios[i].Anterior}' nuevo='{cambios[i].Nuevo}'");
                 valuesClauses.Add($"(@Idservicio{i}, @Campo{i}, @ValorAnterior{i}, @ValorNuevo{i}, @Usuario{i}, @Motivo{i}, @Fecha{i})");
                 parameters.Add($"Idservicio{i}", idservicio);
                 parameters.Add($"Campo{i}", cambios[i].Campo);
@@ -320,7 +319,12 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<List<ServTurismoAuditoria>> GetAuditoria(int idservicio)
         {
-            string sql = @"SELECT idauditoria, idservicio, campo, valor_anterior, valor_nuevo, usuario, motivo, fecha
+            // Alias explícitos en valor_anterior/valor_nuevo: Dapper mapea columnas a propiedades por
+            // nombre exacto (case-insensitive) pero NO convierte snake_case a PascalCase, así que sin
+            // el alias esas dos columnas nunca emparejaban con ValorAnterior/ValorNuevo y quedaban null.
+            string sql = @"SELECT idauditoria, idservicio, campo,
+                                   valor_anterior AS ValorAnterior, valor_nuevo AS ValorNuevo,
+                                   usuario, motivo, fecha
                             FROM servturismo_auditoria
                             WHERE idservicio = @Idservicio
                             ORDER BY fecha DESC, idauditoria DESC";
