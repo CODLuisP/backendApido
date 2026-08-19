@@ -300,6 +300,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             for (int i = 0; i < cambios.Count; i++)
             {
+                Console.WriteLine($"[AUDITORIA-DEBUG] idservicio={idservicio} campo={cambios[i].Campo} anterior='{cambios[i].Anterior}' nuevo='{cambios[i].Nuevo}'");
                 valuesClauses.Add($"(@Idservicio{i}, @Campo{i}, @ValorAnterior{i}, @ValorNuevo{i}, @Usuario{i}, @Motivo{i}, @Fecha{i})");
                 parameters.Add($"Idservicio{i}", idservicio);
                 parameters.Add($"Campo{i}", cambios[i].Campo);
