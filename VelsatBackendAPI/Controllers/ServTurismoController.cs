@@ -141,11 +141,12 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        // PATCH api/servturismo/{idservicio}?limpiarNulos=true
+        // PATCH api/servturismo/{idservicio}?limpiarNulos=true&usuario=jperez&motivo=Cambio+de+solicitud+del+cliente
         // limpiarNulos=true: los campos que llegan en null SÍ se aplican (borran el dato en la BD).
         // Pensado para el formulario de edición del front, que siempre envía el objeto completo.
+        // usuario/motivo quedan en servturismo_auditoria por cada campo que cambió de valor (motivo es opcional).
         [HttpPatch("{idservicio}")]
-        public async Task<IActionResult> Patch(int idservicio, [FromBody] ServTurismo campos, [FromQuery] bool limpiarNulos = false)
+        public async Task<IActionResult> Patch(int idservicio, [FromBody] ServTurismo campos, [FromQuery] bool limpiarNulos = false, [FromQuery] string? usuario = null, [FromQuery] string? motivo = null)
         {
             if (campos == null)
             {
@@ -154,7 +155,7 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var (filasAfectadas, breveteAnterior) = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos);
+                var (filasAfectadas, breveteAnterior) = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos, usuario, motivo);
 
                 if (filasAfectadas == -1)
                 {
@@ -321,6 +322,23 @@ namespace VelsatBackendAPI.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { mensaje = "Error al reanudar el servicio.", error = ex.Message });
+            }
+        }
+
+        // GET api/servturismo/{idservicio}/auditoria
+        // Historial de ediciones manuales del servicio (campo, valor anterior/nuevo, usuario, motivo, fecha),
+        // más reciente primero. Pensado para el panel expandible de "Historial de cambios" en el front.
+        [HttpGet("{idservicio}/auditoria")]
+        public async Task<IActionResult> GetAuditoria(int idservicio)
+        {
+            try
+            {
+                var auditoria = await _readOnlyUow.ServTurismoRepository.GetAuditoria(idservicio);
+                return Ok(auditoria);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener el historial del servicio.", error = ex.Message });
             }
         }
 

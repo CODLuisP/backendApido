@@ -15,9 +15,14 @@ namespace VelsatBackendAPI.Data.Repositories
 
         // BreveteAnterior: valor de "brevete" antes del patch, para que el caller pueda detectar
         // un cambio de conductor y notificarlo (ver ServTurismoController.Patch).
-        Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false);
+        // usuario/motivo: quién hizo la edición y por qué (motivo es opcional); se usan para dejar
+        // un registro en servturismo_auditoria por cada campo que realmente cambió de valor.
+        Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false, string? usuario = null, string? motivo = null);
 
         Task<int> Delete(int idservicio);
+
+        // Historial de auditoría de un servicio, más reciente primero.
+        Task<List<ServTurismoAuditoria>> GetAuditoria(int idservicio);
 
         // Acuse de recibo del conductor. Devuelven false solo si el idservicio no existe;
         // volver a marcar un servicio ya marcado es una operación válida (no cambia nada).

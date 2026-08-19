@@ -65,5 +65,10 @@ namespace VelsatBackendAPI.Model.Turismo
         // consultas filtradas por brevete) pero, a diferencia de Cancelado, se puede "reanudar"
         // (MarcarReanudar) para que vuelva a estar activo. No bloquea ediciones.
         public byte? Standby { get; set; }
+
+        // No es una columna de la tabla: se completa aparte (ver ServTurismoRepository.GetByFechas)
+        // a partir de servturismo_auditoria, para resaltar en la tabla del front qué campos cambiaron
+        // en la última edición manual del servicio.
+        public UltimaModificacionInfo? UltimaModificacion { get; set; }
     }
 }

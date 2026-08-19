@@ -44,7 +44,54 @@ namespace VelsatBackendAPI.Data.Repositories
             var parameters = new { FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date, Brevete = brevete };
 
             var resultado = await _doConnection.QueryAsync<ServTurismo>(sql, parameters, transaction: _doTransaction);
-            return resultado.ToList();
+            var lista = resultado.ToList();
+
+            await AdjuntarUltimaModificacion(lista);
+
+            return lista;
+        }
+
+        // Marca, por servicio, qué campos cambiaron en su última edición manual y cuándo — siempre que
+        // esa edición haya sido en las últimas 24h. Pasado ese plazo se deja de resaltar en la tabla del
+        // front (el historial completo sigue disponible vía GetAuditoria, solo deja de estar "reciente").
+        private async Task AdjuntarUltimaModificacion(List<ServTurismo> servicios)
+        {
+            if (!servicios.Any())
+            {
+                return;
+            }
+
+            var ids = servicios.Select(s => s.Idservicio).ToList();
+
+            string sql = @"SELECT a.idservicio AS Idservicio, a.fecha AS Fecha, GROUP_CONCAT(a.campo) AS CamposTexto
+                            FROM servturismo_auditoria a
+                            INNER JOIN (
+                                SELECT idservicio, MAX(fecha) AS maxfecha
+                                FROM servturismo_auditoria
+                                WHERE idservicio IN @Ids AND fecha >= @Desde
+                                GROUP BY idservicio
+                            ) m ON a.idservicio = m.idservicio AND a.fecha = m.maxfecha
+                            GROUP BY a.idservicio, a.fecha";
+
+            var ultimasMods = await _doConnection.QueryAsync(sql,
+                new { Ids = ids, Desde = DateTime.Now.AddHours(-24) },
+                transaction: _doTransaction);
+
+            var porServicio = ultimasMods.ToDictionary(
+                u => (int)u.Idservicio,
+                u => new UltimaModificacionInfo
+                {
+                    Fecha = (DateTime)u.Fecha,
+                    Campos = ((string)u.CamposTexto).Split(',').ToList(),
+                });
+
+            foreach (var servicio in servicios)
+            {
+                if (porServicio.TryGetValue(servicio.Idservicio, out var info))
+                {
+                    servicio.UltimaModificacion = info;
+                }
+            }
         }
 
         public async Task<int> Insert(ServTurismo servicio)
@@ -63,6 +110,17 @@ namespace VelsatBackendAPI.Data.Repositories
             return idservicio;
         }
 
+        // Columnas del formulario de edición manual (excluye visto/confirmado/finalizado/reprogramado/
+        // cancelado/standby, que no son ediciones del panel sino acuses del conductor o acciones con
+        // su propio endpoint) — son las que se comparan campo por campo para la auditoría.
+        private static readonly string[] ColumnasAuditables =
+        {
+            "fechainicio", "horainicio", "instrucciones", "indicaciones", "horaretorno", "bus", "placa",
+            "brevete", "piloto", "celular", "cobrevete", "copiloto", "cocelular", "tipounidad", "cliente",
+            "grupo", "numpax", "origen", "destino", "guiaturista", "vuelocliente", "observaciones",
+            "ejecutivo", "cotizacion",
+        };
+
         // Por defecto (limpiarNulos = false) solo actualiza las propiedades de "campos" que vengan con
         // valor (no nulas); las no enviadas (null) se ignoran y no modifican el registro.
         // Con limpiarNulos = true, un valor null SÍ se aplica y borra el campo (lo deja NULL en la BD);
@@ -70,10 +128,14 @@ namespace VelsatBackendAPI.Data.Repositories
         // significa "el usuario lo borró".
         // Devuelve -1 (sentinela) cuando el servicio está Cancelado: un servicio cancelado ya no se
         // puede editar, así que el caller (controller) debe convertir eso en un 409 en vez de aplicar el patch.
-        public async Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false)
+        // usuario/motivo quedan registrados en servturismo_auditoria por cada columna auditable que
+        // realmente cambió de valor (comparando contra lo que había antes, no solo contra "vino en el body").
+        public async Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false, string? usuario = null, string? motivo = null)
         {
+            string sqlActual = $"SELECT cancelado, brevete, {string.Join(", ", ColumnasAuditables)} FROM servturismo WHERE idservicio = @Idservicio";
+
             var actual = await _doConnection.QueryFirstOrDefaultAsync(
-                "SELECT fechainicio, cancelado, brevete FROM servturismo WHERE idservicio = @Idservicio",
+                sqlActual,
                 new { Idservicio = idservicio },
                 transaction: _doTransaction);
 
@@ -81,6 +143,8 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 return (0, null);
             }
+
+            var actualDict = (IDictionary<string, object>)actual;
 
             string? breveteAnterior = (string?)actual.brevete;
 
@@ -95,6 +159,22 @@ namespace VelsatBackendAPI.Data.Repositories
             parameters.Add("Idservicio", idservicio);
 
             var setClauses = new List<string>();
+            var cambios = new List<(string Campo, string? Anterior, string? Nuevo)>();
+
+            // Texto tal cual quedó guardado en la columna, para comparar contra el valor nuevo.
+            string? TextoActual(string columna) =>
+                actualDict.TryGetValue(columna, out var valor) && valor != null && !(valor is DBNull)
+                    ? valor is TimeSpan ts ? ts.ToString(@"hh\:mm") : valor.ToString()
+                    : null;
+
+            void RegistrarSiCambio(string columna, string? nuevo)
+            {
+                string? anterior = TextoActual(columna);
+                if (!string.Equals(anterior ?? "", nuevo ?? "", StringComparison.Ordinal))
+                {
+                    cambios.Add((columna, anterior, nuevo));
+                }
+            }
 
             void AgregarSiPresente(string columna, string? valor)
             {
@@ -106,9 +186,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 setClauses.Add($"{columna} = @{columna}");
                 // dbType explícito: si el valor es DBNull, Dapper no puede inferir el tipo del parámetro solo.
                 parameters.Add(columna, (object?)valor ?? DBNull.Value, dbType: DbType.String);
+                RegistrarSiCambio(columna, valor);
             }
 
-            void AgregarValorSiPresente<T>(string columna, T? valor) where T : struct
+            void AgregarValorSiPresente<T>(string columna, T? valor, bool auditar = false, string? valorTexto = null) where T : struct
             {
                 DbType? dbType = typeof(T) == typeof(DateTime)
                     ? DbType.Date
@@ -127,16 +208,18 @@ namespace VelsatBackendAPI.Data.Repositories
 
                     setClauses.Add($"{columna} = @{columna}");
                     parameters.Add(columna, DBNull.Value, dbType: dbType);
+                    if (auditar) RegistrarSiCambio(columna, null);
                     return;
                 }
 
                 setClauses.Add($"{columna} = @{columna}");
                 parameters.Add(columna, valor.Value, dbType: dbType);
+                if (auditar) RegistrarSiCambio(columna, valorTexto);
             }
 
-            AgregarValorSiPresente("fechainicio", campos.Fechainicio);
+            AgregarValorSiPresente("fechainicio", campos.Fechainicio, auditar: true, valorTexto: campos.Fechainicio?.ToString("dd/MM/yyyy"));
             AgregarSiPresente("instrucciones", campos.Instrucciones);
-            AgregarValorSiPresente("horainicio", campos.Horainicio);
+            AgregarValorSiPresente("horainicio", campos.Horainicio, auditar: true, valorTexto: campos.Horainicio?.ToString(@"hh\:mm"));
             AgregarSiPresente("indicaciones", campos.Indicaciones);
             AgregarSiPresente("horaretorno", campos.Horaretorno);
             AgregarSiPresente("bus", campos.Bus);
@@ -189,7 +272,50 @@ namespace VelsatBackendAPI.Data.Repositories
 
             int filas = await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
 
+            if (filas > 0 && cambios.Any())
+            {
+                await InsertarAuditoria(idservicio, cambios, usuario, motivo);
+            }
+
             return (filas, breveteAnterior);
+        }
+
+        // Un INSERT multi-VALUES con una fila por campo modificado, todas con la misma fecha (calculada
+        // una sola vez acá) para que GetByFechas pueda agrupar "los campos que cambiaron en esta edición".
+        private async Task InsertarAuditoria(int idservicio, List<(string Campo, string? Anterior, string? Nuevo)> cambios, string? usuario, string? motivo)
+        {
+            var parameters = new DynamicParameters();
+            var valuesClauses = new List<string>(cambios.Count);
+            DateTime ahora = DateTime.Now;
+
+            for (int i = 0; i < cambios.Count; i++)
+            {
+                valuesClauses.Add($"(@Idservicio{i}, @Campo{i}, @ValorAnterior{i}, @ValorNuevo{i}, @Usuario{i}, @Motivo{i}, @Fecha{i})");
+                parameters.Add($"Idservicio{i}", idservicio);
+                parameters.Add($"Campo{i}", cambios[i].Campo);
+                parameters.Add($"ValorAnterior{i}", (object?)cambios[i].Anterior ?? DBNull.Value, dbType: DbType.String);
+                parameters.Add($"ValorNuevo{i}", (object?)cambios[i].Nuevo ?? DBNull.Value, dbType: DbType.String);
+                parameters.Add($"Usuario{i}", (object?)usuario ?? DBNull.Value, dbType: DbType.String);
+                parameters.Add($"Motivo{i}", (object?)motivo ?? DBNull.Value, dbType: DbType.String);
+                parameters.Add($"Fecha{i}", ahora);
+            }
+
+            string sql = $@"INSERT INTO servturismo_auditoria
+                            (idservicio, campo, valor_anterior, valor_nuevo, usuario, motivo, fecha)
+                            VALUES {string.Join(", ", valuesClauses)}";
+
+            await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
+        public async Task<List<ServTurismoAuditoria>> GetAuditoria(int idservicio)
+        {
+            string sql = @"SELECT idauditoria, idservicio, campo, valor_anterior, valor_nuevo, usuario, motivo, fecha
+                            FROM servturismo_auditoria
+                            WHERE idservicio = @Idservicio
+                            ORDER BY fecha DESC, idauditoria DESC";
+
+            var resultado = await _doConnection.QueryAsync<ServTurismoAuditoria>(sql, new { Idservicio = idservicio }, transaction: _doTransaction);
+            return resultado.ToList();
         }
 
         // Inserta en lote usando sentencias INSERT multi-VALUES (por bloques) en vez de un INSERT por fila,
