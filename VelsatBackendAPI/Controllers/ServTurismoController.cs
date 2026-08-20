@@ -114,7 +114,12 @@ namespace VelsatBackendAPI.Controllers
 
         // Notifica por push al conductor dueño de "brevete". Se ejecuta después del SaveChanges: si falla
         // el envío no debe afectar la respuesta al cliente (el servicio ya quedó insertado en base de datos).
-        private async Task NotificarConductorAsync(string? brevete)
+        // titulo/cuerpo son configurables porque se reusa tanto para "nuevo servicio asignado" (Insert/lote
+        // y reasignación de conductor en el Patch) como para "cambios en un servicio ya asignado" (Patch).
+        private async Task NotificarConductorAsync(
+            string? brevete,
+            string titulo = "Nuevo servicio de turismo",
+            string cuerpo = "Se te ha asignado un nuevo servicio de turismo. Revisa la app para ver el detalle.")
         {
             if (string.IsNullOrWhiteSpace(brevete))
             {
@@ -132,8 +137,8 @@ namespace VelsatBackendAPI.Controllers
 
                 var resultado = await _firebaseService.SendPushNotificationAsync(
                     token.FCMToken,
-                    "Nuevo servicio de turismo",
-                    "Se te ha asignado un nuevo servicio de turismo. Revisa la app para ver el detalle.");
+                    titulo,
+                    cuerpo);
 
                 if (resultado.TokenInvalido)
                 {
@@ -160,7 +165,7 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var (filasAfectadas, breveteAnterior) = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos, usuario, motivo);
+                var (filasAfectadas, breveteAnterior, camposModificados) = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos, usuario, motivo);
 
                 if (filasAfectadas == -1)
                 {
@@ -170,12 +175,23 @@ namespace VelsatBackendAPI.Controllers
 
                 if (filasAfectadas > 0)
                 {
-                    // Solo notifica al conductor NUEVO cuando el patch realmente cambió el brevete
-                    // (reasignación de conductor), no en cualquier edición del servicio.
-                    if (!string.IsNullOrWhiteSpace(campos.Brevete) &&
-                        !string.Equals(campos.Brevete, breveteAnterior, StringComparison.OrdinalIgnoreCase))
+                    bool reasignoConductor = !string.IsNullOrWhiteSpace(campos.Brevete) &&
+                        !string.Equals(campos.Brevete, breveteAnterior, StringComparison.OrdinalIgnoreCase);
+
+                    if (reasignoConductor)
                     {
+                        // Reasignación de conductor: notifica al conductor NUEVO como si fuera un servicio recién asignado.
                         await NotificarConductorAsync(campos.Brevete);
+                    }
+                    else if (camposModificados.Count > 0)
+                    {
+                        // Cualquier otro campo modificado en un servicio que ya tenía conductor: se avisa
+                        // al mismo conductor (breveteAnterior, que no cambió) con un mensaje distinto,
+                        // para no confundirlo con una asignación nueva.
+                        await NotificarConductorAsync(
+                            breveteAnterior,
+                            "Servicio de turismo actualizado",
+                            "Hubo cambios en tu servicio de turismo. Revisa la app para ver el detalle.");
                     }
 
                     return Ok(new { mensaje = "Servicio de turismo actualizado correctamente.", filasAfectadas });

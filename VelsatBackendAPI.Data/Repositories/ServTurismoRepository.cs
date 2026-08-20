@@ -130,7 +130,7 @@ namespace VelsatBackendAPI.Data.Repositories
         // puede editar, así que el caller (controller) debe convertir eso en un 409 en vez de aplicar el patch.
         // usuario/motivo quedan registrados en servturismo_auditoria por cada columna auditable que
         // realmente cambió de valor (comparando contra lo que había antes, no solo contra "vino en el body").
-        public async Task<(int Filas, string? BreveteAnterior)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false, string? usuario = null, string? motivo = null)
+        public async Task<(int Filas, string? BreveteAnterior, List<string> CamposModificados)> Patch(int idservicio, ServTurismo campos, bool limpiarNulos = false, string? usuario = null, string? motivo = null)
         {
             // "brevete" ya está en ColumnasAuditables: no repetirla acá, dos columnas con el mismo
             // nombre en el SELECT corrompen el mapeo por nombre del dynamic row de Dapper.
@@ -143,7 +143,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             if (actual == null)
             {
-                return (0, null);
+                return (0, null, new List<string>());
             }
 
             var actualDict = (IDictionary<string, object>)actual;
@@ -152,7 +152,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             if (Convert.ToByte(actual.cancelado ?? (byte)0) == 1)
             {
-                return (-1, breveteAnterior);
+                return (-1, breveteAnterior, new List<string>());
             }
 
             DateTime? fechaActual = (DateTime?)actual.fechainicio;
@@ -275,7 +275,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             if (!setClauses.Any())
             {
-                return (0, breveteAnterior);
+                return (0, breveteAnterior, new List<string>());
             }
 
             string sql = $"UPDATE servturismo SET {string.Join(", ", setClauses)} WHERE idservicio = @Idservicio";
@@ -287,7 +287,9 @@ namespace VelsatBackendAPI.Data.Repositories
                 await InsertarAuditoria(idservicio, cambios, usuario, motivo);
             }
 
-            return (filas, breveteAnterior);
+            var camposModificados = cambios.Select(c => c.Campo).ToList();
+
+            return (filas, breveteAnterior, camposModificados);
         }
 
         // Un INSERT multi-VALUES con una fila por campo modificado, todas con la misma fecha (calculada
