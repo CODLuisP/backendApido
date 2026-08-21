@@ -385,6 +385,30 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // DELETE api/servturismo/fecha/01/07/2026
+        // Elimina físicamente TODOS los servicios de la fecha indicada (borrado masivo, "Eliminar carga").
+        // Pensado para deshacer una carga de Excel completa cargada por error. Acción irreversible.
+        [HttpDelete("fecha/{*fecha}")]
+        public async Task<IActionResult> DeleteByFecha(string fecha)
+        {
+            if (!DateTime.TryParseExact(fecha, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDt))
+            {
+                return BadRequest(new { mensaje = "Formato de fecha incorrecto. Debe ser dd/MM/yyyy" });
+            }
+
+            try
+            {
+                int filasAfectadas = await _uow.ServTurismoRepository.DeleteByFecha(fechaDt);
+                _uow.SaveChanges();
+
+                return Ok(new { mensaje = "Servicios de turismo eliminados correctamente.", filasAfectadas });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al eliminar los servicios de turismo de la fecha indicada.", error = ex.Message });
+            }
+        }
+
         // ===================== TAXI (CONDUCTORES) CRUD =====================
 
         // GET api/servturismo/taxi?codusuario=...

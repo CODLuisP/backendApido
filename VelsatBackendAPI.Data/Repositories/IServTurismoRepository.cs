@@ -23,6 +23,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> Delete(int idservicio);
 
+        // Elimina físicamente todos los servicios cuya fechainicio sea la indicada (borrado masivo
+        // "Eliminar carga", pensado para deshacer una carga de Excel completa de un día).
+        Task<int> DeleteByFecha(DateTime fecha);
+
         // Historial de auditoría de un servicio, más reciente primero.
         Task<List<ServTurismoAuditoria>> GetAuditoria(int idservicio);
 

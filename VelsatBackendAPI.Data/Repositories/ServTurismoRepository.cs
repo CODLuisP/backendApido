@@ -409,6 +409,13 @@ namespace VelsatBackendAPI.Data.Repositories
             return await _doConnection.ExecuteAsync(sql, new { Idservicio = idservicio }, transaction: _doTransaction);
         }
 
+        public async Task<int> DeleteByFecha(DateTime fecha)
+        {
+            string sql = "DELETE FROM servturismo WHERE fechainicio = @Fecha";
+
+            return await _doConnection.ExecuteAsync(sql, new { Fecha = fecha.Date }, transaction: _doTransaction);
+        }
+
         // ===================== ACUSE DE RECIBO DEL CONDUCTOR =====================
 
         // El UPDATE va condicionado a que el campo no valga ya 1, porque MySQL informa 0 filas
