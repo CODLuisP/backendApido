@@ -202,5 +202,44 @@ namespace VelsatBackendAPI.Data.Repositories
 
             return resultado;
         }
+
+        public async Task RegistrarAuditoria(string usuario, string modulo, string accion, string entidad, string detalle)
+        {
+            var peruTime = DateTime.UtcNow.AddHours(-5);
+
+            var sql = @"INSERT INTO auditoria_general (usuario, modulo, accion, entidad, detalle, fecharegistro)
+                        VALUES (@Usuario, @Modulo, @Accion, @Entidad, @Detalle, @Fecharegistro)";
+
+            await _defaultConnection.ExecuteAsync(sql, new
+            {
+                Usuario = string.IsNullOrWhiteSpace(usuario) ? "desconocido" : usuario,
+                Modulo = modulo,
+                Accion = accion,
+                Entidad = entidad,
+                Detalle = detalle,
+                Fecharegistro = peruTime
+            }, transaction: _defaultTransaction);
+        }
+
+        public async Task<IEnumerable<AuditoriaGeneral>> GetAuditoriaGeneral(int limit, string modulo, string usuario)
+        {
+            var sql = @"SELECT id, usuario, modulo, accion, entidad, detalle, fecharegistro
+                        FROM auditoria_general
+                        WHERE (@Modulo IS NULL OR modulo = @Modulo)
+                          AND (@Usuario IS NULL OR usuario = @Usuario)
+                        ORDER BY fecharegistro DESC
+                        LIMIT @Limit";
+
+            var resultado = await _defaultConnection.QueryAsync<AuditoriaGeneral>(sql,
+                new
+                {
+                    Limit = limit,
+                    Modulo = string.IsNullOrWhiteSpace(modulo) ? null : modulo,
+                    Usuario = string.IsNullOrWhiteSpace(usuario) ? null : usuario
+                },
+                transaction: _defaultTransaction);
+
+            return resultado;
+        }
     }
 }
