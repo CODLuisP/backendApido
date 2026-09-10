@@ -1008,15 +1008,15 @@ namespace VelsatBackendAPI.Controllers
                     // Color especial para la columna 9 (HORA LLEGADA ATO)
                     worksheet.Cell(fila, 9).Style.Fill.BackgroundColor = XLColor.FromHtml("#ffe246");
 
-                    // NUEVO: Aplicar color rojo a valores negativos en las columnas calculadas
+                    // NUEVO: Aplicar color rojo cuando se llegó tarde (sin signo = tarde, con "-" = temprano/a tiempo)
                     // Columna 10 - DIFERENCIA TIEMPO
-                    if (!string.IsNullOrEmpty(diferenciaTiempo) && diferenciaTiempo.StartsWith("-"))
+                    if (!string.IsNullOrEmpty(diferenciaTiempo) && !diferenciaTiempo.StartsWith("-") && diferenciaTiempo != "00:00")
                     {
                         worksheet.Cell(fila, 10).Style.Font.FontColor = XLColor.Red;
                     }
 
-                    // Columna 11 - TIEMPO PROGRAMADO  
-                    if (!string.IsNullOrEmpty(tiempoProgramado) && tiempoProgramado.StartsWith("-"))
+                    // Columna 11 - TIEMPO PROGRAMADO
+                    if (!string.IsNullOrEmpty(tiempoProgramado) && !tiempoProgramado.StartsWith("-") && tiempoProgramado != "00:00")
                     {
                         worksheet.Cell(fila, 11).Style.Font.FontColor = XLColor.Red;
                     }
@@ -1104,13 +1104,14 @@ namespace VelsatBackendAPI.Controllers
                     return "00:00";
                 }
 
-                // Lógica invertida: si es negativo no lleva signo, si es positivo lleva signo menos
+                // Convención natural: negativo = horaFinal es ANTERIOR a horaInicial (adelantado/temprano),
+                // sin signo = horaFinal es POSTERIOR a horaInicial (atrasado/tarde)
                 if (diferencia < TimeSpan.Zero)
                 {
-                    return diferencia.Negate().ToString(@"hh\:mm");
+                    return "-" + diferencia.Negate().ToString(@"hh\:mm");
                 }
 
-                return "-" + diferencia.ToString(@"hh\:mm");
+                return diferencia.ToString(@"hh\:mm");
             }
             catch (Exception ex)
             {
@@ -2744,7 +2745,7 @@ namespace VelsatBackendAPI.Controllers
                     totalRecojoServicios++;
                     string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
 
-                    if (!string.IsNullOrEmpty(diferenciaTiempo) && !diferenciaTiempo.StartsWith("-"))
+                    if (!string.IsNullOrEmpty(diferenciaTiempo) && (diferenciaTiempo.StartsWith("-") || diferenciaTiempo == "00:00"))
                     {
                         recojosPuntuales++;
                     }
@@ -2995,7 +2996,7 @@ namespace VelsatBackendAPI.Controllers
                     worksheet.Cell(fila, 9).Value = servicio.HoraAto ?? "";
 
                     // DIFERENCIA TIEMPO = HORA LLEGADA ATO - HORA ACTIVO TURNO
-                    string diferenciaTiempo = CalcularDiffTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
+                    string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
                     worksheet.Cell(fila, 10).Value = diferenciaTiempo;
 
                     // TIEMPO PROGRAMADO = HORA ACTIVO TURNO - HORA DE INICIO
@@ -3026,9 +3027,10 @@ namespace VelsatBackendAPI.Controllers
                     worksheet.Cell(fila, 9).Style.Fill.BackgroundColor = XLColor.FromHtml("#ffe246");
 
                     // Aplicar color a DIFERENCIA TIEMPO solo para Recojo
+                    // (sin signo = llegó tarde -> rojo; "-" o "00:00" = temprano/a tiempo -> verde)
                     if (tipoTexto == "Recojo" && !string.IsNullOrEmpty(diferenciaTiempo))
                     {
-                        if (diferenciaTiempo.StartsWith("-"))
+                        if (!diferenciaTiempo.StartsWith("-") && diferenciaTiempo != "00:00")
                         {
                             worksheet.Cell(fila, 10).Style.Font.FontColor = XLColor.Red;
                         }
@@ -3072,35 +3074,6 @@ namespace VelsatBackendAPI.Controllers
                     workbook.SaveAs(stream);
                     return stream.ToArray();
                 }
-            }
-        }
-
-        private string CalcularDiffTiempo(string horaFin, string horaInicio)
-        {
-            if (string.IsNullOrEmpty(horaFin) || string.IsNullOrEmpty(horaInicio))
-                return "";
-
-            try
-            {
-                var timeInicio = TimeSpan.Parse(horaInicio);
-                var timeFin = TimeSpan.Parse(horaFin);
-                var diferencia = timeFin - timeInicio;
-
-                int horas = (int)diferencia.TotalHours;
-                int minutos = Math.Abs(diferencia.Minutes);
-
-                if (diferencia.TotalMinutes < 0)
-                {
-                    return $"-{Math.Abs(horas):D2}:{minutos:D2}";
-                }
-                else
-                {
-                    return $"{horas:D2}:{minutos:D2}";
-                }
-            }
-            catch
-            {
-                return "";
             }
         }
 
@@ -3325,7 +3298,7 @@ namespace VelsatBackendAPI.Controllers
                     totalRecojoServicios++;
                     string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
 
-                    if (!string.IsNullOrEmpty(diferenciaTiempo) && !diferenciaTiempo.StartsWith("-"))
+                    if (!string.IsNullOrEmpty(diferenciaTiempo) && (diferenciaTiempo.StartsWith("-") || diferenciaTiempo == "00:00"))
                     {
                         recojosPuntuales++;
                     }
@@ -3576,7 +3549,7 @@ namespace VelsatBackendAPI.Controllers
                     worksheet.Cell(fila, 9).Value = servicio.HoraAto ?? "";
 
                     // DIFERENCIA TIEMPO = HORA LLEGADA ATO - HORA ACTIVO TURNO
-                    string diferenciaTiempo = CalcularDiffTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
+                    string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
                     worksheet.Cell(fila, 10).Value = diferenciaTiempo;
 
                     // TIEMPO PROGRAMADO = HORA ACTIVO TURNO - HORA DE INICIO
@@ -3607,9 +3580,10 @@ namespace VelsatBackendAPI.Controllers
                     worksheet.Cell(fila, 9).Style.Fill.BackgroundColor = XLColor.FromHtml("#ffe246");
 
                     // Aplicar color a DIFERENCIA TIEMPO solo para Recojo
+                    // (sin signo = llegó tarde -> rojo; "-" o "00:00" = temprano/a tiempo -> verde)
                     if (tipoTexto == "Recojo" && !string.IsNullOrEmpty(diferenciaTiempo))
                     {
-                        if (diferenciaTiempo.StartsWith("-"))
+                        if (!diferenciaTiempo.StartsWith("-") && diferenciaTiempo != "00:00")
                         {
                             worksheet.Cell(fila, 10).Style.Font.FontColor = XLColor.Red;
                         }
@@ -3869,7 +3843,7 @@ namespace VelsatBackendAPI.Controllers
                         worksheet.Cell(filaActual, 8).Value = servicio.HoraInicio ?? "";
                         worksheet.Cell(filaActual, 9).Value = servicio.HoraAto ?? "";
 
-                        string diferenciaTiempo = CalcularDiffTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
+                        string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
                         worksheet.Cell(filaActual, 10).Value = diferenciaTiempo;
 
                         string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "").Replace("-", "");
@@ -3895,7 +3869,8 @@ namespace VelsatBackendAPI.Controllers
 
                         if (tipoTexto == "Recojo" && !string.IsNullOrEmpty(diferenciaTiempo))
                         {
-                            worksheet.Cell(filaActual, 10).Style.Font.FontColor = diferenciaTiempo.StartsWith("-")
+                            // Sin signo = llegó tarde -> rojo; "-" o "00:00" = temprano/a tiempo -> verde
+                            worksheet.Cell(filaActual, 10).Style.Font.FontColor = (!diferenciaTiempo.StartsWith("-") && diferenciaTiempo != "00:00")
                                 ? XLColor.Red
                                 : XLColor.FromHtml("#228b22");
                         }
@@ -4157,7 +4132,7 @@ namespace VelsatBackendAPI.Controllers
                         worksheet.Cell(filaActual, 8).Value = servicio.HoraInicio ?? "";
                         worksheet.Cell(filaActual, 9).Value = servicio.HoraAto ?? "";
 
-                        string diferenciaTiempo = CalcularDiffTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
+                        string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
                         worksheet.Cell(filaActual, 10).Value = diferenciaTiempo;
 
                         string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "").Replace("-", "");
@@ -4184,7 +4159,8 @@ namespace VelsatBackendAPI.Controllers
 
                         if (tipoTexto == "Recojo" && !string.IsNullOrEmpty(diferenciaTiempo))
                         {
-                            worksheet.Cell(filaActual, 10).Style.Font.FontColor = diferenciaTiempo.StartsWith("-")
+                            // Sin signo = llegó tarde -> rojo; "-" o "00:00" = temprano/a tiempo -> verde
+                            worksheet.Cell(filaActual, 10).Style.Font.FontColor = (!diferenciaTiempo.StartsWith("-") && diferenciaTiempo != "00:00")
                                 ? XLColor.Red
                                 : XLColor.FromHtml("#228b22");
                         }
