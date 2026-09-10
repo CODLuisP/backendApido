@@ -4428,6 +4428,7 @@ namespace VelsatBackendAPI.Data.Repositories
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0
                   AND s.estado <> 'C'
+                  AND su.estado <> 'C'
                 ORDER BY dates.fecha_dt";
 
             var parameters = new
@@ -4521,6 +4522,7 @@ namespace VelsatBackendAPI.Data.Repositories
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0
                   AND s.estado <> 'C'
+                  AND su.estado <> 'C'
                 ORDER BY dates.fecha_dt";
 
             var parameters = new
@@ -4606,7 +4608,8 @@ namespace VelsatBackendAPI.Data.Repositories
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0 
                   AND s.codusuario = @Codusuario
-                  AND s.estado <> 'C'";
+                  AND s.estado <> 'C'
+                  AND su.estado <> 'C'";
 
             if (codtaxis != null && codtaxis.Any())
                 sql += " AND s.codconductor IN @CodTaxis";
@@ -4669,7 +4672,8 @@ namespace VelsatBackendAPI.Data.Repositories
                   AND su.codcliente NOT IN (39953, 4175)
                   AND su.orden > 0 
                   AND s.codusuario = @Codusuario 
-                  AND s.estado <> 'C'";
+                  AND s.estado <> 'C'
+                  AND su.estado <> 'C'";
 
             if (codtaxis != null && codtaxis.Any())
                 sql += " AND s.codconductor IN @CodTaxis";
