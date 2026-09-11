@@ -3813,7 +3813,6 @@ namespace VelsatBackendAPI.Controllers
                 for (int gc = 0; gc < conductores.Count; gc++)
                 {
                     var serviciosConductor = conductores[gc].ToList();
-                    bool esUltimoConductor = gc == conductores.Count - 1;
 
                     string numeroServicioAnt = "";
                     bool colorAlternativo = false;
@@ -3894,10 +3893,6 @@ namespace VelsatBackendAPI.Controllers
                         var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 18);
                         rangoWrap.Style.Alignment.WrapText = true;
                     }
-
-                    // Separación visual entre conductores (excepto el último)
-                    if (!esUltimoConductor)
-                        filaActual += 1;
                 }
 
                 using (var stream = new MemoryStream())
@@ -4102,7 +4097,6 @@ namespace VelsatBackendAPI.Controllers
                 for (int gc = 0; gc < conductores.Count; gc++)
                 {
                     var serviciosConductor = conductores[gc].ToList();
-                    bool esUltimoConductor = gc == conductores.Count - 1;
 
                     string numeroServicioAnt = "";
                     bool colorAlternativo = false;
@@ -4180,9 +4174,6 @@ namespace VelsatBackendAPI.Controllers
                         var rangoWrap = worksheet.Range(filaInicioGrupo, 7, filaActual - 1, 18);
                         rangoWrap.Style.Alignment.WrapText = true;
                     }
-
-                    if (!esUltimoConductor)
-                        filaActual += 1;
                 }
 
                 using (var stream = new MemoryStream())
