@@ -979,7 +979,7 @@ namespace VelsatBackendAPI.Controllers
                     // NUEVO: Calcular diferencias de tiempo
                     // Columna 10: Diferencia entre columna 9 (Hora Llegada ATO) y columna 7 (Hora ATO)
                     string diferenciaTiempo = CalcularDiferenciaTiempo(horaLlegadaAto, horaAto);
-                    worksheet.Cell(fila, 10).Value = diferenciaTiempo;
+                    worksheet.Cell(fila, 10).Value = diferenciaTiempo.Replace("-", "");
 
                     // Columna 11: Diferencia entre columna 8 (Hora de Inicio) y columna 7 (Hora ATO)
                     string tiempoProgramado = CalcularDiferenciaTiempo(horaInicio, horaAto);
@@ -2997,7 +2997,7 @@ namespace VelsatBackendAPI.Controllers
 
                     // DIFERENCIA TIEMPO = HORA LLEGADA ATO - HORA ACTIVO TURNO
                     string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
-                    worksheet.Cell(fila, 10).Value = diferenciaTiempo;
+                    worksheet.Cell(fila, 10).Value = diferenciaTiempo.Replace("-", "");
 
                     // TIEMPO PROGRAMADO = HORA ACTIVO TURNO - HORA DE INICIO
                     string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "");
@@ -3550,7 +3550,7 @@ namespace VelsatBackendAPI.Controllers
 
                     // DIFERENCIA TIEMPO = HORA LLEGADA ATO - HORA ACTIVO TURNO
                     string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
-                    worksheet.Cell(fila, 10).Value = diferenciaTiempo;
+                    worksheet.Cell(fila, 10).Value = diferenciaTiempo.Replace("-", "");
 
                     // TIEMPO PROGRAMADO = HORA ACTIVO TURNO - HORA DE INICIO
                     string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "");
@@ -3844,7 +3844,7 @@ namespace VelsatBackendAPI.Controllers
                         worksheet.Cell(filaActual, 9).Value = servicio.HoraAto ?? "";
 
                         string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
-                        worksheet.Cell(filaActual, 10).Value = diferenciaTiempo;
+                        worksheet.Cell(filaActual, 10).Value = diferenciaTiempo.Replace("-", "");
 
                         string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "").Replace("-", "");
                         worksheet.Cell(filaActual, 11).Value = tiempoProgramado;
@@ -4133,7 +4133,7 @@ namespace VelsatBackendAPI.Controllers
                         worksheet.Cell(filaActual, 9).Value = servicio.HoraAto ?? "";
 
                         string diferenciaTiempo = CalcularDiferenciaTiempo(servicio.HoraAto ?? "", servicio.HoraTurno ?? "");
-                        worksheet.Cell(filaActual, 10).Value = diferenciaTiempo;
+                        worksheet.Cell(filaActual, 10).Value = diferenciaTiempo.Replace("-", "");
 
                         string tiempoProgramado = CalcularDiferenciaTiempo(servicio.HoraTurno ?? "", servicio.HoraInicio ?? "").Replace("-", "");
                         worksheet.Cell(filaActual, 11).Value = tiempoProgramado;
