@@ -17,10 +17,15 @@ namespace VelsatBackendAPI.Data.Repositories
             _defaultTransaction = defaultTransaction;
         }
 
+        private const string SelectColumns = @"
+            id, accountID, geofenceID, nombre, descripcion, tipo,
+            area_wkt AS AreaWkt, coordenadas_json AS CoordenadasJson, color, activo,
+            fecha_creacion AS FechaCreacion, fecha_actualizacion AS FechaActualizacion";
+
         public async Task<IEnumerable<Geocercas>> GetByAccount(string accountID)
         {
-            const string sql = @"
-                SELECT * FROM geocercas
+            string sql = $@"
+                SELECT {SelectColumns} FROM geocercas
                 WHERE accountID = @AccountID AND activo = 1
                 ORDER BY nombre";
 
@@ -30,7 +35,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<Geocercas> GetById(int id)
         {
-            const string sql = "SELECT * FROM geocercas WHERE id = @Id";
+            string sql = $"SELECT {SelectColumns} FROM geocercas WHERE id = @Id";
 
             return await _defaultConnection.QueryFirstOrDefaultAsync<Geocercas>(
                 sql, new { Id = id }, transaction: _defaultTransaction);

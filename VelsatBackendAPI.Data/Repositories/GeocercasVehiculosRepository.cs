@@ -20,7 +20,9 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<IEnumerable<GeocercasVehiculos>> GetByGeocerca(int idGeocerca)
         {
             const string sql = @"
-                SELECT * FROM geocercas_vehiculos
+                SELECT id, id_geocerca AS IdGeocerca, deviceID,
+                       fecha_vinculacion AS FechaVinculacion, activo
+                FROM geocercas_vehiculos
                 WHERE id_geocerca = @IdGeocerca AND activo = 1
                 ORDER BY deviceID";
 
@@ -31,7 +33,10 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<IEnumerable<Geocercas>> GetGeocercasByDevice(string deviceID)
         {
             const string sql = @"
-                SELECT g.* FROM geocercas g
+                SELECT g.id, g.accountID, g.geofenceID, g.nombre, g.descripcion, g.tipo,
+                       g.area_wkt AS AreaWkt, g.coordenadas_json AS CoordenadasJson, g.color, g.activo,
+                       g.fecha_creacion AS FechaCreacion, g.fecha_actualizacion AS FechaActualizacion
+                FROM geocercas g
                 INNER JOIN geocercas_vehiculos gv ON gv.id_geocerca = g.id
                 WHERE gv.deviceID = @DeviceID AND gv.activo = 1 AND g.activo = 1
                 ORDER BY g.nombre";
