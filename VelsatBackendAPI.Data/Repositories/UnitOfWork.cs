@@ -38,6 +38,8 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IAdminRepository> _adminRepository;
         private readonly Lazy<IServTurismoRepository> _servTurismoRepository;
         private readonly Lazy<INotificacionesRepository> _notificacionesRepository;
+        private readonly Lazy<IGeocercasRepository> _geocercasRepository;
+        private readonly Lazy<IGeocercasVehiculosRepository> _geocercasVehiculosRepository;
 
         private bool _disposed = false;
         private bool _committed = false;
@@ -99,6 +101,12 @@ namespace VelsatBackendAPI.Data.Repositories
 
             _notificacionesRepository = new Lazy<INotificacionesRepository>(() =>
                 new NotificacionesRepository(DOConnection, _doTransaction));
+
+            _geocercasRepository = new Lazy<IGeocercasRepository>(() =>
+                new GeocercasRepository(DefaultConnection, _defaultTransaction));
+
+            _geocercasVehiculosRepository = new Lazy<IGeocercasVehiculosRepository>(() =>
+                new GeocercasVehiculosRepository(DefaultConnection, _defaultTransaction));
         }
 
         // ✅ Conexión principal con inicialización thread-safe y retry logic
@@ -426,6 +434,24 @@ namespace VelsatBackendAPI.Data.Repositories
             }
         }
 
+        public IGeocercasRepository GeocercasRepository
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+                return _geocercasRepository.Value;
+            }
+        }
+
+        public IGeocercasVehiculosRepository GeocercasVehiculosRepository
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+                return _geocercasVehiculosRepository.Value;
+            }
+        }
+
         // ✅ SaveChanges optimizado
         public void SaveChanges()
         {
@@ -610,6 +636,8 @@ namespace VelsatBackendAPI.Data.Repositories
             TryDisposeRepository(_adminRepository);
             TryDisposeRepository(_servTurismoRepository);
             TryDisposeRepository(_notificacionesRepository);
+            TryDisposeRepository(_geocercasRepository);
+            TryDisposeRepository(_geocercasVehiculosRepository);
         }
 
         private void TryDisposeRepository<T>(Lazy<T> lazyRepo)

@@ -36,6 +36,8 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IDocRepository> _docRepository;
         private readonly Lazy<IServTurismoRepository> _servTurismoRepository;
         private readonly Lazy<INotificacionesRepository> _notificacionesRepository;
+        private readonly Lazy<IGeocercasRepository> _geocercasRepository;
+        private readonly Lazy<IGeocercasVehiculosRepository> _geocercasVehiculosRepository;
 
 
         private bool _disposed = false;
@@ -74,6 +76,10 @@ namespace VelsatBackendAPI.Data.Repositories
             _servTurismoRepository = new Lazy<IServTurismoRepository>(() => new ServTurismoRepository(DOConnection, null));
 
             _notificacionesRepository = new Lazy<INotificacionesRepository>(() => new NotificacionesRepository(DOConnection, null));
+
+            _geocercasRepository = new Lazy<IGeocercasRepository>(() => new GeocercasRepository(DefaultConnection, null));
+
+            _geocercasVehiculosRepository = new Lazy<IGeocercasVehiculosRepository>(() => new GeocercasVehiculosRepository(DefaultConnection, null));
         }
 
         private MySqlConnection DefaultConnection
@@ -305,6 +311,26 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (_disposed)
                     throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
                 return _notificacionesRepository.Value;
+            }
+        }
+
+        public IGeocercasRepository GeocercasRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _geocercasRepository.Value;
+            }
+        }
+
+        public IGeocercasVehiculosRepository GeocercasVehiculosRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _geocercasVehiculosRepository.Value;
             }
         }
 
