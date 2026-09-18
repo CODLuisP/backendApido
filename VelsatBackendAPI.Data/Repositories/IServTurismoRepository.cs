@@ -30,6 +30,11 @@ namespace VelsatBackendAPI.Data.Repositories
         // Historial de auditoría de un servicio, más reciente primero.
         Task<List<ServTurismoAuditoria>> GetAuditoria(int idservicio);
 
+        // Fecha/hora del servicio y teléfono del conductor asignado (join a taxi por brevete),
+        // para armar y enviar la notificación manual por WhatsApp del botón en la tabla web.
+        // Null si el servicio no existe.
+        Task<DatosNotificacionConductor?> GetDatosNotificacion(int idservicio);
+
         // Acuse de recibo del conductor. Devuelven false solo si el idservicio no existe;
         // volver a marcar un servicio ya marcado es una operación válida (no cambia nada).
         Task<bool> MarcarVisto(int idservicio);

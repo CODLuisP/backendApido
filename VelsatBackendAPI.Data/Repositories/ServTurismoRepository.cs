@@ -335,6 +335,21 @@ namespace VelsatBackendAPI.Data.Repositories
             return resultado.ToList();
         }
 
+        // LEFT JOIN a taxi (no INNER): si el servicio no tiene conductor asignado o el brevete no
+        // matchea ningún taxi, igual queremos devolver fecha/hora para que el caller distinga
+        // "servicio sin conductor" (Telefono null) de "no existe el servicio" (retorna null).
+        public async Task<DatosNotificacionConductor?> GetDatosNotificacion(int idservicio)
+        {
+            string sql = @"SELECT s.fechainicio AS Fechainicio, s.horainicio AS Horainicio,
+                                   s.brevete AS Brevete, t.telefono AS Telefono
+                            FROM servturismo s
+                            LEFT JOIN taxi t ON t.brevete = s.brevete
+                            WHERE s.idservicio = @Idservicio";
+
+            return await _doConnection.QueryFirstOrDefaultAsync<DatosNotificacionConductor>(
+                sql, new { Idservicio = idservicio }, transaction: _doTransaction);
+        }
+
         // Inserta en lote usando sentencias INSERT multi-VALUES (por bloques) en vez de un INSERT por fila,
         // para evitar N round-trips a la base de datos cuando se cargan muchos registros (ej. importación de Excel).
         private const int TamanioLoteInsert = 500;

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
+using System.Linq;
 using VelsatBackendAPI.Data.Repositories;
 using VelsatBackendAPI.Data.Services;
 using VelsatBackendAPI.Model.Turismo;
@@ -13,12 +14,14 @@ namespace VelsatBackendAPI.Controllers
         private readonly IReadOnlyUnitOfWork _readOnlyUow;  // ✅ Para GET
         private readonly IUnitOfWork _uow;
         private readonly IFirebaseService _firebaseService;
+        private readonly IWhatsAppService _whatsAppService;
 
-        public ServTurismoController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow, IFirebaseService firebaseService)
+        public ServTurismoController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow, IFirebaseService firebaseService, IWhatsAppService whatsAppService)
         {
             _readOnlyUow = readOnlyUow;
             _uow = uow;
             _firebaseService = firebaseService;
+            _whatsAppService = whatsAppService;
         }
 
         // GET api/servturismo?fechaInicio=01/07/2026&fechaFin=31/07/2026&brevete=Q12345678
@@ -165,7 +168,10 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var (filasAfectadas, breveteAnterior, camposModificados) = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos, usuario, motivo);
+                // La edición manual ya NO notifica automáticamente (ni push ni WhatsApp): queda a
+                // criterio del operador, que dispara la notificación a mano desde la tabla web
+                // (PATCH {idservicio}/notificar) eligiendo la plantilla que corresponda.
+                var (filasAfectadas, _, _) = await _uow.ServTurismoRepository.Patch(idservicio, campos, limpiarNulos, usuario, motivo);
 
                 if (filasAfectadas == -1)
                 {
@@ -175,25 +181,6 @@ namespace VelsatBackendAPI.Controllers
 
                 if (filasAfectadas > 0)
                 {
-                    bool reasignoConductor = !string.IsNullOrWhiteSpace(campos.Brevete) &&
-                        !string.Equals(campos.Brevete, breveteAnterior, StringComparison.OrdinalIgnoreCase);
-
-                    if (reasignoConductor)
-                    {
-                        // Reasignación de conductor: notifica al conductor NUEVO como si fuera un servicio recién asignado.
-                        await NotificarConductorAsync(campos.Brevete);
-                    }
-                    else if (camposModificados.Count > 0)
-                    {
-                        // Cualquier otro campo modificado en un servicio que ya tenía conductor: se avisa
-                        // al mismo conductor (breveteAnterior, que no cambió) con un mensaje distinto,
-                        // para no confundirlo con una asignación nueva.
-                        await NotificarConductorAsync(
-                            breveteAnterior,
-                            "Servicio de turismo actualizado",
-                            "Hubo cambios en tu servicio de turismo. Revisa la app para ver el detalle.");
-                    }
-
                     return Ok(new { mensaje = "Servicio de turismo actualizado correctamente.", filasAfectadas });
                 }
 
@@ -344,6 +331,107 @@ namespace VelsatBackendAPI.Controllers
             {
                 return StatusCode(500, new { mensaje = "Error al reanudar el servicio.", error = ex.Message });
             }
+        }
+
+        // PATCH api/servturismo/{idservicio}/notificar
+        // Notificación manual disparada desde el botón de la tabla web (una por servicio, con
+        // plantilla a elegir: revisión / cambio / cancelación). Manda el mismo mensaje por los DOS
+        // canales a la vez: WhatsApp y push de la app (Firebase) — ambos se intentan de forma
+        // independiente, así que si uno falla (celular inválido, o el conductor no tiene la app
+        // instalada) el otro igual se envía. El teléfono y el token FCM SIEMPRE se resuelven acá
+        // contra la ficha del conductor en BD (tabla taxi, por el brevete del servicio): el cliente
+        // solo manda "tipo", nunca el texto ni el destino, así no se puede notificar algo arbitrario.
+        [HttpPatch("{idservicio}/notificar")]
+        public async Task<IActionResult> NotificarPorWhatsapp(int idservicio, [FromBody] NotificarConductorRequest body)
+        {
+            if (body == null || string.IsNullOrWhiteSpace(body.Tipo))
+            {
+                return BadRequest(new { mensaje = "El tipo de plantilla es requerido." });
+            }
+
+            try
+            {
+                var datos = await _readOnlyUow.ServTurismoRepository.GetDatosNotificacion(idservicio);
+
+                if (datos == null)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                string fecha = datos.Fechainicio?.ToString("dd/MM/yyyy") ?? "-";
+                string hora = datos.Horainicio.HasValue
+                    ? DateTime.Today.Add(datos.Horainicio.Value).ToString("HH:mm")
+                    : "-";
+
+                (string Titulo, string Cuerpo)? plantilla = body.Tipo switch
+                {
+                    "revision" => ("Revisa tus servicios", $"Revisa tus servicios asignados para el día {fecha}"),
+                    "cambio" => ("Servicio de turismo actualizado", $"Tu servicio del día {fecha} de las {hora} tuvo una modificación"),
+                    "cancelacion" => ("Servicio de turismo cancelado", $"Tu servicio del día {fecha} de las {hora} fue cancelado"),
+                    _ => null,
+                };
+
+                if (plantilla == null)
+                {
+                    return BadRequest(new { mensaje = "Tipo de plantilla no reconocido." });
+                }
+
+                var (titulo, mensaje) = plantilla.Value;
+
+                bool whatsappEnviado = false;
+                string? telefono = NormalizarCelularPeru(datos.Telefono);
+                if (telefono != null)
+                {
+                    whatsappEnviado = await _whatsAppService.EnviarMensajeAsync(telefono, mensaje);
+                }
+
+                bool pushEnviado = false;
+                if (!string.IsNullOrWhiteSpace(datos.Brevete))
+                {
+                    var token = await _readOnlyUow.NotificacionesRepository.GetFCMTokenByBreveteAsync(datos.Brevete);
+                    if (token != null)
+                    {
+                        var resultadoPush = await _firebaseService.SendPushNotificationAsync(token.FCMToken, titulo, mensaje);
+                        pushEnviado = resultadoPush.Success;
+
+                        if (resultadoPush.TokenInvalido)
+                        {
+                            await _readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
+                        }
+                    }
+                }
+
+                if (!whatsappEnviado && !pushEnviado)
+                {
+                    return StatusCode(502, new { mensaje = "No se pudo enviar la notificación (ni por WhatsApp ni en la app)." });
+                }
+
+                string mensajeRespuesta = whatsappEnviado && pushEnviado
+                    ? "Notificación enviada por WhatsApp y en la app."
+                    : whatsappEnviado
+                        ? "Notificación enviada por WhatsApp (no se pudo enviar el push de la app)."
+                        : "Notificación enviada en la app (no se pudo enviar por WhatsApp).";
+
+                return Ok(new { mensaje = mensajeRespuesta, whatsappEnviado, pushEnviado });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al notificar al conductor.", error = ex.Message });
+            }
+        }
+
+        // Acepta 9 dígitos (celular peruano sin código de país) o 11 (ya con el prefijo 51).
+        private static string? NormalizarCelularPeru(string? valor)
+        {
+            if (string.IsNullOrWhiteSpace(valor))
+            {
+                return null;
+            }
+
+            string digitos = new string(valor.Where(char.IsDigit).ToArray());
+            if (digitos.Length == 9) return $"51{digitos}";
+            if (digitos.Length == 11 && digitos.StartsWith("51")) return digitos;
+            return null;
         }
 
         // GET api/servturismo/{idservicio}/auditoria
