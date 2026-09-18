@@ -331,7 +331,10 @@ namespace VelsatBackendAPI.Data.Repositories
 
                 for (int i = 0; i < datareport.ListaTablas.Count - 1; i++)
                 {
-                    if (datareport.ListaTablas[i].SpeedKPH == 0 && datareport.ListaTablas[i + 1].SpeedKPH == 0)
+                    var actual = datareport.ListaTablas[i];
+                    var siguiente = datareport.ListaTablas[i + 1];
+
+                    if (actual.SpeedKPH == 0 && siguiente.SpeedKPH == 0 && SameLocation(actual, siguiente))
                     {
                         Contador++;
 
@@ -364,7 +367,7 @@ namespace VelsatBackendAPI.Data.Repositories
                             Contador = 0;
                         }
 
-                        if ((i + 1) == ultimoelemento && datareport.ListaTablas[ultimoelemento].SpeedKPH > 0)
+                        if ((i + 1) == ultimoelemento && (siguiente.SpeedKPH > 0 || !SameLocation(actual, siguiente)))
                         {
                             RouteDetails stop = CreateRouteDetails(datareport.ListaTablas[ultimoelemento]);
                             DetailsData.Add(stop);
@@ -374,6 +377,26 @@ namespace VelsatBackendAPI.Data.Repositories
                 }
             }
             return DetailsData;
+        }
+
+        private const double SameLocationToleranceMeters = 15;
+
+        private static bool SameLocation(TablasReporting a, TablasReporting b)
+        {
+            return DistanceMeters(a.Latitude, a.Longitude, b.Latitude, b.Longitude) <= SameLocationToleranceMeters;
+        }
+
+        private static double DistanceMeters(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double EarthRadiusMeters = 6371000;
+            double dLat = (lat2 - lat1) * Math.PI / 180;
+            double dLon = (lon2 - lon1) * Math.PI / 180;
+
+            double h = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                       Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) *
+                       Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+            return 2 * EarthRadiusMeters * Math.Asin(Math.Min(1, Math.Sqrt(h)));
         }
 
         private RouteDetails CreateRouteDetails(TablasReporting gpsData)
