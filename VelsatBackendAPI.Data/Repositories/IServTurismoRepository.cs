@@ -35,6 +35,12 @@ namespace VelsatBackendAPI.Data.Repositories
         // Null si el servicio no existe.
         Task<DatosNotificacionConductor?> GetDatosNotificacion(int idservicio);
 
+        // Teléfono de cada brevete indicado según la ficha vigente en la tabla taxi (brevete -> telefono,
+        // sin normalizar). Pensado para notificar por WhatsApp una carga en lote (ver
+        // ServTurismoController.InsertLote): el destino siempre se resuelve acá, nunca desde el cliente.
+        // Los brevetes sin ficha o sin teléfono no aparecen en el resultado.
+        Task<Dictionary<string, string>> GetTelefonosPorBrevete(IEnumerable<string> brevetes);
+
         // Acuse de recibo del conductor. Devuelven false solo si el idservicio no existe;
         // volver a marcar un servicio ya marcado es una operación válida (no cambia nada).
         Task<bool> MarcarVisto(int idservicio);

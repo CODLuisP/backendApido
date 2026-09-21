@@ -46,10 +46,12 @@ namespace VelsatBackendAPI.Data.Services
                 string json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                _httpClient.DefaultRequestHeaders.Clear();
-                _httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+                // El header va en cada request (no en DefaultRequestHeaders) para que varios envíos
+                // en paralelo (ver ServTurismoController.InsertLote) no se pisen entre sí.
+                using var request = new HttpRequestMessage(HttpMethod.Post, baseUrl) { Content = content };
+                request.Headers.Add("x-api-key", apiKey);
 
-                var response = await _httpClient.PostAsync(baseUrl, content);
+                var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {

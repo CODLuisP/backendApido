@@ -350,6 +350,38 @@ namespace VelsatBackendAPI.Data.Repositories
                 sql, new { Idservicio = idservicio }, transaction: _doTransaction);
         }
 
+        // Si un brevete tiene más de una ficha en taxi, gana la de turismo = '1' y, entre esas, la más
+        // reciente (mayor codtaxi): el ORDER BY deja esa fila al final y el diccionario se queda con la última.
+        public async Task<Dictionary<string, string>> GetTelefonosPorBrevete(IEnumerable<string> brevetes)
+        {
+            var lista = brevetes.Where(b => !string.IsNullOrWhiteSpace(b)).Select(b => b.Trim()).Distinct().ToList();
+            var telefonos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (lista.Count == 0)
+            {
+                return telefonos;
+            }
+
+            string sql = @"SELECT TRIM(brevete) AS Brevete, TRIM(telefono) AS Telefono
+                            FROM taxi
+                            WHERE TRIM(brevete) IN @Brevetes
+                              AND telefono IS NOT NULL AND TRIM(telefono) <> ''
+                            ORDER BY (turismo = '1'), codtaxi";
+
+            var filas = await _doConnection.QueryAsync<ConductorTurismo>(
+                sql, new { Brevetes = lista }, transaction: _doTransaction);
+
+            foreach (var fila in filas)
+            {
+                if (fila.Brevete != null && fila.Telefono != null)
+                {
+                    telefonos[fila.Brevete] = fila.Telefono;
+                }
+            }
+
+            return telefonos;
+        }
+
         // Inserta en lote usando sentencias INSERT multi-VALUES (por bloques) en vez de un INSERT por fila,
         // para evitar N round-trips a la base de datos cuando se cargan muchos registros (ej. importación de Excel).
         private const int TamanioLoteInsert = 500;

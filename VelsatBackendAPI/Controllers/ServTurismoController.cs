@@ -107,11 +107,57 @@ namespace VelsatBackendAPI.Controllers
                     await NotificarConductorAsync(brevete);
                 }
 
-                return Ok(new { mensaje = "Servicios de turismo insertados correctamente.", insertados });
+                var (whatsappEnviados, whatsappFallidos) = await NotificarLotePorWhatsappAsync(servicios);
+
+                return Ok(new { mensaje = "Servicios de turismo insertados correctamente.", insertados, whatsappEnviados, whatsappFallidos });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { mensaje = "Error al insertar los servicios de turismo en lote.", error = ex.Message });
+            }
+        }
+
+        private const string MensajeWhatsappCargaLote = "Hola, tienes un servicio de turismo asignado. Revisa el detalle en tu app.";
+
+        // Avisa por WhatsApp a los conductores (brevete y cobrevete) de una carga en lote. El teléfono se
+        // consulta acá en la tabla taxi al momento de enviar: se ignoran las columnas celular/cocelular del
+        // Excel y nada del destino viene del cliente. Un conductor con varios servicios recibe un solo
+        // mensaje. Igual que el push, corre después del SaveChanges y no debe afectar la respuesta.
+        private async Task<(int Enviados, int Fallidos)> NotificarLotePorWhatsappAsync(IEnumerable<ServTurismo> servicios)
+        {
+            try
+            {
+                var brevetes = servicios
+                    .SelectMany(s => new[] { s.Brevete, s.Cobrevete })
+                    .Where(b => !string.IsNullOrWhiteSpace(b))
+                    .Select(b => b!.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (brevetes.Count == 0)
+                {
+                    return (0, 0);
+                }
+
+                var telefonosPorBrevete = await _readOnlyUow.ServTurismoRepository.GetTelefonosPorBrevete(brevetes);
+
+                var telefonos = telefonosPorBrevete.Values
+                    .Select(NormalizarCelularPeru)
+                    .Where(t => t != null)
+                    .Select(t => t!)
+                    .Distinct()
+                    .ToList();
+
+                var resultados = await Task.WhenAll(
+                    telefonos.Select(t => _whatsAppService.EnviarMensajeAsync(t, MensajeWhatsappCargaLote)));
+
+                int enviados = resultados.Count(ok => ok);
+                return (enviados, telefonos.Count - enviados);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error notificando por WhatsApp la carga en lote de turismo: {ex.Message}");
+                return (0, 0);
             }
         }
 
