@@ -29,7 +29,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<IEnumerable<CodNomPas>> GetCodigo()
         {
-            const string sql = "SELECT codcliente, apellidos FROM cliente WHERE estadocuenta = 'A'";
+            const string sql = "SELECT codcliente, apellidos, empresa FROM cliente WHERE estadocuenta = 'A'";
             return await _doConnection.QueryAsync<CodNomPas>(sql, transaction: _doTransaction);
         }
 

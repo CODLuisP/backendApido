@@ -10,5 +10,6 @@ namespace VelsatBackendAPI.Model.GestionPasajeros
     {
         public int codcliente {  get; set; }
         public string apellidos {  get; set; }
+        public string empresa { get; set; }
     }
 }
