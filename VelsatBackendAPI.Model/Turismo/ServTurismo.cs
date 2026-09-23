@@ -51,6 +51,10 @@ namespace VelsatBackendAPI.Model.Turismo
         // confirmada con un modal en la app). Es el estado final del ciclo de vida del servicio.
         public byte? Finalizado { get; set; }
 
+        // Fecha y hora en que se marcó Finalizado, generada por el servidor al recibir el PATCH
+        // /finalizar (no la envía la app móvil). Null mientras el servicio no se haya finalizado.
+        public DateTime? Horafinalizado { get; set; }
+
         // Se marca en 1 cuando el servicio se reprograma (Patch cambia fechainicio a otro día).
         // Al reprogramar, el repositorio limpia visto/confirmado/finalizado (ver ServTurismoRepository.Patch)
         // para que solo quede visible la etiqueta "Reprogramado" hasta que el conductor vuelva a actuar.

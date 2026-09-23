@@ -294,15 +294,15 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                bool existe = await _uow.ServTurismoRepository.MarcarFinalizado(idservicio);
+                DateTime? horaFinalizado = await _uow.ServTurismoRepository.MarcarFinalizado(idservicio);
                 _uow.SaveChanges();
 
-                if (!existe)
+                if (horaFinalizado == null)
                 {
                     return NotFound(new { mensaje = "No se encontró el servicio." });
                 }
 
-                return Ok(new { mensaje = "Servicio finalizado por el conductor.", idservicio, finalizado = 1 });
+                return Ok(new { mensaje = "Servicio finalizado por el conductor.", idservicio, finalizado = 1, horafinalizado = horaFinalizado });
             }
             catch (Exception ex)
             {

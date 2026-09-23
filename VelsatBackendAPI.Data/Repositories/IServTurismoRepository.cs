@@ -47,7 +47,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<bool> MarcarConfirmado(int idservicio);
 
-        Task<bool> MarcarFinalizado(int idservicio);
+        // Devuelve null si el servicio no existe; si existe, la hora de finalización (servturismo.horafinalizado).
+        Task<DateTime?> MarcarFinalizado(int idservicio);
 
         Task<bool> MarcarCancelado(int idservicio);
 

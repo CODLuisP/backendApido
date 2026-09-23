@@ -33,7 +33,8 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion, visto, confirmado, finalizado, reprogramado, cancelado, standby
+                                   ejecutivo, cotizacion, visto, confirmado, finalizado, horafinalizado, reprogramado,
+                                   cancelado, standby
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
                             {(string.IsNullOrWhiteSpace(brevete)
@@ -265,6 +266,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 setClauses.Add("visto = 0");
                 setClauses.Add("confirmado = 0");
                 setClauses.Add("finalizado = 0");
+                setClauses.Add("horafinalizado = NULL");
             }
             else
             {
@@ -527,14 +529,29 @@ namespace VelsatBackendAPI.Data.Repositories
 
         // Estado final del ciclo del servicio, disparado por el deslizamiento a la derecha en la app
         // (con modal de confirmación porque es irreversible). No toca un servicio ya Cancelado ni
-        // uno ya Finalizado (idempotente ante reintentos).
-        public Task<bool> MarcarFinalizado(int idservicio) =>
-            MarcarAcuse(idservicio,
+        // uno ya Finalizado (idempotente ante reintentos). horafinalizado se calcula acá (NOW() del
+        // servidor), la app móvil no envía ninguna hora en este PATCH.
+        // Devuelve null si el servicio no existe; si existe, la hora de finalización (recién puesta,
+        // o la que ya tenía si el conductor reintentó el PATCH).
+        public async Task<DateTime?> MarcarFinalizado(int idservicio)
+        {
+            bool existe = await MarcarAcuse(idservicio,
                 @"UPDATE servturismo
-                  SET finalizado = 1
+                  SET finalizado = 1, horafinalizado = NOW()
                   WHERE idservicio = @Idservicio
                     AND (cancelado IS NULL OR cancelado <> 1)
                     AND (finalizado IS NULL OR finalizado <> 1)");
+
+            if (!existe)
+            {
+                return null;
+            }
+
+            return await _doConnection.ExecuteScalarAsync<DateTime?>(
+                "SELECT horafinalizado FROM servturismo WHERE idservicio = @Idservicio",
+                new { Idservicio = idservicio },
+                transaction: _doTransaction);
+        }
 
         // ===================== TAXI (CONDUCTORES) CRUD =====================
 
