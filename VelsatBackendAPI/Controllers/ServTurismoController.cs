@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Linq;
 using VelsatBackendAPI.Data.Repositories;
@@ -15,13 +17,23 @@ namespace VelsatBackendAPI.Controllers
         private readonly IUnitOfWork _uow;
         private readonly IFirebaseService _firebaseService;
         private readonly IWhatsAppService _whatsAppService;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly ILogger<ServTurismoController> _logger;
 
-        public ServTurismoController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow, IFirebaseService firebaseService, IWhatsAppService whatsAppService)
+        public ServTurismoController(
+            IReadOnlyUnitOfWork readOnlyUow,
+            IUnitOfWork uow,
+            IFirebaseService firebaseService,
+            IWhatsAppService whatsAppService,
+            IServiceScopeFactory serviceScopeFactory,
+            ILogger<ServTurismoController> logger)
         {
             _readOnlyUow = readOnlyUow;
             _uow = uow;
             _firebaseService = firebaseService;
             _whatsAppService = whatsAppService;
+            _serviceScopeFactory = serviceScopeFactory;
+            _logger = logger;
         }
 
         // GET api/servturismo?fechaInicio=01/07/2026&fechaFin=31/07/2026&brevete=Q12345678
@@ -71,7 +83,15 @@ namespace VelsatBackendAPI.Controllers
                 int idservicio = await _uow.ServTurismoRepository.Insert(servicio);
                 _uow.SaveChanges();
 
-                await NotificarConductorAsync(servicio.Brevete);
+                // El servicio ya quedó insertado: la notificación push se manda en segundo plano,
+                // sin bloquear la respuesta (ver comentario en InsertLote sobre por qué esto es
+                // necesario y no solo una optimización).
+                DispararEnBackground(async sp =>
+                {
+                    var readOnlyUow = sp.GetRequiredService<IReadOnlyUnitOfWork>();
+                    var firebaseService = sp.GetRequiredService<IFirebaseService>();
+                    await NotificarConductorAsync(readOnlyUow, firebaseService, servicio.Brevete);
+                });
 
                 return Ok(new { mensaje = "Servicio de turismo creado correctamente.", idservicio });
             }
@@ -84,6 +104,13 @@ namespace VelsatBackendAPI.Controllers
         // POST api/servturismo/lote
         // Inserción en lote (ej. carga desde Excel en el front). Ejecuta INSERTs multi-VALUES por bloques
         // para minimizar los round-trips a la base de datos y evitar lentitud con listas grandes.
+        //
+        // IMPORTANTE: responde apenas termina el SaveChanges, antes de notificar. Antes, la respuesta
+        // esperaba a que se mandaran TODOS los push y WhatsApp; si el gateway de WhatsApp estaba caído
+        // o desvinculado, esas llamadas podían demorar ~100s (timeout default de HttpClient) y la
+        // respuesta tardaba tanto que el front (useServiciosTurismo.cargarServiciosExcel) la trataba
+        // como fallo de red, guardaba el lote localmente como pendiente y lo reintentaba solo — pese a
+        // que el lote ya estaba insertado en BD, duplicando (hasta triplicando) los servicios cargados.
         [HttpPost("lote")]
         public async Task<IActionResult> InsertLote([FromBody] List<ServTurismo> servicios)
         {
@@ -97,19 +124,26 @@ namespace VelsatBackendAPI.Controllers
                 int insertados = await _uow.ServTurismoRepository.InsertBatch(servicios);
                 _uow.SaveChanges();
 
-                var brevetes = servicios
-                    .Select(s => s.Brevete)
-                    .Where(brevete => !string.IsNullOrWhiteSpace(brevete))
-                    .Distinct();
-
-                foreach (var brevete in brevetes)
+                DispararEnBackground(async sp =>
                 {
-                    await NotificarConductorAsync(brevete);
-                }
+                    var readOnlyUow = sp.GetRequiredService<IReadOnlyUnitOfWork>();
+                    var firebaseService = sp.GetRequiredService<IFirebaseService>();
+                    var whatsAppService = sp.GetRequiredService<IWhatsAppService>();
 
-                var (whatsappEnviados, whatsappFallidos) = await NotificarLotePorWhatsappAsync(servicios);
+                    var brevetes = servicios
+                        .Select(s => s.Brevete)
+                        .Where(brevete => !string.IsNullOrWhiteSpace(brevete))
+                        .Distinct();
 
-                return Ok(new { mensaje = "Servicios de turismo insertados correctamente.", insertados, whatsappEnviados, whatsappFallidos });
+                    foreach (var brevete in brevetes)
+                    {
+                        await NotificarConductorAsync(readOnlyUow, firebaseService, brevete);
+                    }
+
+                    await NotificarLotePorWhatsappAsync(readOnlyUow, whatsAppService, servicios);
+                });
+
+                return Ok(new { mensaje = "Servicios de turismo insertados correctamente. Se están notificando a los conductores.", insertados });
             }
             catch (Exception ex)
             {
@@ -117,13 +151,36 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // Ejecuta "trabajo" en segundo plano, en su propio scope de DI (los servicios scoped como
+        // _uow/_readOnlyUow no sobreviven más allá del request; acá se resuelven instancias nuevas
+        // que sí siguen vivas después de responder). Los métodos que llama ya atrapan sus propias
+        // excepciones, pero se protege igual para nunca dejar una excepción no observada.
+        private void DispararEnBackground(Func<IServiceProvider, Task> trabajo)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    await trabajo(scope.ServiceProvider);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error notificando en segundo plano tras carga de servicios de turismo.");
+                }
+            });
+        }
+
         private const string MensajeWhatsappCargaLote = "Hola, tienes un servicio de turismo asignado. Revisa el detalle en tu app.";
 
         // Avisa por WhatsApp a los conductores (brevete y cobrevete) de una carga en lote. El teléfono se
         // consulta acá en la tabla taxi al momento de enviar: se ignoran las columnas celular/cocelular del
         // Excel y nada del destino viene del cliente. Un conductor con varios servicios recibe un solo
-        // mensaje. Igual que el push, corre después del SaveChanges y no debe afectar la respuesta.
-        private async Task<(int Enviados, int Fallidos)> NotificarLotePorWhatsappAsync(IEnumerable<ServTurismo> servicios)
+        // mensaje. Corre en segundo plano (ver DispararEnBackground) y no debe afectar la respuesta.
+        private static async Task<(int Enviados, int Fallidos)> NotificarLotePorWhatsappAsync(
+            IReadOnlyUnitOfWork readOnlyUow,
+            IWhatsAppService whatsAppService,
+            IEnumerable<ServTurismo> servicios)
         {
             try
             {
@@ -139,7 +196,7 @@ namespace VelsatBackendAPI.Controllers
                     return (0, 0);
                 }
 
-                var telefonosPorBrevete = await _readOnlyUow.ServTurismoRepository.GetTelefonosPorBrevete(brevetes);
+                var telefonosPorBrevete = await readOnlyUow.ServTurismoRepository.GetTelefonosPorBrevete(brevetes);
 
                 var telefonos = telefonosPorBrevete.Values
                     .Select(NormalizarCelularPeru)
@@ -149,7 +206,7 @@ namespace VelsatBackendAPI.Controllers
                     .ToList();
 
                 var resultados = await Task.WhenAll(
-                    telefonos.Select(t => _whatsAppService.EnviarMensajeAsync(t, MensajeWhatsappCargaLote)));
+                    telefonos.Select(t => whatsAppService.EnviarMensajeAsync(t, MensajeWhatsappCargaLote)));
 
                 int enviados = resultados.Count(ok => ok);
                 return (enviados, telefonos.Count - enviados);
@@ -161,11 +218,13 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        // Notifica por push al conductor dueño de "brevete". Se ejecuta después del SaveChanges: si falla
-        // el envío no debe afectar la respuesta al cliente (el servicio ya quedó insertado en base de datos).
-        // titulo/cuerpo son configurables porque se reusa tanto para "nuevo servicio asignado" (Insert/lote
-        // y reasignación de conductor en el Patch) como para "cambios en un servicio ya asignado" (Patch).
-        private async Task NotificarConductorAsync(
+        // Notifica por push al conductor dueño de "brevete". Corre en segundo plano (ver
+        // DispararEnBackground) y no debe afectar la respuesta al cliente (el servicio ya quedó
+        // insertado en base de datos). titulo/cuerpo son configurables porque se reusa tanto para
+        // "nuevo servicio asignado" (Insert/lote) como para "cambios en un servicio ya asignado".
+        private static async Task NotificarConductorAsync(
+            IReadOnlyUnitOfWork readOnlyUow,
+            IFirebaseService firebaseService,
             string? brevete,
             string titulo = "Nuevo servicio de turismo",
             string cuerpo = "Se te ha asignado un nuevo servicio de turismo. Revisa la app para ver el detalle.")
@@ -177,21 +236,21 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var token = await _readOnlyUow.NotificacionesRepository.GetFCMTokenByBreveteAsync(brevete);
+                var token = await readOnlyUow.NotificacionesRepository.GetFCMTokenByBreveteAsync(brevete);
 
                 if (token == null)
                 {
                     return;
                 }
 
-                var resultado = await _firebaseService.SendPushNotificationAsync(
+                var resultado = await firebaseService.SendPushNotificationAsync(
                     token.FCMToken,
                     titulo,
                     cuerpo);
 
                 if (resultado.TokenInvalido)
                 {
-                    await _readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
+                    await readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
                 }
             }
             catch (Exception ex)

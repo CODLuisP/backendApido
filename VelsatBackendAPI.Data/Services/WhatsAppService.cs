@@ -4,6 +4,7 @@ using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace VelsatBackendAPI.Data.Services
@@ -29,8 +30,16 @@ namespace VelsatBackendAPI.Data.Services
             _logger = logger;
         }
 
+        // Timeout corto propio (independiente del Timeout global del HttpClient inyectado por
+        // AddHttpClient) para que un gateway de WhatsApp caído o desvinculado no cuelgue la
+        // request casi 100s: eso alargaba tanto la respuesta de InsertLote que el front la daba
+        // por caída y reintentaba la carga completa, duplicando servicios.
+        private static readonly TimeSpan TimeoutEnvio = TimeSpan.FromSeconds(10);
+
         public async Task<bool> EnviarMensajeAsync(string telefono, string mensaje)
         {
+            using var cts = new CancellationTokenSource(TimeoutEnvio);
+
             try
             {
                 string baseUrl = _configuration["WhatsApp:BaseUrl"];
@@ -51,7 +60,7 @@ namespace VelsatBackendAPI.Data.Services
                 using var request = new HttpRequestMessage(HttpMethod.Post, baseUrl) { Content = content };
                 request.Headers.Add("x-api-key", apiKey);
 
-                var response = await _httpClient.SendAsync(request);
+                var response = await _httpClient.SendAsync(request, cts.Token);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -61,6 +70,11 @@ namespace VelsatBackendAPI.Data.Services
                 }
 
                 return true;
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogError($"WhatsApp: timeout ({TimeoutEnvio.TotalSeconds}s) al enviar a {telefono} (¿gateway desvinculado o caído?)");
+                return false;
             }
             catch (Exception ex)
             {
