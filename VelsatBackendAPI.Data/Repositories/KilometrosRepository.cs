@@ -195,16 +195,16 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             var reporting = new KilometrajeBatchReporting();
 
+            var rangosRecibidos = request?.Rangos ?? new List<RangoKilometrajeRequest>();
             var rangosValidos = new List<(string RangoId, string DeviceId, int Ini, int Fin)>();
 
-            foreach (var rango in request?.Rangos ?? new List<RangoKilometrajeRequest>())
+            foreach (var rango in rangosRecibidos)
             {
                 if (string.IsNullOrWhiteSpace(rango.DeviceID) || string.IsNullOrWhiteSpace(rango.FechaIni) || string.IsNullOrWhiteSpace(rango.FechaFin))
                     continue;
 
-                var dates = FormatDate(rango.FechaIni, rango.FechaFin);
-                int ini = DateUnix(dates.dateStart);
-                int fin = DateUnix(dates.dateEnd);
+                if (!TryParseFechaHoraUnix(rango.FechaIni, out int ini) || !TryParseFechaHoraUnix(rango.FechaFin, out int fin))
+                    continue;
 
                 if (fin <= ini)
                     continue;
@@ -214,7 +214,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             if (rangosValidos.Count == 0)
             {
-                reporting.Mensaje = "No se recibieron rangos válidos para consultar kilometraje";
+                reporting.Mensaje = $"No se recibieron rangos válidos para consultar kilometraje (recibidos: {rangosRecibidos.Count})";
                 return reporting;
             }
 
@@ -291,6 +291,24 @@ namespace VelsatBackendAPI.Data.Repositories
                 .Where(f => !string.IsNullOrEmpty(f.DeviceID))
                 .GroupBy(f => f.DeviceID, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First().AccountID, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static bool TryParseFechaHoraUnix(string fechaHora, out int unix)
+        {
+            unix = 0;
+
+            if (!DateTime.TryParseExact(
+                    fechaHora.Trim(),
+                    new[] { "dd/MM/yyyy HH:mm", "d/M/yyyy H:mm" },
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime fecha))
+            {
+                return false;
+            }
+
+            unix = (int)(fecha.ToUniversalTime() - new DateTime(1970, 1, 1)).TotalSeconds;
+            return true;
         }
 
         private List<KilometrosRecorridosServicio> EjecutarQueryBatch(
