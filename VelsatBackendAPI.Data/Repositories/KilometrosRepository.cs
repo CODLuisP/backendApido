@@ -191,6 +191,135 @@ namespace VelsatBackendAPI.Data.Repositories
             }
         }
 
+        public async Task<KilometrajeBatchReporting> GetKmReportingBatch(KilometrajeBatchRequest request)
+        {
+            var reporting = new KilometrajeBatchReporting();
+
+            var rangosValidos = new List<(string RangoId, string DeviceId, int Ini, int Fin)>();
+
+            foreach (var rango in request?.Rangos ?? new List<RangoKilometrajeRequest>())
+            {
+                if (string.IsNullOrWhiteSpace(rango.DeviceID) || string.IsNullOrWhiteSpace(rango.FechaIni) || string.IsNullOrWhiteSpace(rango.FechaFin))
+                    continue;
+
+                var dates = FormatDate(rango.FechaIni, rango.FechaFin);
+                int ini = DateUnix(dates.dateStart);
+                int fin = DateUnix(dates.dateEnd);
+
+                if (fin <= ini)
+                    continue;
+
+                rangosValidos.Add((rango.RangoId, rango.DeviceID.Trim().ToUpperInvariant(), ini, fin));
+            }
+
+            if (rangosValidos.Count == 0)
+            {
+                reporting.Mensaje = "No se recibieron rangos válidos para consultar kilometraje";
+                return reporting;
+            }
+
+            int fechainiUnixGlobal = rangosValidos.Min(r => r.Ini);
+            int fechafinUnixGlobal = rangosValidos.Max(r => r.Fin);
+
+            const string sqlHistoricos = "select tabla from historicos where timeini<=@FechafinUnix and timefin>=@FechainiUnix";
+            var nombresTablas = _defaultConnection.Query<Historicos>(sqlHistoricos, new { FechainiUnix = fechainiUnixGlobal, FechafinUnix = fechafinUnixGlobal }, transaction: _defaultTransaction).ToList();
+
+            var accountIdPorDevice = ObtenerAccountIdsPorDevice(rangosValidos.Select(r => r.DeviceId).Distinct().ToList());
+
+            var crudo = new List<KilometrosRecorridosServicio>();
+
+            if (nombresTablas.Count == 0)
+            {
+                crudo.AddRange(EjecutarQueryBatch(_defaultConnection, _defaultTransaction, "eventdata", rangosValidos, accountIdPorDevice, request.AccountID));
+            }
+            else
+            {
+                foreach (var nombreTabla in nombresTablas)
+                {
+                    crudo.AddRange(EjecutarQueryBatch(_secondConnection, _secondTransaction, nombreTabla.Tabla, rangosValidos, accountIdPorDevice, request.AccountID));
+                }
+            }
+
+            reporting.Resultados = crudo
+                .GroupBy(r => new { r.RangoId, r.DeviceId })
+                .Select(g => new KilometrosRecorridosServicio
+                {
+                    RangoId = g.Key.RangoId,
+                    DeviceId = g.Key.DeviceId,
+                    Maximo = g.Max(x => x.Maximo),
+                    Minimo = g.Min(x => x.Minimo),
+                    Kilometros = g.Max(x => x.Maximo) - g.Min(x => x.Minimo),
+                })
+                .ToList();
+
+            if (reporting.Resultados.Count == 0)
+            {
+                reporting.Mensaje = "No se encontró datos disponibles para el rango de fechas ingresado";
+            }
+
+            return reporting;
+        }
+
+        private class DeviceAccountRow
+        {
+            public string DeviceID { get; set; }
+            public string AccountID { get; set; }
+        }
+
+        private Dictionary<string, string> ObtenerAccountIdsPorDevice(List<string> deviceIds)
+        {
+            if (deviceIds.Count == 0)
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            const string sql = "SELECT deviceID AS DeviceID, accountID AS AccountID FROM device WHERE deviceID IN @DeviceIds";
+
+            var filas = _defaultConnection.Query<DeviceAccountRow>(sql, new { DeviceIds = deviceIds }, transaction: _defaultTransaction).ToList();
+
+            return filas
+                .Where(f => !string.IsNullOrEmpty(f.DeviceID))
+                .GroupBy(f => f.DeviceID, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().AccountID, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private List<KilometrosRecorridosServicio> EjecutarQueryBatch(
+            IDbConnection connection,
+            IDbTransaction transaction,
+            string tabla,
+            List<(string RangoId, string DeviceId, int Ini, int Fin)> rangos,
+            Dictionary<string, string> accountIdPorDevice,
+            string accountIdFallback)
+        {
+            var parameters = new DynamicParameters();
+            var filasUnion = new List<string>();
+
+            for (int i = 0; i < rangos.Count; i++)
+            {
+                var r = rangos[i];
+                var accountId = accountIdPorDevice.TryGetValue(r.DeviceId, out var acc) && !string.IsNullOrEmpty(acc)
+                    ? acc
+                    : accountIdFallback;
+
+                filasUnion.Add($"SELECT @RangoId{i} AS rangoId, @DeviceID{i} AS deviceID, @AccountID{i} AS accountID, @Ini{i} AS ini, @Fin{i} AS fin");
+
+                parameters.Add($"RangoId{i}", r.RangoId);
+                parameters.Add($"DeviceID{i}", r.DeviceId);
+                parameters.Add($"AccountID{i}", accountId);
+                parameters.Add($"Ini{i}", r.Ini);
+                parameters.Add($"Fin{i}", r.Fin);
+            }
+
+            string sql = $@"
+                SELECT r.rangoId AS RangoId, e.deviceID AS DeviceId,
+                       MAX(e.odometerKM) AS Maximo, MIN(e.odometerKM) AS Minimo
+                FROM {tabla} e
+                INNER JOIN (
+                    {string.Join(" UNION ALL ", filasUnion)}
+                ) r ON e.deviceID = r.deviceID AND e.accountID = r.accountID AND e.timestamp BETWEEN r.ini AND r.fin
+                GROUP BY r.rangoId, e.deviceID";
+
+            return connection.Query<KilometrosRecorridosServicio>(sql, parameters, transaction: transaction).ToList();
+        }
+
         public class ResultadosCalculoDias
         {
             public double NumDias { get; set; }

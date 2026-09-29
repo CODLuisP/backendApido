@@ -12,5 +12,7 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<KilometrosReporting> GetKmReporting(string fechaini, string fechafin, string deviceID, string accountID);
 
         Task<KilometrosReporting> GetAllKmReporting(string fechaini, string fechafin, string accountID);
+
+        Task<KilometrajeBatchReporting> GetKmReportingBatch(KilometrajeBatchRequest request);
     }
 }

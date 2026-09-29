@@ -40,6 +40,15 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
+        [HttpPost("kilometerbatch")]
+        public async Task<IActionResult> GetKilometerBatch([FromBody] KilometrajeBatchRequest request)
+        {
+
+            var result = await _readOnlyUow.KilometrosRepository.GetKmReportingBatch(request);
+            return Ok(result);
+
+        }
+
         [HttpGet("kilometerall/{fechaini}/{fechafin}/{accountID}")]
         public async Task<IActionResult> GetAllKilometer(string fechaini, string fechafin, string accountID)
         {
