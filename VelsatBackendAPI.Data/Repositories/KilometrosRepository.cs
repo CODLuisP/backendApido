@@ -226,17 +226,29 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var accountIdPorDevice = ObtenerAccountIdsPorDevice(rangosValidos.Select(r => r.DeviceId).Distinct().ToList());
 
+            var rangosConCuenta = rangosValidos
+                .Select(r => (
+                    r.RangoId,
+                    r.DeviceId,
+                    r.Ini,
+                    r.Fin,
+                    AccountId: accountIdPorDevice.TryGetValue(r.DeviceId, out var acc) && !string.IsNullOrEmpty(acc)
+                        ? acc
+                        : request.AccountID))
+                .Where(r => !string.IsNullOrWhiteSpace(r.AccountId))
+                .ToList();
+
             var crudo = new List<KilometrosRecorridosServicio>();
 
             if (nombresTablas.Count == 0)
             {
-                crudo.AddRange(EjecutarQueryBatch(_defaultConnection, _defaultTransaction, "eventdata", rangosValidos, accountIdPorDevice, request.AccountID));
+                crudo.AddRange(EjecutarQueryBatch(_defaultConnection, _defaultTransaction, "eventdata", rangosConCuenta));
             }
             else
             {
                 foreach (var nombreTabla in nombresTablas)
                 {
-                    crudo.AddRange(EjecutarQueryBatch(_secondConnection, _secondTransaction, nombreTabla.Tabla, rangosValidos, accountIdPorDevice, request.AccountID));
+                    crudo.AddRange(EjecutarQueryBatch(_secondConnection, _secondTransaction, nombreTabla.Tabla, rangosConCuenta));
                 }
             }
 
@@ -285,9 +297,7 @@ namespace VelsatBackendAPI.Data.Repositories
             IDbConnection connection,
             IDbTransaction transaction,
             string tabla,
-            List<(string RangoId, string DeviceId, int Ini, int Fin)> rangos,
-            Dictionary<string, string> accountIdPorDevice,
-            string accountIdFallback)
+            List<(string RangoId, string DeviceId, int Ini, int Fin, string AccountId)> rangos)
         {
             var parameters = new DynamicParameters();
             var filasUnion = new List<string>();
@@ -295,15 +305,12 @@ namespace VelsatBackendAPI.Data.Repositories
             for (int i = 0; i < rangos.Count; i++)
             {
                 var r = rangos[i];
-                var accountId = accountIdPorDevice.TryGetValue(r.DeviceId, out var acc) && !string.IsNullOrEmpty(acc)
-                    ? acc
-                    : accountIdFallback;
 
                 filasUnion.Add($"SELECT @RangoId{i} AS rangoId, @DeviceID{i} AS deviceID, @AccountID{i} AS accountID, @Ini{i} AS ini, @Fin{i} AS fin");
 
                 parameters.Add($"RangoId{i}", r.RangoId);
                 parameters.Add($"DeviceID{i}", r.DeviceId);
-                parameters.Add($"AccountID{i}", accountId);
+                parameters.Add($"AccountID{i}", r.AccountId);
                 parameters.Add($"Ini{i}", r.Ini);
                 parameters.Add($"Fin{i}", r.Fin);
             }
@@ -314,7 +321,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 FROM {tabla} e
                 INNER JOIN (
                     {string.Join(" UNION ALL ", filasUnion)}
-                ) r ON e.deviceID = r.deviceID AND e.accountID = r.accountID AND e.timestamp BETWEEN r.ini AND r.fin
+                ) r ON e.accountID = r.accountID AND e.deviceID = r.deviceID AND e.timestamp BETWEEN r.ini AND r.fin
                 GROUP BY r.rangoId, e.deviceID";
 
             return connection.Query<KilometrosRecorridosServicio>(sql, parameters, transaction: transaction).ToList();
