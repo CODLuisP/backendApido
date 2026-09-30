@@ -655,14 +655,14 @@ namespace VelsatBackendAPI.Controllers
                 return BadRequest(new { mensaje = "El texto de la observación es requerido." });
             }
 
-            if (body.Tipo == "ampliacion" && !body.Dias.HasValue)
+            if (body.Tipo == "ampliacion" && !body.Horas.HasValue)
             {
-                return BadRequest(new { mensaje = "La cantidad de días es requerida." });
+                return BadRequest(new { mensaje = "La cantidad de horas es requerida." });
             }
 
             try
             {
-                var mensajeCreado = await _uow.ServTurismoRepository.InsertMensaje(idservicio, body.Tipo, body.Texto, body.Dias);
+                var mensajeCreado = await _uow.ServTurismoRepository.InsertMensaje(idservicio, body.Tipo, body.Texto, body.Horas);
                 _uow.SaveChanges();
 
                 if (mensajeCreado == null)

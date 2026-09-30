@@ -11,11 +11,11 @@ namespace VelsatBackendAPI.Model.Turismo
         public int Idservicio { get; set; }
 
         // "observacion": texto libre. "ampliacion": solicitud predefinida de ampliación de
-        // servicio, con Dias (del select) y Texto opcional (detalle adicional escrito a mano).
+        // servicio, con Horas (del select) y Texto opcional (detalle adicional escrito a mano).
         public string Tipo { get; set; } = string.Empty;
 
         public string? Texto { get; set; }
-        public int? Dias { get; set; }
+        public int? Horas { get; set; }
         public string? Brevete { get; set; }
         public DateTime Fecha { get; set; }
         public byte Atendido { get; set; }

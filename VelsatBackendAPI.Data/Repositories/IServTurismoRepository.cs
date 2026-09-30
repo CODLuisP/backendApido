@@ -74,7 +74,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         // Inserta el mensaje y devuelve, ya unido a servturismo/taxi, todo lo que necesita el
         // front para mostrar la alerta. Null si el servicio no existe.
-        Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? dias);
+        Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? horas);
 
         // Mensajes aún no atendidos (atendido = 0), más reciente primero. Pensado para que el
         // front recupere al cargar la pantalla lo que llegó mientras estaba desconectado.

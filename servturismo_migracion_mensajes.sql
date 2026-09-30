@@ -7,7 +7,7 @@ CREATE TABLE servturismo_mensaje (
   idservicio INT NOT NULL,
   tipo VARCHAR(20) NOT NULL,        -- 'observacion' | 'ampliacion'
   texto VARCHAR(500) NULL,          -- observación libre, o detalle adicional de la ampliación
-  dias INT NULL,                    -- solo 'ampliacion': cantidad de días elegida en el select
+  horas INT NULL,                   -- solo 'ampliacion': cantidad de horas elegida en el select
   brevete VARCHAR(20) NULL,         -- conductor que lo envió (resuelto en servidor, no lo manda la app)
   fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atendido TINYINT NOT NULL DEFAULT 0,

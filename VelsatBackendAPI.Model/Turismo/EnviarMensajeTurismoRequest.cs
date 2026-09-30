@@ -9,7 +9,7 @@ namespace VelsatBackendAPI.Model.Turismo
         // Requerido si Tipo = "observacion" (texto libre); opcional en "ampliacion" (detalle adicional).
         public string? Texto { get; set; }
 
-        // Requerido si Tipo = "ampliacion": cantidad de días elegida en el select.
-        public int? Dias { get; set; }
+        // Requerido si Tipo = "ampliacion": cantidad de horas elegida en el select.
+        public int? Horas { get; set; }
     }
 }

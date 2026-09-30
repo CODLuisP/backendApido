@@ -664,7 +664,7 @@ namespace VelsatBackendAPI.Data.Repositories
         // ===================== MENSAJES / SOLICITUDES DEL CONDUCTOR =====================
 
         private const string ColumnasMensaje = @"m.idmensaje AS Idmensaje, m.idservicio AS Idservicio, m.tipo AS Tipo,
-                                                   m.texto AS Texto, m.dias AS Dias, m.brevete AS Brevete,
+                                                   m.texto AS Texto, m.horas AS Horas, m.brevete AS Brevete,
                                                    m.fecha AS Fecha, m.atendido AS Atendido,
                                                    DATE_FORMAT(s.fechainicio, '%d/%m/%Y') AS Fechainicio,
                                                    TIME_FORMAT(s.horainicio, '%H:%i') AS Horainicio,
@@ -673,7 +673,7 @@ namespace VelsatBackendAPI.Data.Repositories
                                             FROM servturismo_mensaje m
                                             INNER JOIN servturismo s ON s.idservicio = m.idservicio";
 
-        public async Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? dias)
+        public async Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? horas)
         {
             bool existeServicio = await _doConnection.ExecuteScalarAsync<int>(
                 "SELECT COUNT(1) FROM servturismo WHERE idservicio = @Idservicio",
@@ -692,12 +692,12 @@ namespace VelsatBackendAPI.Data.Repositories
                 new { Idservicio = idservicio },
                 transaction: _doTransaction);
 
-            string sqlInsert = @"INSERT INTO servturismo_mensaje (idservicio, tipo, texto, dias, brevete)
-                                  VALUES (@Idservicio, @Tipo, @Texto, @Dias, @Brevete);
+            string sqlInsert = @"INSERT INTO servturismo_mensaje (idservicio, tipo, texto, horas, brevete)
+                                  VALUES (@Idservicio, @Tipo, @Texto, @Horas, @Brevete);
                                   SELECT LAST_INSERT_ID();";
 
             int idmensaje = await _doConnection.QuerySingleAsync<int>(sqlInsert,
-                new { Idservicio = idservicio, Tipo = tipo, Texto = texto, Dias = dias, Brevete = brevete },
+                new { Idservicio = idservicio, Tipo = tipo, Texto = texto, Horas = horas, Brevete = brevete },
                 transaction: _doTransaction);
 
             string sqlMensaje = $"SELECT {ColumnasMensaje} WHERE m.idmensaje = @Idmensaje";
