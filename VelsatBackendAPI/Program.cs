@@ -69,6 +69,8 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddSignalR();
+
 builder.Services.AddDistributedMemoryCache();
 
 builder.Services.AddSession(options =>
@@ -104,5 +106,6 @@ app.UseAuthorization();
 app.UseSession();
 
 app.MapControllers();
+app.MapHub<TurismoMensajesHub>("/turismoHub/{usuario}");
 
 app.Run();

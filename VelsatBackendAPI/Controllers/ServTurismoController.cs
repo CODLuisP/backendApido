@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Linq;
 using VelsatBackendAPI.Data.Repositories;
 using VelsatBackendAPI.Data.Services;
+using VelsatBackendAPI.Hubs;
 using VelsatBackendAPI.Model.Turismo;
 
 namespace VelsatBackendAPI.Controllers
@@ -19,6 +21,11 @@ namespace VelsatBackendAPI.Controllers
         private readonly IWhatsAppService _whatsAppService;
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<ServTurismoController> _logger;
+        private readonly IHubContext<TurismoMensajesHub> _mensajesHub;
+
+        // Grupo fijo del hub de mensajes: única cuenta de despacho de turismo hoy (igual que
+        // USUARIO_UNIDADES en GetTaxis/GetUnidades).
+        private const string GrupoDespachoTurismo = "movilbus";
 
         public ServTurismoController(
             IReadOnlyUnitOfWork readOnlyUow,
@@ -26,7 +33,8 @@ namespace VelsatBackendAPI.Controllers
             IFirebaseService firebaseService,
             IWhatsAppService whatsAppService,
             IServiceScopeFactory serviceScopeFactory,
-            ILogger<ServTurismoController> logger)
+            ILogger<ServTurismoController> logger,
+            IHubContext<TurismoMensajesHub> mensajesHub)
         {
             _readOnlyUow = readOnlyUow;
             _uow = uow;
@@ -34,6 +42,7 @@ namespace VelsatBackendAPI.Controllers
             _whatsAppService = whatsAppService;
             _serviceScopeFactory = serviceScopeFactory;
             _logger = logger;
+            _mensajesHub = mensajesHub;
         }
 
         // GET api/servturismo?fechaInicio=01/07/2026&fechaFin=31/07/2026&brevete=Q12345678
@@ -623,6 +632,100 @@ namespace VelsatBackendAPI.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { mensaje = "Error al eliminar los servicios de turismo de la fecha indicada.", error = ex.Message });
+            }
+        }
+
+        // ===================== MENSAJES / SOLICITUDES DEL CONDUCTOR =====================
+
+        // POST api/servturismo/{idservicio}/mensaje
+        // La app móvil lo llama cuando el conductor manda una observación o una solicitud
+        // (ampliación de servicio) desde el botón "Mensaje / Solicitud". Guarda el mensaje y lo
+        // notifica en vivo al front de despacho por SignalR (grupo GrupoDespachoTurismo); si el
+        // front estaba desconectado, lo recupera con GetMensajesPendientes al reconectar.
+        [HttpPost("{idservicio}/mensaje")]
+        public async Task<IActionResult> EnviarMensaje(int idservicio, [FromBody] EnviarMensajeTurismoRequest body)
+        {
+            if (body == null || (body.Tipo != "observacion" && body.Tipo != "ampliacion"))
+            {
+                return BadRequest(new { mensaje = "El tipo de mensaje debe ser 'observacion' o 'ampliacion'." });
+            }
+
+            if (body.Tipo == "observacion" && string.IsNullOrWhiteSpace(body.Texto))
+            {
+                return BadRequest(new { mensaje = "El texto de la observación es requerido." });
+            }
+
+            if (body.Tipo == "ampliacion" && !body.Dias.HasValue)
+            {
+                return BadRequest(new { mensaje = "La cantidad de días es requerida." });
+            }
+
+            try
+            {
+                var mensajeCreado = await _uow.ServTurismoRepository.InsertMensaje(idservicio, body.Tipo, body.Texto, body.Dias);
+                _uow.SaveChanges();
+
+                if (mensajeCreado == null)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                try
+                {
+                    await _mensajesHub.Clients.Group(GrupoDespachoTurismo).SendAsync("NuevoMensajeTurismo", mensajeCreado);
+                }
+                catch (Exception ex)
+                {
+                    // El mensaje ya quedó guardado; si SignalR falla, el front igual lo recupera
+                    // con GetMensajesPendientes, así que no se responde error al conductor.
+                    _logger.LogError(ex, "[SignalR] Error notificando mensaje de turismo idmensaje={Idmensaje}", mensajeCreado.Idmensaje);
+                }
+
+                return Ok(new { mensaje = "Mensaje enviado correctamente.", idmensaje = mensajeCreado.Idmensaje });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al enviar el mensaje.", error = ex.Message });
+            }
+        }
+
+        // GET api/servturismo/mensajes/pendientes
+        // El front lo consulta al cargar la pantalla para recuperar las alertas que llegaron
+        // mientras estaba desconectado (SignalR solo entrega en vivo a quien está conectado).
+        [HttpGet("mensajes/pendientes")]
+        public async Task<IActionResult> GetMensajesPendientes()
+        {
+            try
+            {
+                var mensajes = await _readOnlyUow.ServTurismoRepository.GetMensajesPendientes();
+                return Ok(mensajes);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener los mensajes pendientes.", error = ex.Message });
+            }
+        }
+
+        // PATCH api/servturismo/mensajes/{idmensaje}/atendido
+        // El front lo llama cuando el operador cierra la alerta manualmente. Es idempotente.
+        [HttpPatch("mensajes/{idmensaje}/atendido")]
+        public async Task<IActionResult> MarcarMensajeAtendido(int idmensaje)
+        {
+            try
+            {
+                bool existe = await _uow.ServTurismoRepository.MarcarMensajeAtendido(idmensaje);
+                _uow.SaveChanges();
+
+                if (!existe)
+                {
+                    return NotFound(new { mensaje = "No se encontró el mensaje." });
+                }
+
+                return Ok(new { mensaje = "Mensaje marcado como atendido.", idmensaje });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al marcar el mensaje como atendido.", error = ex.Message });
             }
         }
 

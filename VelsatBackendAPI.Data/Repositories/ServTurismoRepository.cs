@@ -660,5 +660,82 @@ namespace VelsatBackendAPI.Data.Repositories
 
             return await _doConnection.ExecuteAsync(sql, new { Codtaxi = codtaxi }, transaction: _doTransaction);
         }
+
+        // ===================== MENSAJES / SOLICITUDES DEL CONDUCTOR =====================
+
+        private const string ColumnasMensaje = @"m.idmensaje AS Idmensaje, m.idservicio AS Idservicio, m.tipo AS Tipo,
+                                                   m.texto AS Texto, m.dias AS Dias, m.brevete AS Brevete,
+                                                   m.fecha AS Fecha, m.atendido AS Atendido,
+                                                   DATE_FORMAT(s.fechainicio, '%d/%m/%Y') AS Fechainicio,
+                                                   TIME_FORMAT(s.horainicio, '%H:%i') AS Horainicio,
+                                                   s.cliente AS Cliente, s.origen AS Origen, s.destino AS Destino,
+                                                   s.bus AS Bus, s.placa AS Placa, s.piloto AS Piloto, s.celular AS Celular
+                                            FROM servturismo_mensaje m
+                                            INNER JOIN servturismo s ON s.idservicio = m.idservicio";
+
+        public async Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? dias)
+        {
+            bool existeServicio = await _doConnection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM servturismo WHERE idservicio = @Idservicio",
+                new { Idservicio = idservicio },
+                transaction: _doTransaction) > 0;
+
+            if (!existeServicio)
+            {
+                return null;
+            }
+
+            // El brevete de quien envía se resuelve acá (el conductor asignado al servicio), no
+            // se confía en lo que mande la app.
+            string? brevete = await _doConnection.QueryFirstOrDefaultAsync<string?>(
+                "SELECT brevete FROM servturismo WHERE idservicio = @Idservicio",
+                new { Idservicio = idservicio },
+                transaction: _doTransaction);
+
+            string sqlInsert = @"INSERT INTO servturismo_mensaje (idservicio, tipo, texto, dias, brevete)
+                                  VALUES (@Idservicio, @Tipo, @Texto, @Dias, @Brevete);
+                                  SELECT LAST_INSERT_ID();";
+
+            int idmensaje = await _doConnection.QuerySingleAsync<int>(sqlInsert,
+                new { Idservicio = idservicio, Tipo = tipo, Texto = texto, Dias = dias, Brevete = brevete },
+                transaction: _doTransaction);
+
+            string sqlMensaje = $"SELECT {ColumnasMensaje} WHERE m.idmensaje = @Idmensaje";
+
+            return await _doConnection.QueryFirstOrDefaultAsync<MensajeTurismo>(sqlMensaje,
+                new { Idmensaje = idmensaje },
+                transaction: _doTransaction);
+        }
+
+        public async Task<List<MensajeTurismo>> GetMensajesPendientes()
+        {
+            string sql = $"SELECT {ColumnasMensaje} WHERE m.atendido = 0 ORDER BY m.fecha DESC";
+
+            var resultado = await _doConnection.QueryAsync<MensajeTurismo>(sql, transaction: _doTransaction);
+            return resultado.ToList();
+        }
+
+        public async Task<bool> MarcarMensajeAtendido(int idmensaje)
+        {
+            int existe = await _doConnection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM servturismo_mensaje WHERE idmensaje = @Idmensaje",
+                new { Idmensaje = idmensaje },
+                transaction: _doTransaction);
+
+            if (existe == 0)
+            {
+                return false;
+            }
+
+            await _doConnection.ExecuteAsync(
+                @"UPDATE servturismo_mensaje
+                  SET atendido = 1, fecha_atendido = NOW()
+                  WHERE idmensaje = @Idmensaje
+                    AND atendido <> 1",
+                new { Idmensaje = idmensaje },
+                transaction: _doTransaction);
+
+            return true;
+        }
     }
 }

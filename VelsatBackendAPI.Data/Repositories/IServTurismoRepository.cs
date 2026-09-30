@@ -69,5 +69,19 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> PatchTaxi(int codtaxi, ConductorTurismo campos);
 
         Task<int> DeleteTaxi(int codtaxi);
+
+        // ===================== MENSAJES / SOLICITUDES DEL CONDUCTOR =====================
+
+        // Inserta el mensaje y devuelve, ya unido a servturismo/taxi, todo lo que necesita el
+        // front para mostrar la alerta. Null si el servicio no existe.
+        Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? dias);
+
+        // Mensajes aún no atendidos (atendido = 0), más reciente primero. Pensado para que el
+        // front recupere al cargar la pantalla lo que llegó mientras estaba desconectado.
+        Task<List<MensajeTurismo>> GetMensajesPendientes();
+
+        // Devuelve false solo si el idmensaje no existe; marcar dos veces el mismo mensaje como
+        // atendido sigue devolviendo éxito.
+        Task<bool> MarcarMensajeAtendido(int idmensaje);
     }
 }
