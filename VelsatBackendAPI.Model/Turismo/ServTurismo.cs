@@ -43,9 +43,13 @@ namespace VelsatBackendAPI.Model.Turismo
 
         // Acuse de recibo del conductor desde la app móvil.
         // Visto: se marca solo, cuando el servicio se muestra en pantalla.
-        // Confirmado: se marca cuando el conductor desliza la tarjeta del servicio.
+        // Confirmado: se marca cuando el conductor presiona "Iniciar" en la app.
         public byte? Visto { get; set; }
         public byte? Confirmado { get; set; }
+
+        // Fecha y hora en que el conductor inició el servicio (botón "Iniciar" de la app; marca
+        // Confirmado = 1), generada por el servidor al recibir el PATCH /iniciar. Null mientras no se inicie.
+        public DateTime? Horainiciado { get; set; }
 
         // Se marca cuando el conductor desliza la tarjeta hacia la derecha (acción irreversible,
         // confirmada con un modal en la app). Es el estado final del ciclo de vida del servicio.

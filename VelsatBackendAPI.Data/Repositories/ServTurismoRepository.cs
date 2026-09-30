@@ -33,7 +33,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = $@"SELECT idservicio, fechainicio, instrucciones, horainicio, indicaciones, horaretorno,
                                    bus, placa, brevete, piloto, celular, cobrevete, copiloto, cocelular, tipounidad,
                                    cliente, grupo, numpax, origen, destino, guiaturista, vuelocliente, observaciones,
-                                   ejecutivo, cotizacion, visto, confirmado, finalizado, horafinalizado, reprogramado,
+                                   ejecutivo, cotizacion, visto, confirmado, horainiciado, finalizado, horafinalizado, reprogramado,
                                    cancelado, standby
                             FROM servturismo
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
@@ -265,6 +265,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 setClauses.Add("reprogramado = 1");
                 setClauses.Add("visto = 0");
                 setClauses.Add("confirmado = 0");
+                setClauses.Add("horainiciado = NULL");
                 setClauses.Add("finalizado = 0");
                 setClauses.Add("horafinalizado = NULL");
             }
@@ -505,6 +506,31 @@ namespace VelsatBackendAPI.Data.Repositories
                     AND (cancelado IS NULL OR cancelado <> 1)
                     AND (confirmado IS NULL OR confirmado <> 1)");
 
+        // Inicio del servicio, disparado por el botón "Iniciar" de la app. Marca confirmado = 1 y guarda
+        // horainiciado (NOW() del servidor; la app no envía hora). Idempotente ante reintentos: si ya
+        // estaba iniciado no se pisa la hora. No toca un servicio Cancelado ni uno ya Finalizado.
+        // Devuelve null si el servicio no existe; si existe, la hora de inicio (nueva o la que ya tenía).
+        public async Task<DateTime?> MarcarIniciado(int idservicio)
+        {
+            bool existe = await MarcarAcuse(idservicio,
+                @"UPDATE servturismo
+                  SET confirmado = 1, horainiciado = NOW()
+                  WHERE idservicio = @Idservicio
+                    AND (cancelado IS NULL OR cancelado <> 1)
+                    AND (finalizado IS NULL OR finalizado <> 1)
+                    AND (confirmado IS NULL OR confirmado <> 1)");
+
+            if (!existe)
+            {
+                return null;
+            }
+
+            return await _doConnection.ExecuteScalarAsync<DateTime?>(
+                "SELECT horainiciado FROM servturismo WHERE idservicio = @Idservicio",
+                new { Idservicio = idservicio },
+                transaction: _doTransaction);
+        }
+
         public Task<bool> MarcarCancelado(int idservicio) =>
             MarcarAcuse(idservicio,
                 "UPDATE servturismo SET cancelado = 1 WHERE idservicio = @Idservicio AND (cancelado IS NULL OR cancelado <> 1)");
@@ -527,7 +553,7 @@ namespace VelsatBackendAPI.Data.Repositories
                   WHERE idservicio = @Idservicio
                     AND standby = 1");
 
-        // Estado final del ciclo del servicio, disparado por el deslizamiento a la derecha en la app
+        // Estado final del ciclo del servicio, disparado por el botón "Finalizar" de la app
         // (con modal de confirmación porque es irreversible). No toca un servicio ya Cancelado ni
         // uno ya Finalizado (idempotente ante reintentos). horafinalizado se calcula acá (NOW() del
         // servidor), la app móvil no envía ninguna hora en este PATCH.

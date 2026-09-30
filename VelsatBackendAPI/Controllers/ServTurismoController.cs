@@ -322,8 +322,8 @@ namespace VelsatBackendAPI.Controllers
         }
 
         // PATCH api/servturismo/{idservicio}/confirmado
-        // La app móvil lo llama cuando el conductor desliza la tarjeta del servicio,
-        // confirmando que lo recibió. Es idempotente.
+        // Obsoleto: la app móvil nueva usa /iniciar (que además guarda la hora). Se mantiene para
+        // las versiones anteriores de la app. Es idempotente.
         [HttpPatch("{idservicio}/confirmado")]
         public async Task<IActionResult> MarcarConfirmado(int idservicio)
         {
@@ -345,8 +345,32 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // PATCH api/servturismo/{idservicio}/iniciar
+        // La app móvil lo llama cuando el conductor presiona "Iniciar". Marca confirmado = 1 y guarda
+        // la hora de inicio (la pone el servidor). Es idempotente.
+        [HttpPatch("{idservicio}/iniciar")]
+        public async Task<IActionResult> MarcarIniciado(int idservicio)
+        {
+            try
+            {
+                DateTime? horaIniciado = await _uow.ServTurismoRepository.MarcarIniciado(idservicio);
+                _uow.SaveChanges();
+
+                if (horaIniciado == null)
+                {
+                    return NotFound(new { mensaje = "No se encontró el servicio." });
+                }
+
+                return Ok(new { mensaje = "Servicio iniciado por el conductor.", idservicio, confirmado = 1, horainiciado = horaIniciado });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al iniciar el servicio.", error = ex.Message });
+            }
+        }
+
         // PATCH api/servturismo/{idservicio}/finalizar
-        // La app móvil lo llama cuando el conductor desliza la tarjeta hacia la derecha y confirma
+        // La app móvil lo llama cuando el conductor presiona "Finalizar" y confirma
         // el modal de advertencia (acción irreversible). Es idempotente.
         [HttpPatch("{idservicio}/finalizar")]
         public async Task<IActionResult> MarcarFinalizado(int idservicio)
