@@ -21,7 +21,7 @@ namespace VelsatBackendAPI.Model
         public int Item { get; set; }
 
         public string Fecha => TimeZoneInfo.ConvertTimeFromUtc(TimestampConvert, TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time")).ToString("dd/MM/yyyy");
-        public string Hora => TimeZoneInfo.ConvertTimeFromUtc(TimestampConvert, TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time")).ToString("HH:mm").ToUpper();
+        public string Hora => TimeZoneInfo.ConvertTimeFromUtc(TimestampConvert, TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time")).ToString("HH:mm:ss");
 
         public double SpeedKPH { get; set; }
         public double Longitude { get; set; }
