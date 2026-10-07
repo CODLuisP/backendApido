@@ -16,8 +16,6 @@ namespace VelsatBackendAPI.Model
         public double LastGPSTimestamp { get; set; }
         public double LastValidSpeed { get; set; }
         public double LastOdometerKM { get; set; }
-        public double Odometerini { get; set; }
-        public double Kmini { get; set; }
         public string Descripcion { get; set; }
         public string Direccion { get; set; }
         public string? Codgeoact { get; set; }

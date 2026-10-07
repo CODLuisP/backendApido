@@ -51,7 +51,6 @@ namespace VelsatBackendAPI.Model.Cgcela
         public int? Totalservicios { get; set; }
         public Ggeocerca? GeocercaDesvio { get; set; }
         public string? Timerutaout { get; set; }
-        public double? Odometercontrol { get; set; }
         public string? Codmantecontrol { get; set; }
         public string? Botonpanico { get; set; }
         public string? Timereg { get; set; }
