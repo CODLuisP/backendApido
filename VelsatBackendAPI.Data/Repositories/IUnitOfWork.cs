@@ -45,6 +45,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         IGeocercasVehiculosRepository GeocercasVehiculosRepository { get; }
 
+        IConfiguracionRepository ConfiguracionRepository { get; }
+
         void SaveChanges();
 
     }

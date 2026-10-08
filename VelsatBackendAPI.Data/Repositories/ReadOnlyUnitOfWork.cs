@@ -27,6 +27,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IKmServicioRepository> _kmServicioRepository;
         private readonly Lazy<IRecorridoRepository> _recorridoRepository;
         private readonly Lazy<IUserRepository> _userRepository;
+        private readonly Lazy<IConfiguracionRepository> _configuracionRepository;
         private readonly Lazy<IGacelaRepository> _gacelaRepository;
         private readonly Lazy<IPasajerosRepository> _pasajeroRepository;
         private readonly Lazy<IPreplanRepository> _preplanRepository;
@@ -80,6 +81,8 @@ namespace VelsatBackendAPI.Data.Repositories
             _geocercasRepository = new Lazy<IGeocercasRepository>(() => new GeocercasRepository(DefaultConnection, null));
 
             _geocercasVehiculosRepository = new Lazy<IGeocercasVehiculosRepository>(() => new GeocercasVehiculosRepository(DefaultConnection, null));
+
+            _configuracionRepository = new Lazy<IConfiguracionRepository>(() => new ConfiguracionRepository(DefaultConnection, null));
         }
 
         private MySqlConnection DefaultConnection
@@ -331,6 +334,16 @@ namespace VelsatBackendAPI.Data.Repositories
                 if (_disposed)
                     throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
                 return _geocercasVehiculosRepository.Value;
+            }
+        }
+
+        public IConfiguracionRepository ConfiguracionRepository
+        {
+            get
+            {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(ReadOnlyUnitOfWork));
+                return _configuracionRepository.Value;
             }
         }
 
