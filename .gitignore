@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Config local con secretos (se monta con docker -v en produccion)
+VelsatBackendAPI/appsettings.json
