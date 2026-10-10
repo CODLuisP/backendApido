@@ -53,7 +53,7 @@ namespace VelsatBackendAPI.Controllers
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = claims,
-                Expires = DateTime.UtcNow.AddHours(4),
+                Expires = DateTime.UtcNow.AddHours(48),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(keyBytes), SecurityAlgorithms.HmacSha256Signature)
             };
 
