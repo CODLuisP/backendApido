@@ -558,6 +558,110 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // POST api/servturismo/notificar-revision?fecha=11/10/2026   body: { brevetes: [...] }
+        // Botón "Notificar revisión a todos" de la tabla web: manda la plantilla "revision" (la única
+        // permitida en masa; cambio/cancelación son por servicio) a los conductores elegidos en el modal.
+        // Solo se respetan los brevetes que figuran como piloto o copiloto en algún servicio de esa
+        // fecha que no esté cancelado ni en stand by (los que el conductor ve en su app). Un conductor
+        // con varios servicios recibe un solo mensaje. Igual que NotificarPorWhatsapp, se intenta
+        // WhatsApp y push de forma independiente, y el destino siempre se resuelve acá en BD.
+        [HttpPost("notificar-revision")]
+        public async Task<IActionResult> NotificarRevisionTodos([FromQuery] string fecha, [FromBody] NotificarRevisionRequest body)
+        {
+            if (!DateTime.TryParseExact(fecha, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDt))
+            {
+                return BadRequest(new { mensaje = "Formato de fecha incorrecto. Debe ser dd/MM/yyyy" });
+            }
+
+            if (body?.Brevetes == null || body.Brevetes.Count == 0)
+            {
+                return BadRequest(new { mensaje = "Selecciona al menos un conductor." });
+            }
+
+            try
+            {
+                var servicios = await _readOnlyUow.ServTurismoRepository.GetByFechas(fechaDt, fechaDt);
+
+                var elegidos = new HashSet<string>(
+                    body.Brevetes.Where(b => !string.IsNullOrWhiteSpace(b)).Select(b => b.Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+
+                var brevetes = servicios
+                    .Where(s => s.Cancelado != 1 && s.Standby != 1)
+                    .SelectMany(s => new[] { s.Brevete, s.Cobrevete })
+                    .Where(b => !string.IsNullOrWhiteSpace(b))
+                    .Select(b => b!.Trim())
+                    .Where(elegidos.Contains)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (brevetes.Count == 0)
+                {
+                    return NotFound(new { mensaje = "Ninguno de los conductores elegidos tiene servicios activos en esa fecha." });
+                }
+
+                const string titulo = "Revisa tus servicios";
+                string mensaje = $"Revisa tus servicios asignados para el día {fechaDt:dd/MM/yyyy}";
+
+                var telefonosPorBrevete = await _readOnlyUow.ServTurismoRepository.GetTelefonosPorBrevete(brevetes);
+                var telefonos = brevetes
+                    .Select(b => telefonosPorBrevete.TryGetValue(b, out var t) ? NormalizarCelularPeru(t) : null)
+                    .ToList();
+                int sinTelefono = telefonos.Count(t => t == null);
+
+                // Dos fichas con el mismo número reciben un solo WhatsApp.
+                var telefonosDistintos = telefonos.Where(t => t != null).Select(t => t!).Distinct().ToList();
+                var resultadosWhatsapp = await Task.WhenAll(
+                    telefonosDistintos.Select(t => _whatsAppService.EnviarMensajeAsync(t, mensaje)));
+                int whatsappEnviados = resultadosWhatsapp.Count(ok => ok);
+
+                // Secuencial: las consultas comparten la conexión de _readOnlyUow.
+                int pushEnviados = 0;
+                foreach (var brevete in brevetes)
+                {
+                    var token = await _readOnlyUow.NotificacionesRepository.GetFCMTokenByBreveteAsync(brevete);
+                    if (token == null)
+                    {
+                        continue;
+                    }
+
+                    var resultadoPush = await _firebaseService.SendPushNotificationAsync(token.FCMToken, titulo, mensaje);
+                    if (resultadoPush.Success)
+                    {
+                        pushEnviados++;
+                    }
+
+                    if (resultadoPush.TokenInvalido)
+                    {
+                        await _readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
+                    }
+                }
+
+                int conductores = brevetes.Count;
+                int whatsappFallidos = telefonosDistintos.Count - whatsappEnviados;
+
+                if (whatsappEnviados == 0 && pushEnviados == 0)
+                {
+                    return StatusCode(502, new
+                    {
+                        mensaje = "No se pudo notificar a ningún conductor (ni por WhatsApp ni en la app).",
+                        conductores, whatsappEnviados, whatsappFallidos, sinTelefono, pushEnviados,
+                    });
+                }
+
+                string mensajeRespuesta =
+                    $"Revisión notificada a {conductores} conductor(es): {whatsappEnviados} por WhatsApp, {pushEnviados} en la app." +
+                    (sinTelefono > 0 ? $" {sinTelefono} sin celular válido en su ficha." : "") +
+                    (whatsappFallidos > 0 ? $" {whatsappFallidos} WhatsApp no se pudieron enviar." : "");
+
+                return Ok(new { mensaje = mensajeRespuesta, conductores, whatsappEnviados, whatsappFallidos, sinTelefono, pushEnviados });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al notificar la revisión a los conductores.", error = ex.Message });
+            }
+        }
+
         // Acepta 9 dígitos (celular peruano sin código de país) o 11 (ya con el prefijo 51).
         private static string? NormalizarCelularPeru(string? valor)
         {
