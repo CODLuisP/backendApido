@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 using VelsatBackendAPI.Data.Repositories;
@@ -15,7 +16,6 @@ namespace VelsatBackendAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-
     public class ReportingController : ControllerBase
     {
         private readonly IReadOnlyUnitOfWork _readOnlyUow; // ✅ Cambiar a ReadOnly

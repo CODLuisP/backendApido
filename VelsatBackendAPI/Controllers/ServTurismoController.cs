@@ -99,7 +99,11 @@ namespace VelsatBackendAPI.Controllers
                 {
                     var readOnlyUow = sp.GetRequiredService<IReadOnlyUnitOfWork>();
                     var firebaseService = sp.GetRequiredService<IFirebaseService>();
-                    await NotificarConductorAsync(readOnlyUow, firebaseService, servicio.Brevete);
+
+                    foreach (var brevete in BrevetesPilotoYCopiloto(new[] { servicio }))
+                    {
+                        await NotificarConductorAsync(readOnlyUow, firebaseService, brevete);
+                    }
                 });
 
                 return Ok(new { mensaje = "Servicio de turismo creado correctamente.", idservicio });
@@ -139,12 +143,7 @@ namespace VelsatBackendAPI.Controllers
                     var firebaseService = sp.GetRequiredService<IFirebaseService>();
                     var whatsAppService = sp.GetRequiredService<IWhatsAppService>();
 
-                    var brevetes = servicios
-                        .Select(s => s.Brevete)
-                        .Where(brevete => !string.IsNullOrWhiteSpace(brevete))
-                        .Distinct();
-
-                    foreach (var brevete in brevetes)
+                    foreach (var brevete in BrevetesPilotoYCopiloto(servicios))
                     {
                         await NotificarConductorAsync(readOnlyUow, firebaseService, brevete);
                     }
@@ -193,12 +192,7 @@ namespace VelsatBackendAPI.Controllers
         {
             try
             {
-                var brevetes = servicios
-                    .SelectMany(s => new[] { s.Brevete, s.Cobrevete })
-                    .Where(b => !string.IsNullOrWhiteSpace(b))
-                    .Select(b => b!.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                var brevetes = BrevetesPilotoYCopiloto(servicios);
 
                 if (brevetes.Count == 0)
                 {
@@ -227,11 +221,24 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        // Notifica por push al conductor dueño de "brevete". Corre en segundo plano (ver
-        // DispararEnBackground) y no debe afectar la respuesta al cliente (el servicio ya quedó
-        // insertado en base de datos). titulo/cuerpo son configurables porque se reusa tanto para
-        // "nuevo servicio asignado" (Insert/lote) como para "cambios en un servicio ya asignado".
-        private static async Task NotificarConductorAsync(
+        // Brevetes de piloto y copiloto de los servicios dados, sin vacíos ni repetidos (un conductor
+        // con varios servicios, o que figura como piloto y copiloto, se notifica una sola vez).
+        private static List<string> BrevetesPilotoYCopiloto(IEnumerable<ServTurismo> servicios)
+        {
+            return servicios
+                .SelectMany(s => new[] { s.Brevete, s.Cobrevete })
+                .Where(b => !string.IsNullOrWhiteSpace(b))
+                .Select(b => b!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        // Notifica por push al conductor dueño de "brevete" y devuelve si el push salió. Se usa en
+        // segundo plano (ver DispararEnBackground) tras Insert/lote, donde el resultado se ignora, y en
+        // la notificación manual, donde sí se informa. Nunca lanza: un conductor sin app instalada
+        // (sin token) o un error de Firebase solo devuelven false. titulo/cuerpo son configurables
+        // porque se reusa para "nuevo servicio asignado" (Insert/lote) y para las plantillas manuales.
+        private static async Task<bool> NotificarConductorAsync(
             IReadOnlyUnitOfWork readOnlyUow,
             IFirebaseService firebaseService,
             string? brevete,
@@ -240,7 +247,7 @@ namespace VelsatBackendAPI.Controllers
         {
             if (string.IsNullOrWhiteSpace(brevete))
             {
-                return;
+                return false;
             }
 
             try
@@ -249,7 +256,7 @@ namespace VelsatBackendAPI.Controllers
 
                 if (token == null)
                 {
-                    return;
+                    return false;
                 }
 
                 var resultado = await firebaseService.SendPushNotificationAsync(
@@ -261,10 +268,13 @@ namespace VelsatBackendAPI.Controllers
                 {
                     await readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
                 }
+
+                return resultado.Success;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error notificando servicio de turismo: {ex.Message}");
+                return false;
             }
         }
 
@@ -473,12 +483,12 @@ namespace VelsatBackendAPI.Controllers
 
         // PATCH api/servturismo/{idservicio}/notificar
         // Notificación manual disparada desde el botón de la tabla web (una por servicio, con
-        // plantilla a elegir: revisión / cambio / cancelación). Manda el mismo mensaje por los DOS
-        // canales a la vez: WhatsApp y push de la app (Firebase) — ambos se intentan de forma
-        // independiente, así que si uno falla (celular inválido, o el conductor no tiene la app
-        // instalada) el otro igual se envía. El teléfono y el token FCM SIEMPRE se resuelven acá
-        // contra la ficha del conductor en BD (tabla taxi, por el brevete del servicio): el cliente
-        // solo manda "tipo", nunca el texto ni el destino, así no se puede notificar algo arbitrario.
+        // plantilla a elegir: revisión / cambio / cancelación). Se envía al piloto Y al copiloto, por
+        // los DOS canales: WhatsApp y push de la app (Firebase) — cada canal y cada conductor se
+        // intentan de forma independiente, así que si uno falla (sin celular, o sin la app instalada)
+        // lo demás igual se envía. El teléfono y el token FCM SIEMPRE se resuelven acá contra la ficha
+        // del conductor en BD (tabla taxi, por brevete/cobrevete del servicio): el cliente solo manda
+        // "tipo", nunca el texto ni el destino, así no se puede notificar algo arbitrario.
         [HttpPatch("{idservicio}/notificar")]
         public async Task<IActionResult> NotificarPorWhatsapp(int idservicio, [FromBody] NotificarConductorRequest body)
         {
@@ -516,46 +526,189 @@ namespace VelsatBackendAPI.Controllers
 
                 var (titulo, mensaje) = plantilla.Value;
 
-                bool whatsappEnviado = false;
-                string? telefono = NormalizarCelularPeru(datos.Telefono);
-                if (telefono != null)
+                // Piloto y copiloto (si lo hay). Si ambos tienen el mismo brevete se notifica una vez.
+                string? brevetePiloto = datos.Brevete?.Trim();
+                string? breveteCopiloto = datos.Cobrevete?.Trim();
+
+                var destinatarios = new List<(string Rol, string Brevete)>();
+                if (!string.IsNullOrEmpty(brevetePiloto))
                 {
-                    whatsappEnviado = await _whatsAppService.EnviarMensajeAsync(telefono, mensaje);
+                    destinatarios.Add(("Piloto", brevetePiloto));
+                }
+                if (!string.IsNullOrEmpty(breveteCopiloto)
+                    && !string.Equals(breveteCopiloto, brevetePiloto, StringComparison.OrdinalIgnoreCase))
+                {
+                    destinatarios.Add(("Copiloto", breveteCopiloto));
                 }
 
-                bool pushEnviado = false;
-                if (!string.IsNullOrWhiteSpace(datos.Brevete))
-                {
-                    var token = await _readOnlyUow.NotificacionesRepository.GetFCMTokenByBreveteAsync(datos.Brevete);
-                    if (token != null)
-                    {
-                        var resultadoPush = await _firebaseService.SendPushNotificationAsync(token.FCMToken, titulo, mensaje);
-                        pushEnviado = resultadoPush.Success;
+                // WhatsApp y push se intentan de forma independiente por cada uno: el que no tenga
+                // celular en su ficha solo recibe el push, y el que no tenga la app solo el WhatsApp.
+                var telefonosPorBrevete = await _readOnlyUow.ServTurismoRepository.GetTelefonosPorBrevete(
+                    destinatarios.Select(d => d.Brevete));
+                var telefonos = destinatarios
+                    .Select(d => telefonosPorBrevete.TryGetValue(d.Brevete, out var t) ? NormalizarCelularPeru(t) : null)
+                    .ToList();
 
-                        if (resultadoPush.TokenInvalido)
-                        {
-                            await _readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
-                        }
-                    }
+                // Si piloto y copiloto comparten número, sale un solo WhatsApp.
+                var telefonosDistintos = telefonos.Where(t => t != null).Select(t => t!).Distinct().ToList();
+                var resultadosWhatsapp = await Task.WhenAll(
+                    telefonosDistintos.Select(t => _whatsAppService.EnviarMensajeAsync(t, mensaje)));
+                var whatsappPorTelefono = telefonosDistintos
+                    .Zip(resultadosWhatsapp, (telefono, ok) => (telefono, ok))
+                    .ToDictionary(x => x.telefono, x => x.ok);
+
+                // Secuencial: las consultas del token comparten la conexión de _readOnlyUow.
+                var resultados = new List<(string Rol, bool Whatsapp, bool Push, bool TieneCelular)>();
+                for (int i = 0; i < destinatarios.Count; i++)
+                {
+                    var (rol, brevete) = destinatarios[i];
+                    string? telefono = telefonos[i];
+                    bool whatsapp = telefono != null && whatsappPorTelefono[telefono];
+                    bool push = await NotificarConductorAsync(_readOnlyUow, _firebaseService, brevete, titulo, mensaje);
+                    resultados.Add((rol, whatsapp, push, telefono != null));
                 }
 
+                bool whatsappEnviado = resultados.Any(r => r.Whatsapp);
+                bool pushEnviado = resultados.Any(r => r.Push);
+                string detalle = string.Join(". ", resultados.Select(r => DescribirEnvio(r.Rol, r.Whatsapp, r.Push, r.TieneCelular)));
+                var porConductor = resultados.Select(r => new { rol = r.Rol, whatsappEnviado = r.Whatsapp, pushEnviado = r.Push });
+
+                // Solo es error si no le llegó nada a nadie; si al menos uno recibió algo, es éxito
+                // y el detalle dice qué le faltó a cada uno.
                 if (!whatsappEnviado && !pushEnviado)
                 {
-                    return StatusCode(502, new { mensaje = "No se pudo enviar la notificación (ni por WhatsApp ni en la app)." });
+                    return StatusCode(502, new
+                    {
+                        mensaje = "No se pudo enviar la notificación (ni por WhatsApp ni en la app)." +
+                                  (detalle.Length > 0 ? $" {detalle}." : ""),
+                        whatsappEnviado,
+                        pushEnviado,
+                        conductores = porConductor,
+                    });
                 }
 
-                string mensajeRespuesta = whatsappEnviado && pushEnviado
-                    ? "Notificación enviada por WhatsApp y en la app."
-                    : whatsappEnviado
-                        ? "Notificación enviada por WhatsApp (no se pudo enviar el push de la app)."
-                        : "Notificación enviada en la app (no se pudo enviar por WhatsApp).";
-
-                return Ok(new { mensaje = mensajeRespuesta, whatsappEnviado, pushEnviado });
+                return Ok(new { mensaje = $"Notificación enviada. {detalle}.", whatsappEnviado, pushEnviado, conductores = porConductor });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { mensaje = "Error al notificar al conductor.", error = ex.Message });
             }
+        }
+
+        // POST api/servturismo/notificar-revision?fecha=11/10/2026   body: { brevetes: [...] }
+        // Botón "Notificar revisión a todos" de la tabla web: manda la plantilla "revision" (la única
+        // permitida en masa; cambio/cancelación son por servicio) a los conductores elegidos en el modal.
+        // Solo se respetan los brevetes que figuran como piloto o copiloto en algún servicio de esa
+        // fecha que no esté cancelado ni en stand by (los que el conductor ve en su app). Un conductor
+        // con varios servicios recibe un solo mensaje. Igual que NotificarPorWhatsapp, se intenta
+        // WhatsApp y push de forma independiente, y el destino siempre se resuelve acá en BD.
+        [HttpPost("notificar-revision")]
+        public async Task<IActionResult> NotificarRevisionTodos([FromQuery] string fecha, [FromBody] NotificarRevisionRequest body)
+        {
+            if (!DateTime.TryParseExact(fecha, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fechaDt))
+            {
+                return BadRequest(new { mensaje = "Formato de fecha incorrecto. Debe ser dd/MM/yyyy" });
+            }
+
+            if (body?.Brevetes == null || body.Brevetes.Count == 0)
+            {
+                return BadRequest(new { mensaje = "Selecciona al menos un conductor." });
+            }
+
+            try
+            {
+                var servicios = await _readOnlyUow.ServTurismoRepository.GetByFechas(fechaDt, fechaDt);
+
+                var elegidos = new HashSet<string>(
+                    body.Brevetes.Where(b => !string.IsNullOrWhiteSpace(b)).Select(b => b.Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+
+                var brevetes = servicios
+                    .Where(s => s.Cancelado != 1 && s.Standby != 1)
+                    .SelectMany(s => new[] { s.Brevete, s.Cobrevete })
+                    .Where(b => !string.IsNullOrWhiteSpace(b))
+                    .Select(b => b!.Trim())
+                    .Where(elegidos.Contains)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (brevetes.Count == 0)
+                {
+                    return NotFound(new { mensaje = "Ninguno de los conductores elegidos tiene servicios activos en esa fecha." });
+                }
+
+                const string titulo = "Revisa tus servicios";
+                string mensaje = $"Revisa tus servicios asignados para el día {fechaDt:dd/MM/yyyy}";
+
+                var telefonosPorBrevete = await _readOnlyUow.ServTurismoRepository.GetTelefonosPorBrevete(brevetes);
+                var telefonos = brevetes
+                    .Select(b => telefonosPorBrevete.TryGetValue(b, out var t) ? NormalizarCelularPeru(t) : null)
+                    .ToList();
+                int sinTelefono = telefonos.Count(t => t == null);
+
+                // Dos fichas con el mismo número reciben un solo WhatsApp.
+                var telefonosDistintos = telefonos.Where(t => t != null).Select(t => t!).Distinct().ToList();
+                var resultadosWhatsapp = await Task.WhenAll(
+                    telefonosDistintos.Select(t => _whatsAppService.EnviarMensajeAsync(t, mensaje)));
+                int whatsappEnviados = resultadosWhatsapp.Count(ok => ok);
+
+                // Secuencial: las consultas comparten la conexión de _readOnlyUow.
+                int pushEnviados = 0;
+                foreach (var brevete in brevetes)
+                {
+                    var token = await _readOnlyUow.NotificacionesRepository.GetFCMTokenByBreveteAsync(brevete);
+                    if (token == null)
+                    {
+                        continue;
+                    }
+
+                    var resultadoPush = await _firebaseService.SendPushNotificationAsync(token.FCMToken, titulo, mensaje);
+                    if (resultadoPush.Success)
+                    {
+                        pushEnviados++;
+                    }
+
+                    if (resultadoPush.TokenInvalido)
+                    {
+                        await _readOnlyUow.NotificacionesRepository.DeleteFCMTokenAsync(token.FCMToken);
+                    }
+                }
+
+                int conductores = brevetes.Count;
+                int whatsappFallidos = telefonosDistintos.Count - whatsappEnviados;
+
+                if (whatsappEnviados == 0 && pushEnviados == 0)
+                {
+                    return StatusCode(502, new
+                    {
+                        mensaje = "No se pudo notificar a ningún conductor (ni por WhatsApp ni en la app).",
+                        conductores, whatsappEnviados, whatsappFallidos, sinTelefono, pushEnviados,
+                    });
+                }
+
+                string mensajeRespuesta =
+                    $"Revisión notificada a {conductores} conductor(es): {whatsappEnviados} por WhatsApp, {pushEnviados} en la app." +
+                    (sinTelefono > 0 ? $" {sinTelefono} sin celular válido en su ficha." : "") +
+                    (whatsappFallidos > 0 ? $" {whatsappFallidos} WhatsApp no se pudieron enviar." : "");
+
+                return Ok(new { mensaje = mensajeRespuesta, conductores, whatsappEnviados, whatsappFallidos, sinTelefono, pushEnviados });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al notificar la revisión a los conductores.", error = ex.Message });
+            }
+        }
+
+        // Texto corto para el toast del front, ej. "Piloto: WhatsApp y app" / "Copiloto: solo app (sin celular)".
+        private static string DescribirEnvio(string rol, bool whatsapp, bool push, bool tieneCelular)
+        {
+            return (whatsapp, push) switch
+            {
+                (true, true) => $"{rol}: WhatsApp y app",
+                (true, false) => $"{rol}: solo WhatsApp (sin app)",
+                (false, true) => tieneCelular ? $"{rol}: solo app (falló WhatsApp)" : $"{rol}: solo app (sin celular)",
+                _ => tieneCelular ? $"{rol}: no se pudo notificar" : $"{rol}: no se pudo notificar (sin celular ni app)",
+            };
         }
 
         // Acepta 9 dígitos (celular peruano sin código de país) o 11 (ya con el prefijo 51).

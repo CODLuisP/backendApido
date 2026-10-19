@@ -39,7 +39,7 @@ namespace VelsatBackendAPI.Data.Repositories
                             WHERE fechainicio BETWEEN @FechaInicio AND @FechaFin
                             {(string.IsNullOrWhiteSpace(brevete)
                                 ? ""
-                                : "AND brevete = @Brevete AND (cancelado IS NULL OR cancelado <> 1) AND (standby IS NULL OR standby <> 1)")}
+                                : "AND (brevete = @Brevete OR cobrevete = @Brevete) AND (cancelado IS NULL OR cancelado <> 1) AND (standby IS NULL OR standby <> 1)")}
                             ORDER BY fechainicio, horainicio";
 
             var parameters = new { FechaInicio = fechaInicio.Date, FechaFin = fechaFin.Date, Brevete = brevete };
@@ -338,15 +338,14 @@ namespace VelsatBackendAPI.Data.Repositories
             return resultado.ToList();
         }
 
-        // LEFT JOIN a taxi (no INNER): si el servicio no tiene conductor asignado o el brevete no
-        // matchea ningún taxi, igual queremos devolver fecha/hora para que el caller distinga
-        // "servicio sin conductor" (Telefono null) de "no existe el servicio" (retorna null).
+        // Solo datos del servicio: el teléfono de piloto y copiloto lo resuelve el caller con
+        // GetTelefonosPorBrevete (misma regla de ficha vigente que la carga en lote). Retorna null
+        // solo si el servicio no existe.
         public async Task<DatosNotificacionConductor?> GetDatosNotificacion(int idservicio)
         {
             string sql = @"SELECT s.fechainicio AS Fechainicio, s.horainicio AS Horainicio,
-                                   s.brevete AS Brevete, t.telefono AS Telefono
+                                   s.brevete AS Brevete, s.cobrevete AS Cobrevete
                             FROM servturismo s
-                            LEFT JOIN taxi t ON t.brevete = s.brevete
                             WHERE s.idservicio = @Idservicio";
 
             return await _doConnection.QueryFirstOrDefaultAsync<DatosNotificacionConductor>(

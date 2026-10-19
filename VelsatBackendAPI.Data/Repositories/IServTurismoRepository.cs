@@ -7,6 +7,7 @@ namespace VelsatBackendAPI.Data.Repositories
 {
     public interface IServTurismoRepository
     {
+        // brevete (opcional, app móvil): servicios activos donde ese brevete es piloto O copiloto.
         Task<List<ServTurismo>> GetByFechas(DateTime fechaInicio, DateTime fechaFin, string? brevete = null);
 
         Task<int> Insert(ServTurismo servicio);
@@ -30,9 +31,8 @@ namespace VelsatBackendAPI.Data.Repositories
         // Historial de auditoría de un servicio, más reciente primero.
         Task<List<ServTurismoAuditoria>> GetAuditoria(int idservicio);
 
-        // Fecha/hora del servicio y teléfono del conductor asignado (join a taxi por brevete),
-        // para armar y enviar la notificación manual por WhatsApp del botón en la tabla web.
-        // Null si el servicio no existe.
+        // Fecha/hora del servicio y brevetes de piloto y copiloto, para armar y enviar la
+        // notificación manual (WhatsApp + push) del botón en la tabla web. Null si el servicio no existe.
         Task<DatosNotificacionConductor?> GetDatosNotificacion(int idservicio);
 
         // Teléfono de cada brevete indicado según la ficha vigente en la tabla taxi (brevete -> telefono,
