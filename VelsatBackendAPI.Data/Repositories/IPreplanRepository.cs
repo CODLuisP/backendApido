@@ -83,6 +83,8 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<int> ModificarConductorAsync(Conductor conductor);
 
+        Task<int> ActualizarImagenConductorAsync(int codigoConductor, string? imagen);
+
         Task<int> HabilitarConductorAsync(int codigoConductor);
 
         Task<int> DeshabilitarConductorAsync(int codigoConductor);

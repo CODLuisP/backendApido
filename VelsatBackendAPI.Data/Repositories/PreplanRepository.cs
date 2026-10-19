@@ -3473,6 +3473,21 @@ namespace VelsatBackendAPI.Data.Repositories
             return rowsAffected;
         }
 
+        public async Task<int> ActualizarImagenConductorAsync(int codigoConductor, string? imagen)
+        {
+            if (codigoConductor <= 0)
+                throw new ArgumentException("El código del conductor es inválido", nameof(codigoConductor));
+
+            string sql = "UPDATE taxi SET imagen = @Imagen WHERE codtaxi = @Codigo";
+            var parameters = new
+            {
+                Imagen = string.IsNullOrWhiteSpace(imagen) ? null : imagen.Trim(),
+                Codigo = codigoConductor
+            };
+
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
+        }
+
         public async Task<int> HabilitarConductorAsync(int codigoConductor)
         {
             string sql = "UPDATE taxi SET habilitado = '1' WHERE codtaxi = @Codigo";

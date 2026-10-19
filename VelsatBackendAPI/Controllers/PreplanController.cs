@@ -1950,6 +1950,36 @@ namespace VelsatBackendAPI.Controllers
         }
 
 
+        [HttpPut("ActualizarImagenConductor/{id}")]
+        public async Task<IActionResult> ActualizarImagenConductor(int id, [FromBody] ActualizarImagenConductorRequest request)
+        {
+            if (id <= 0)
+                return BadRequest(new { mensaje = "Código de conductor inválido." });
+
+            if (request == null)
+                return BadRequest(new { mensaje = "El cuerpo de la solicitud no puede ser nulo." });
+
+            try
+            {
+                var filas = await _uow.PreplanRepository.ActualizarImagenConductorAsync(id, request.Imagen);
+
+                _uow.SaveChanges();
+
+                if (filas == 0)
+                    return NotFound(new { mensaje = "Conductor no encontrado.", code = 0 });
+
+                return Ok(new { mensaje = "Imagen del conductor actualizada.", code = 1 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Error interno del servidor.",
+                    detalle = ex.Message
+                });
+            }
+        }
+
         [HttpPost("HabilitarCond/{id}")]
         public async Task<IActionResult> HabilitarConductor(int id)
         {
