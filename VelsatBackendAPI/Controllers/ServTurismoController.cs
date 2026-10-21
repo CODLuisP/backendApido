@@ -815,7 +815,7 @@ namespace VelsatBackendAPI.Controllers
 
             try
             {
-                var mensajeCreado = await _uow.ServTurismoRepository.InsertMensaje(idservicio, body.Tipo, body.Texto, body.Horas);
+                var mensajeCreado = await _uow.ServTurismoRepository.InsertMensaje(idservicio, body.Tipo, body.Texto, body.Horas, body.Brevete);
                 _uow.SaveChanges();
 
                 if (mensajeCreado == null)

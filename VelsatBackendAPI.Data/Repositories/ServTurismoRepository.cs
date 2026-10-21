@@ -668,11 +668,23 @@ namespace VelsatBackendAPI.Data.Repositories
                                                    DATE_FORMAT(s.fechainicio, '%d/%m/%Y') AS Fechainicio,
                                                    TIME_FORMAT(s.horainicio, '%H:%i') AS Horainicio,
                                                    s.cliente AS Cliente, s.origen AS Origen, s.destino AS Destino,
-                                                   s.bus AS Bus, s.placa AS Placa, s.piloto AS Piloto, s.celular AS Celular
+                                                   s.bus AS Bus, s.placa AS Placa, s.piloto AS Piloto, s.celular AS Celular,
+                                                   s.brevete AS BrevetePiloto, s.copiloto AS Copiloto,
+                                                   s.cobrevete AS Cobrevete, s.cocelular AS Cocelular,
+                                                   CASE WHEN s.cobrevete IS NOT NULL AND TRIM(s.cobrevete) <> ''
+                                                             AND TRIM(m.brevete) = TRIM(s.cobrevete)
+                                                             AND (s.brevete IS NULL OR TRIM(s.brevete) <> TRIM(s.cobrevete))
+                                                        THEN 'Copiloto' ELSE 'Piloto' END AS EnviadoPorRol,
+                                                   CASE WHEN s.cobrevete IS NOT NULL AND TRIM(s.cobrevete) <> ''
+                                                             AND TRIM(m.brevete) = TRIM(s.cobrevete)
+                                                             AND (s.brevete IS NULL OR TRIM(s.brevete) <> TRIM(s.cobrevete))
+                                                        THEN s.copiloto ELSE s.piloto END AS EnviadoPorNombre,
+                                                   s.horaretorno AS Horaretorno,
+                                                   s.tipounidad AS Tipounidad, s.grupo AS Grupo, s.numpax AS Numpax
                                             FROM servturismo_mensaje m
                                             INNER JOIN servturismo s ON s.idservicio = m.idservicio";
 
-        public async Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? horas)
+        public async Task<MensajeTurismo?> InsertMensaje(int idservicio, string tipo, string? texto, int? horas, string? breveteEmisor = null)
         {
             bool existeServicio = await _doConnection.ExecuteScalarAsync<int>(
                 "SELECT COUNT(1) FROM servturismo WHERE idservicio = @Idservicio",
@@ -684,12 +696,21 @@ namespace VelsatBackendAPI.Data.Repositories
                 return null;
             }
 
-            // El brevete de quien envía se resuelve acá (el conductor asignado al servicio), no
-            // se confía en lo que mande la app.
-            string? brevete = await _doConnection.QueryFirstOrDefaultAsync<string?>(
-                "SELECT brevete FROM servturismo WHERE idservicio = @Idservicio",
+            // El brevete de quien envía se valida acá contra piloto/copiloto del servicio: solo se
+            // acepta el que mande la app si coincide con alguno de los dos; si no viene (app
+            // vieja) o no coincide, se asume el piloto.
+            var conductores = await _doConnection.QueryFirstAsync<ServTurismo>(
+                "SELECT brevete AS Brevete, cobrevete AS Cobrevete FROM servturismo WHERE idservicio = @Idservicio",
                 new { Idservicio = idservicio },
                 transaction: _doTransaction);
+
+            string? emisor = breveteEmisor?.Trim();
+            string? brevete = conductores.Brevete;
+            if (!string.IsNullOrEmpty(emisor)
+                && string.Equals(emisor, conductores.Cobrevete?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                brevete = conductores.Cobrevete;
+            }
 
             string sqlInsert = @"INSERT INTO servturismo_mensaje (idservicio, tipo, texto, horas, brevete)
                                   VALUES (@Idservicio, @Tipo, @Texto, @Horas, @Brevete);

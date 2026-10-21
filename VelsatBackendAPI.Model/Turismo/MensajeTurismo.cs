@@ -34,5 +34,23 @@ namespace VelsatBackendAPI.Model.Turismo
         public string? Placa { get; set; }
         public string? Piloto { get; set; }
         public string? Celular { get; set; }
+
+        // Brevete del piloto asignado al servicio (Brevete es el de quien envió el mensaje).
+        public string? BrevetePiloto { get; set; }
+
+        // Copiloto del servicio (si hay).
+        public string? Copiloto { get; set; }
+        public string? Cobrevete { get; set; }
+        public string? Cocelular { get; set; }
+
+        // Quién envió el mensaje: "Piloto" | "Copiloto", y su nombre.
+        public string? EnviadoPorRol { get; set; }
+        public string? EnviadoPorNombre { get; set; }
+
+        // Más datos del servicio.
+        public string? Horaretorno { get; set; }
+        public string? Tipounidad { get; set; }
+        public string? Grupo { get; set; }
+        public string? Numpax { get; set; }
     }
 }

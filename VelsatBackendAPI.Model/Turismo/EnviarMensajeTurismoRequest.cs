@@ -11,5 +11,10 @@ namespace VelsatBackendAPI.Model.Turismo
 
         // Requerido si Tipo = "ampliacion": cantidad de horas elegida en el select.
         public int? Horas { get; set; }
+
+        // Brevete del conductor con la sesión abierta en la app. Opcional: las versiones viejas
+        // de la app no lo mandan. Se valida contra piloto/copiloto del servicio; si no viene o no
+        // coincide, se asume el piloto.
+        public string? Brevete { get; set; }
     }
 }
