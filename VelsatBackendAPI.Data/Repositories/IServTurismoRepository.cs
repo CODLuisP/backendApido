@@ -80,6 +80,9 @@ namespace VelsatBackendAPI.Data.Repositories
         // front recupere al cargar la pantalla lo que llegó mientras estaba desconectado.
         Task<List<MensajeTurismo>> GetMensajesPendientes();
 
+        // Mensajes recibidos en el día indicado (00:00 - 23:59), atendidos o no, para el reporte.
+        Task<List<MensajeTurismo>> GetMensajesPorFecha(DateTime fecha);
+
         // Devuelve false solo si el idmensaje no existe; marcar dos veces el mismo mensaje como
         // atendido sigue devolviendo éxito.
         Task<bool> MarcarMensajeAtendido(int idmensaje);

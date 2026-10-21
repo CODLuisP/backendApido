@@ -735,6 +735,19 @@ namespace VelsatBackendAPI.Data.Repositories
             return resultado.ToList();
         }
 
+        public async Task<List<MensajeTurismo>> GetMensajesPorFecha(DateTime fecha)
+        {
+            // Día completo 00:00:00 - 23:59:59 (rango semiabierto para no perder el último segundo).
+            string sql = $@"SELECT {ColumnasMensaje}
+                            WHERE m.fecha >= @Desde AND m.fecha < @Hasta
+                            ORDER BY m.fecha DESC";
+
+            var resultado = await _doConnection.QueryAsync<MensajeTurismo>(sql,
+                new { Desde = fecha.Date, Hasta = fecha.Date.AddDays(1) },
+                transaction: _doTransaction);
+            return resultado.ToList();
+        }
+
         public async Task<bool> MarcarMensajeAtendido(int idmensaje)
         {
             int existe = await _doConnection.ExecuteScalarAsync<int>(

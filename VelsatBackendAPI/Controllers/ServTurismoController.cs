@@ -859,6 +859,27 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // GET api/servturismo/mensajes/reporte?fecha=yyyy-MM-dd
+        // Reporte de observaciones/solicitudes recibidas ese día (00:00 - 23:59).
+        [HttpGet("mensajes/reporte")]
+        public async Task<IActionResult> GetMensajesReporte([FromQuery] DateTime fecha)
+        {
+            if (fecha == default)
+            {
+                return BadRequest(new { mensaje = "La fecha es requerida (yyyy-MM-dd)." });
+            }
+
+            try
+            {
+                var mensajes = await _readOnlyUow.ServTurismoRepository.GetMensajesPorFecha(fecha);
+                return Ok(mensajes);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener el reporte de observaciones.", error = ex.Message });
+            }
+        }
+
         // PATCH api/servturismo/mensajes/{idmensaje}/atendido
         // El front lo llama cuando el operador cierra la alerta manualmente. Es idempotente.
         [HttpPatch("mensajes/{idmensaje}/atendido")]
