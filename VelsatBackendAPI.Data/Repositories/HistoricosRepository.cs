@@ -231,7 +231,7 @@ namespace VelsatBackendAPI.Data.Repositories
                     string sqlEventData = @"
                         SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
                         FROM eventdata
-                        WHERE deviceID IN (SELECT deviceID FROM device WHERE accountID = @AccountID)
+                        WHERE accountID = @AccountID
                           AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
                         ORDER BY timestamp";
 
@@ -249,7 +249,7 @@ namespace VelsatBackendAPI.Data.Repositories
                         string sqlR = $@"
                             SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
                             FROM {consultaTabla}
-                            WHERE deviceID IN (SELECT deviceID FROM gts.device WHERE accountID = @AccountID)
+                            WHERE accountID = @AccountID
                               AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
                             ORDER BY timestamp";
 
