@@ -307,6 +307,39 @@ namespace VelsatBackendAPI.Controllers
 
         }
 
+        [HttpGet("speedall/{fechaini}/{fechafin}/{speedKPH}/{accountID}")]
+        public async Task<IActionResult> GetDataSpeedAll(string fechaini, string fechafin, double speedKPH, string accountID)
+        {
+            try
+            {
+                var resultado = await _readOnlyUow.HistoricosRepository.GetAllSpeedData(fechaini, fechafin, speedKPH, accountID);
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener los datos de velocidad", error = ex.Message });
+            }
+        }
+
+        [HttpGet("downloadExcelVall/{fechaini}/{fechafin}/{speedKPH}/{accountID}")]
+        public async Task<IActionResult> DownloadExcelVall(string fechaini, string fechafin, double speedKPH, string accountID)
+        {
+            try
+            {
+                var datos = await _readOnlyUow.HistoricosRepository.GetAllSpeedData(fechaini, fechafin, speedKPH, accountID);
+
+                var user = _readOnlyUow.HistoricosRepository.UserNameByAccount(accountID);
+                var excelBytes = await ConvertSpeedDataAllExcel(datos, fechaini, fechafin, user);
+                string fileName = $"reporte_velocidad_gps_todas_las_unidades.xlsx";
+
+                return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al generar el archivo Excel de velocidad", error = ex.Message });
+            }
+        }
+
 
         private async Task<byte[]> ConvertSpeedDataExcel(List<SpeedReporting> speedData, string fechaini, string fechafin, string deviceId, string user)
         {
@@ -504,6 +537,203 @@ namespace VelsatBackendAPI.Controllers
                 worksheet.Cell(ultimaFila, 2).Style.Font.FontColor = XLColor.White;
 
 
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    return stream.ToArray();
+                }
+            }
+        }
+
+        private async Task<byte[]> ConvertSpeedDataAllExcel(List<SpeedReporting> speedData, string fechaini, string fechafin, string user)
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("SpeedData");
+
+                worksheet.Cell(12, 2).Value = "ITEM";
+                worksheet.Cell(12, 3).Value = "UNIDAD";
+                worksheet.Cell(12, 4).Value = "VELOCIDAD";
+                worksheet.Cell(12, 5).Value = "FECHA";
+                worksheet.Cell(12, 6).Value = "HORA";
+                worksheet.Cell(12, 7).Value = "LATITUD";
+                worksheet.Cell(12, 8).Value = "LONGITUD";
+                worksheet.Cell(12, 9).Value = "UBICACIÓN";
+
+                worksheet.Range("I12:K12").Merge();
+
+                bool colorAzul = true;
+
+                for (int i = 0; i < speedData.Count; i++)
+                {
+                    var speed = speedData[i];
+
+                    worksheet.Cell(i + 13, 2).Value = speed.Item;
+                    worksheet.Cell(i + 13, 3).Value = speed.DeviceId?.ToUpper();
+                    worksheet.Cell(i + 13, 4).Value = speed.SpeedKPH;
+                    worksheet.Cell(i + 13, 5).Value = speed.Date;
+                    worksheet.Cell(i + 13, 6).Value = speed.Time;
+                    worksheet.Cell(i + 13, 7).Value = Math.Round(speed.Latitude, 5);
+                    worksheet.Cell(i + 13, 8).Value = Math.Round(speed.Longitude, 5);
+                    worksheet.Cell(i + 13, 9).Value = speed.Address;
+
+                    worksheet.Range(i + 13, 9, i + 13, 11).Merge();
+                }
+
+                worksheet.Range("B9:C9").Merge();
+                worksheet.Cell(9, 2).Value = "Fecha de Inicio:";
+                worksheet.Cell(9, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(9, 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                worksheet.Cell(9, 2).Style.Font.FontColor = XLColor.White;
+                worksheet.Cell(9, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                worksheet.Cell(9, 2).Style.Font.FontName = "Cambria";
+                worksheet.Cell(9, 2).Style.Font.FontSize = 10;
+                worksheet.Cell(9, 2).Style.Font.SetBold();
+
+                worksheet.Range("B10:C10").Merge();
+                worksheet.Cell(10, 2).Value = "Fecha de Fin:";
+                worksheet.Cell(10, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(10, 2).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                worksheet.Cell(10, 2).Style.Font.FontColor = XLColor.White;
+                worksheet.Cell(10, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                worksheet.Cell(10, 2).Style.Font.FontName = "Cambria";
+                worksheet.Cell(10, 2).Style.Font.FontSize = 10;
+                worksheet.Cell(10, 2).Style.Font.SetBold();
+
+                worksheet.Range("B10:E10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("B10:E10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+
+                string fechainiFormateada = DateTime.Parse(fechaini).ToString("dd/MM/yyyy  HH:mm");
+                worksheet.Range("D9:E9").Merge();
+                worksheet.Cell(9, 4).Value = fechainiFormateada;
+                worksheet.Cell(9, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(9, 4).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                worksheet.Cell(9, 4).Style.Font.FontColor = XLColor.White;
+                worksheet.Cell(9, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                worksheet.Cell(9, 4).Style.Font.FontName = "Cambria";
+                worksheet.Cell(9, 4).Style.Font.FontSize = 10;
+                worksheet.Cell(9, 4).Style.Font.SetBold();
+
+                string fechafinFormateada = DateTime.Parse(fechafin).ToString("dd/MM/yyyy  HH:mm");
+                worksheet.Range("D10:E10").Merge();
+                worksheet.Cell(10, 4).Value = fechafinFormateada;
+                worksheet.Cell(10, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(10, 4).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                worksheet.Cell(10, 4).Style.Font.FontColor = XLColor.White;
+                worksheet.Cell(10, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                worksheet.Cell(10, 4).Style.Font.FontName = "Cambria";
+                worksheet.Cell(10, 4).Style.Font.FontSize = 10;
+                worksheet.Cell(10, 4).Style.Font.SetBold();
+
+                worksheet.Range("F10:K10").Style.Border.BottomBorder = XLBorderStyleValues.Thick;
+                worksheet.Range("F10:K10").Style.Border.BottomBorderColor = XLColor.FromHtml("#1a3446");
+
+                var rangoCeldas = worksheet.Range("B4:I7");
+                rangoCeldas.Merge();
+                rangoCeldas.Value = "REPORTE DE VELOCIDAD - TODAS LAS UNIDADES";
+                rangoCeldas.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                rangoCeldas.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                rangoCeldas.Style.Font.FontColor = XLColor.White;
+                rangoCeldas.Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                rangoCeldas.Style.Font.FontName = "Calibri";
+                rangoCeldas.Style.Font.FontSize = 16;
+                rangoCeldas.Style.Font.SetBold();
+
+                worksheet.Cell("K9").Value = "Generado el " + DateTime.Now.ToString("dd/MM/yyyy  HH:mm:ss");
+                worksheet.Cell("K9").Style.Font.FontName = "Cambria";
+                worksheet.Cell("K9").Style.Font.FontSize = 10;
+                worksheet.Cell("K9").Style.Font.SetBold();
+                worksheet.Cell("K9").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                worksheet.Cell("K9").Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                worksheet.Cell("K10").Value = "USUARIO : " + (user ?? "").ToUpper();
+                worksheet.Cell("K10").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                worksheet.Cell("K10").Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                worksheet.Cell("K10").Style.Font.FontName = "Cambria";
+                worksheet.Cell("K10").Style.Font.FontSize = 10;
+                worksheet.Cell("K10").Style.Font.SetBold();
+
+                string imageUrl1 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/e880b9a3-e8f9-4278-9d06-6c2f661b8800/public";
+                byte[] imageBytes1 = await DownloadImageAsync(imageUrl1);
+                using (var ms1 = new MemoryStream(imageBytes1))
+                {
+                    var image = worksheet.AddPicture(ms1).MoveTo(worksheet.Cell("B4")).WithSize(81, 81);
+                }
+
+                var mergedRange = worksheet.Range("J4:K7");
+                mergedRange.Merge();
+                mergedRange.Style.Fill.BackgroundColor = XLColor.FromColor(System.Drawing.Color.FromArgb(224, 224, 224));
+                mergedRange.Merge().Style.Alignment.WrapText = true;
+                mergedRange.Merge().Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                mergedRange.Merge().Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                string imageUrl2 = "https://imagedelivery.net/o0E1jB_kGKnYacpYCBFmZA/5fb05ad0-957b-4de1-ca5a-3eb24882fa00/public";
+                byte[] imageBytes2 = await DownloadImageAsync(imageUrl2);
+                using (var ms2 = new MemoryStream(imageBytes2))
+                {
+                    var image2 = worksheet.AddPicture(ms2).MoveTo(worksheet.Cell("J4"), new System.Drawing.Point(100, 0)).WithSize(240, 80);
+                }
+
+                worksheet.Row(12).Height = 40;
+                for (int i = 2; i <= 11; i++)
+                {
+                    worksheet.Cell(12, i).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+                    worksheet.Cell(12, i).Style.Font.Bold = true;
+                    worksheet.Cell(12, i).Style.Font.FontColor = XLColor.White;
+                    worksheet.Cell(12, i).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(12, i).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                }
+
+                for (int i = 0; i < speedData.Count; i++)
+                {
+                    string filaColorHex = colorAzul ? "#EDEFF2" : "#FFFFFF";
+                    XLColor filaColor = XLColor.FromHtml(filaColorHex);
+
+                    for (int j = 2; j <= 11; j++)
+                    {
+                        worksheet.Cell(i + 13, j).Style.Fill.BackgroundColor = filaColor;
+                        worksheet.Cell(i + 13, j).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                        worksheet.Cell(i + 13, j).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                        if (j == 9)
+                        {
+                            worksheet.Cell(i + 13, j).Style.Alignment.WrapText = true;
+                        }
+                    }
+
+                    colorAzul = !colorAzul;
+                }
+
+                worksheet.ShowGridLines = false;
+
+                worksheet.Column(2).Width = 7;
+                worksheet.Column(3).Width = 15;
+                worksheet.Column(4).Width = 15;
+                worksheet.Column(5).Width = 15;
+                worksheet.Column(6).Width = 15;
+                worksheet.Column(7).Width = 15;
+                worksheet.Column(8).Width = 18;
+                worksheet.Column(9).Width = 17;
+                worksheet.Column(10).Width = 26;
+                worksheet.Column(11).Width = 7;
+
+                var tableRange = worksheet.Range(worksheet.Cell(12, 2), worksheet.LastCellUsed(XLCellsUsedOptions.All));
+
+                tableRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                tableRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                int ultimaFilaAll = 13 + speedData.Count;
+
+                worksheet.Cell(ultimaFilaAll, 2).Value = "Datos obtenidos del Sistema de Rastreo Vehicular de www.velsat.com.pe";
+
+                worksheet.Range(ultimaFilaAll, 2, ultimaFilaAll, 11).Merge().Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+
+                worksheet.Range(ultimaFilaAll, 2, ultimaFilaAll, 11).Merge().Style.Font.Italic = true;
+
+                worksheet.Cell(ultimaFilaAll, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#1a3446");
+
+                worksheet.Cell(ultimaFilaAll, 2).Style.Font.FontColor = XLColor.White;
 
                 using (var stream = new MemoryStream())
                 {

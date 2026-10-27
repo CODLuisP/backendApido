@@ -204,6 +204,118 @@ namespace VelsatBackendAPI.Data.Repositories
             return SpeedData;
         }
 
+        public async Task<DatosReporting> GetAllDataReporting(string fechaini, string fechafin, string accountID)
+        {
+            var dates = FormatDate(fechaini, fechafin);
+            fechaini = dates.dateStart;
+            fechafin = dates.dateEnd;
+            var resultadoDias = CalcularDias(fechaini, fechafin);
+            double numdias = resultadoDias.NumDias;
+
+            if (numdias <= 3)
+            {
+                const string sql = "SELECT tabla FROM historicos WHERE timeini <= @FechafinUnix AND timefin >= @FechainiUnix";
+
+                var nombresTablas = _defaultConnection.Query<Historicos>(
+                    sql,
+                    new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                    transaction: _defaultTransaction).ToList();
+
+                var datosReporting = new DatosReporting
+                {
+                    ListaTablas = new List<TablasReporting>()
+                };
+
+                if (nombresTablas.Count == 0)
+                {
+                    string sqlEventData = @"
+                        SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
+                        FROM eventdata
+                        WHERE deviceID IN (SELECT deviceID FROM device WHERE accountID = @AccountID)
+                          AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
+                        ORDER BY timestamp";
+
+                    datosReporting.ListaTablas = _defaultConnection.Query<TablasReporting>(
+                        sqlEventData,
+                        new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                        transaction: _defaultTransaction).ToList();
+                }
+                else
+                {
+                    foreach (var nombreTabla in nombresTablas)
+                    {
+                        string consultaTabla = nombreTabla.Tabla;
+
+                        string sqlR = $@"
+                            SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
+                            FROM {consultaTabla}
+                            WHERE deviceID IN (SELECT deviceID FROM gts.device WHERE accountID = @AccountID)
+                              AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
+                            ORDER BY timestamp";
+
+                        var datosTabla = _secondConnection.Query<TablasReporting>(
+                            sqlR,
+                            new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                            transaction: _secondTransaction).ToList();
+
+                        datosReporting.ListaTablas.AddRange(datosTabla);
+                    }
+                }
+
+                for (int i = 0; i < datosReporting.ListaTablas.Count; i++)
+                {
+                    datosReporting.ListaTablas[i].Item = i + 1;
+                }
+
+                if (datosReporting.ListaTablas.Count == 0)
+                {
+                    return new DatosReporting
+                    {
+                        Mensaje = "No se encontró datos disponible en el rango de fechas ingresado"
+                    };
+                }
+
+                return datosReporting;
+            }
+            else
+            {
+                return new DatosReporting
+                {
+                    Mensaje = "La diferencia entre las fechas es mayor a 3 días; seleccione otras fechas"
+                };
+            }
+        }
+
+        public async Task<List<SpeedReporting>> GetAllSpeedData(string fechaini, string fechafin, double speedKPH, string accountID)
+        {
+            var datosreporte = await GetAllDataReporting(fechaini, fechafin, accountID);
+
+            List<SpeedReporting> SpeedData = new List<SpeedReporting>();
+
+            if (datosreporte != null && datosreporte.ListaTablas.Count > 0)
+            {
+                for (int i = 0; i < datosreporte.ListaTablas.Count; i++)
+                {
+                    if (datosreporte.ListaTablas[i].SpeedKPH >= speedKPH)
+                    {
+                        SpeedReporting data = new SpeedReporting
+                        {
+                            Item = SpeedData.Count + 1,
+                            DeviceId = datosreporte.ListaTablas[i].DeviceId,
+                            SpeedKPH = datosreporte.ListaTablas[i].SpeedKPH,
+                            Date = datosreporte.ListaTablas[i].Fecha,
+                            Time = datosreporte.ListaTablas[i].Hora,
+                            Latitude = datosreporte.ListaTablas[i].Latitude,
+                            Longitude = datosreporte.ListaTablas[i].Longitude,
+                            Address = datosreporte.ListaTablas[i].Address
+                        };
+                        SpeedData.Add(data);
+                    }
+                }
+            }
+            return SpeedData;
+        }
+
         public async Task<List<StopsReporting>> GetStopData(string fechaini, string fechafin, string deviceID, string accountID)
         {
             var datosreporte = await GetDataReporting(fechaini, fechafin, deviceID, accountID);
@@ -421,6 +533,15 @@ namespace VelsatBackendAPI.Data.Repositories
             const string sqlUser = "Select description from usuarios where accountID = @AccountId";
 
             string userName = _defaultConnection.QueryFirstOrDefault<string>(sqlUser, new { AccountId = account }, transaction: _defaultTransaction);
+
+            return userName;
+        }
+
+        public string UserNameByAccount(string accountID)
+        {
+            const string sqlUser = "Select description from usuarios where accountID = @AccountId";
+
+            string userName = _defaultConnection.QueryFirstOrDefault<string>(sqlUser, new { AccountId = accountID }, transaction: _defaultTransaction);
 
             return userName;
         }

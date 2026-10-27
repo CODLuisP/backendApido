@@ -10,6 +10,7 @@ namespace VelsatBackendAPI.Model
     public class SpeedReporting
     {
         public int Item { get; set; }
+        public string DeviceId { get; set; }
         public double SpeedKPH { get; set; }
         public string Date { get; set; }
         public string Time { get; set; }

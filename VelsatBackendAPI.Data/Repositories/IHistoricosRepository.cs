@@ -17,7 +17,11 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<List<SpeedReporting>> GetSpeedData(string fechaini, string fechafin, string deviceID, double speedKPH, string accountID);
 
+        Task<List<SpeedReporting>> GetAllSpeedData(string fechaini, string fechafin, double speedKPH, string accountID);
+
         string UserName(string deviceID);
+
+        string UserNameByAccount(string accountID);
 
         Task<List<string>> DeviceFilterSedapal(string rutadefault);
     }
