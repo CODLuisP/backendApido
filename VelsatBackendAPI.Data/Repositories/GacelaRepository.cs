@@ -329,7 +329,7 @@ namespace VelsatBackendAPI.Data.Repositories
         // MÉTODO OPTIMIZADO: UNA SOLA CONSULTA SQL CON JOIN
         private async Task<IEnumerable<GCarro>> ObtenerTodosVehiculosConGpsOptimizado(string usuario)
         {
-            var sql = @"SELECT DISTINCT vehiculos.Codunidad, vehiculos.Habilitado, d.deviceID as NumequipoGps, d.lastValidLongitude, d.lastValidLatitude, d.direccion FROM (SELECT deviceID as Codunidad, habilitada as Habilitado FROM device WHERE accountID = @CodUsuario UNION ALL SELECT DeviceName as Codunidad, '1' as Habilitado FROM DeviceUser WHERE UserID = @CodUsuario AND Status = '1') vehiculos INNER JOIN device d ON d.deviceID = vehiculos.Codunidad ORDER BY vehiculos.Codunidad";
+            var sql = @"SELECT DISTINCT vehiculos.Codunidad, vehiculos.Habilitado, d.deviceID as NumequipoGps, d.lastValidLongitude, d.lastValidLatitude, d.direccion FROM (SELECT deviceID as Codunidad, habilitada as Habilitado FROM device WHERE accountID = @CodUsuario UNION ALL SELECT DeviceName as Codunidad, '1' as Habilitado FROM deviceuser WHERE UserID = @CodUsuario AND Status = '1') vehiculos INNER JOIN device d ON d.deviceID = vehiculos.Codunidad ORDER BY vehiculos.Codunidad";
 
             var parametros = new { CodUsuario = usuario };
             var resultado = await _defaultConnection.QueryAsync(sql, parametros, transaction: _defaultTransaction);
