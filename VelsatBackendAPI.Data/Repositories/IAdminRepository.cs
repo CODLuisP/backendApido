@@ -41,6 +41,15 @@ namespace VelsatBackendAPI.Data.Repositories
 
         Task<IEnumerable<DeviceSutran>> GetUnidadesSutran();
 
+        //REDIRECCIÓN DE USUARIOS (serverprueba = web, servermobile = mobile)
+        Task<IEnumerable<RedirUsuario>> GetRedirByLogin(string tabla, string loginusu);
+
+        Task<int> InsertRedir(string tabla, RedirUsuario redir);
+
+        Task<int> UpdateRedir(string tabla, RedirUsuario redir);
+
+        Task<int> DeleteRedir(string tabla, int id);
+
         //AUDITORÍA GENERAL (registro de movimientos)
         Task RegistrarAuditoria(string usuario, string modulo, string accion, string entidad, string detalle);
 

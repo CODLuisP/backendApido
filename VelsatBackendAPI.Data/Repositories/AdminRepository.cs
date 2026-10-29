@@ -241,5 +241,42 @@ namespace VelsatBackendAPI.Data.Repositories
 
             return resultado;
         }
+
+        // La tabla nunca viene del cliente: solo se aceptan estos dos nombres.
+        private static string TablaRedir(string tabla) => tabla switch
+        {
+            "serverprueba" => "serverprueba",
+            "servermobile" => "servermobile",
+            _ => throw new ArgumentException("Tabla de redirección no válida")
+        };
+
+        public async Task<IEnumerable<RedirUsuario>> GetRedirByLogin(string tabla, string loginusu)
+        {
+            var sql = $"SELECT id, loginusu, servidor, tipo FROM {TablaRedir(tabla)} WHERE loginusu = @Loginusu ORDER BY id";
+
+            return await _defaultConnection.QueryAsync<RedirUsuario>(sql, new { Loginusu = loginusu }, transaction: _defaultTransaction);
+        }
+
+        public async Task<int> InsertRedir(string tabla, RedirUsuario redir)
+        {
+            var sql = $"INSERT INTO {TablaRedir(tabla)} (loginusu, servidor, tipo) VALUES (@Loginusu, @Servidor, @Tipo); SELECT LAST_INSERT_ID();";
+
+            redir.Id = await _defaultConnection.ExecuteScalarAsync<int>(sql, redir, transaction: _defaultTransaction);
+            return redir.Id;
+        }
+
+        public async Task<int> UpdateRedir(string tabla, RedirUsuario redir)
+        {
+            var sql = $"UPDATE {TablaRedir(tabla)} SET loginusu = @Loginusu, servidor = @Servidor, tipo = @Tipo WHERE id = @Id";
+
+            return await _defaultConnection.ExecuteAsync(sql, redir, transaction: _defaultTransaction);
+        }
+
+        public async Task<int> DeleteRedir(string tabla, int id)
+        {
+            var sql = $"DELETE FROM {TablaRedir(tabla)} WHERE id = @Id";
+
+            return await _defaultConnection.ExecuteAsync(sql, new { Id = id }, transaction: _defaultTransaction);
+        }
     }
 }

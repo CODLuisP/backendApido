@@ -458,5 +458,131 @@ namespace VelsatBackendAPI.Controllers
                 return StatusCode(500, new { message = "Error al obtener la auditoría general", error = ex.Message });
             }
         }
+
+        // ---------- REDIRECCIÓN DE USUARIOS (web = serverprueba, mobile = servermobile) ----------
+
+        private static string? TablaRedir(string canal) => canal?.ToLowerInvariant() switch
+        {
+            "web" => "serverprueba",
+            "mobile" => "servermobile",
+            _ => null
+        };
+
+        private static string? ValidarRedir(RedirUsuario? r)
+        {
+            if (r == null) return "El registro no puede ser nulo";
+            if (string.IsNullOrWhiteSpace(r.Loginusu) || r.Loginusu.Trim().Length > 45) return "loginusu es obligatorio (máx. 45 caracteres)";
+            if (string.IsNullOrWhiteSpace(r.Servidor) || r.Servidor.Trim().Length > 80) return "servidor es obligatorio (máx. 80 caracteres)";
+            if (string.IsNullOrWhiteSpace(r.Tipo) || r.Tipo.Trim().Length != 1) return "tipo es obligatorio (1 carácter)";
+            r.Loginusu = r.Loginusu.Trim();
+            r.Servidor = r.Servidor.Trim();
+            r.Tipo = r.Tipo.Trim();
+            return null;
+        }
+
+        [HttpGet("Redir/{canal}")]
+        public async Task<IActionResult> GetRedir(string canal, [FromQuery] string loginusu)
+        {
+            var tabla = TablaRedir(canal);
+            if (tabla == null) return BadRequest(new { message = "El canal debe ser 'web' o 'mobile'" });
+            if (string.IsNullOrWhiteSpace(loginusu)) return BadRequest(new { message = "El loginusu es obligatorio" });
+
+            try
+            {
+                var registros = await _readOnlyUow.AdminRepository.GetRedirByLogin(tabla, loginusu.Trim());
+                return Ok(registros);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener los registros de redirección", error = ex.Message });
+            }
+        }
+
+        [HttpPost("Redir/{canal}")]
+        public async Task<IActionResult> InsertRedir(string canal, [FromBody] RedirUsuario redir, [FromQuery] string actor, [FromQuery] string motivo)
+        {
+            var tabla = TablaRedir(canal);
+            if (tabla == null) return BadRequest(new { message = "El canal debe ser 'web' o 'mobile'" });
+
+            var error = ValidarRedir(redir);
+            if (error != null) return BadRequest(new { message = error });
+
+            if (!MotivoValido(motivo))
+                return BadRequest(new { message = "El motivo es obligatorio y debe tener al menos 6 caracteres" });
+
+            try
+            {
+                var id = await _uow.AdminRepository.InsertRedir(tabla, redir);
+
+                await _uow.AdminRepository.RegistrarAuditoria(actor, "Redir. Usuarios", "Crear", redir.Loginusu, $"Se creó la redirección {canal} de {redir.Loginusu} hacia {redir.Servidor} (tipo {redir.Tipo}). Motivo: {motivo.Trim()}");
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Registro creado correctamente", id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al crear el registro de redirección", error = ex.Message });
+            }
+        }
+
+        [HttpPut("Redir/{canal}")]
+        public async Task<IActionResult> UpdateRedir(string canal, [FromBody] RedirUsuario redir, [FromQuery] string actor, [FromQuery] string motivo)
+        {
+            var tabla = TablaRedir(canal);
+            if (tabla == null) return BadRequest(new { message = "El canal debe ser 'web' o 'mobile'" });
+
+            var error = ValidarRedir(redir);
+            if (error != null) return BadRequest(new { message = error });
+
+            if (!MotivoValido(motivo))
+                return BadRequest(new { message = "El motivo es obligatorio y debe tener al menos 6 caracteres" });
+
+            try
+            {
+                var rowsAffected = await _uow.AdminRepository.UpdateRedir(tabla, redir);
+
+                if (rowsAffected == 0)
+                    return NotFound(new { message = "Registro no encontrado" });
+
+                await _uow.AdminRepository.RegistrarAuditoria(actor, "Redir. Usuarios", "Actualizar", redir.Loginusu, $"Se actualizó la redirección {canal} #{redir.Id} de {redir.Loginusu} hacia {redir.Servidor} (tipo {redir.Tipo}). Motivo: {motivo.Trim()}");
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Registro actualizado correctamente", rowsAffected });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar el registro de redirección", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("Redir/{canal}/{id:int}")]
+        public async Task<IActionResult> DeleteRedir(string canal, int id, [FromQuery] string loginusu, [FromQuery] string actor, [FromQuery] string motivo)
+        {
+            var tabla = TablaRedir(canal);
+            if (tabla == null) return BadRequest(new { message = "El canal debe ser 'web' o 'mobile'" });
+
+            if (!MotivoValido(motivo))
+                return BadRequest(new { message = "El motivo es obligatorio y debe tener al menos 6 caracteres" });
+
+            try
+            {
+                var rowsAffected = await _uow.AdminRepository.DeleteRedir(tabla, id);
+
+                if (rowsAffected == 0)
+                    return NotFound(new { message = "Registro no encontrado" });
+
+                await _uow.AdminRepository.RegistrarAuditoria(actor, "Redir. Usuarios", "Eliminar", loginusu ?? id.ToString(), $"Se eliminó la redirección {canal} #{id} de {loginusu}. Motivo: {motivo.Trim()}");
+
+                _uow.SaveChanges();
+
+                return Ok(new { message = "Registro eliminado correctamente", id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al eliminar el registro de redirección", error = ex.Message });
+            }
+        }
     }
 }
