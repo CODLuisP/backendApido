@@ -48,7 +48,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             double numdias = resultadoDias.NumDias;
 
-            if (numdias <= 31)
+            if (numdias <= 15)
             {
                 const string sql = "select tabla from historicos where timeini<=@FechafinUnix and timefin>=@FechainiUnix";
 
@@ -108,7 +108,7 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 return new KilometrosReporting
                 {
-                    Mensaje = "La diferencia entre las fechas es mayor a 31 días; seleccione otra fechas"
+                    Mensaje = "La diferencia entre las fechas es mayor a 15 días; seleccione otra fechas"
                 };
             }
         }
