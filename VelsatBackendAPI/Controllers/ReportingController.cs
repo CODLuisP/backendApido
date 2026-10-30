@@ -341,6 +341,40 @@ namespace VelsatBackendAPI.Controllers
         }
 
 
+        // Genera el Excel de velocidad a partir de datos ya obtenidos por bloques de fechas
+        [HttpPost("downloadExcelVFromData")]
+        [RequestSizeLimit(209715200)]
+        public async Task<IActionResult> DownloadExcelVFromData([FromBody] SpeedExcelRequest request)
+        {
+            try
+            {
+                if (request == null || request.Rows == null)
+                    return BadRequest(new { message = "No se recibieron datos para generar el Excel" });
+
+                byte[] excelBytes;
+                string fileName;
+
+                if (request.AllUnits)
+                {
+                    var user = _readOnlyUow.HistoricosRepository.UserNameByAccount(request.AccountID);
+                    excelBytes = await ConvertSpeedDataAllExcel(request.Rows, request.FechaIni, request.FechaFin, user);
+                    fileName = "reporte_velocidad_gps_todas_las_unidades.xlsx";
+                }
+                else
+                {
+                    var user = _readOnlyUow.HistoricosRepository.UserName(request.DeviceId);
+                    excelBytes = await ConvertSpeedDataExcel(request.Rows, request.FechaIni, request.FechaFin, request.DeviceId, user);
+                    fileName = $"reporte_velocidad_gps_{request.DeviceId}.xlsx";
+                }
+
+                return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al generar el archivo Excel de velocidad", error = ex.Message });
+            }
+        }
+
         private async Task<byte[]> ConvertSpeedDataExcel(List<SpeedReporting> speedData, string fechaini, string fechafin, string deviceId, string user)
         {
             using (var workbook = new XLWorkbook())

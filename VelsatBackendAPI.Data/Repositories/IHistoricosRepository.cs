@@ -9,7 +9,7 @@ namespace VelsatBackendAPI.Data.Repositories
 {
     public interface IHistoricosRepository
     {
-        Task<DatosReporting> GetDataReporting(string fechaini, string fechafin, string deviceID, string accountID);
+        Task<DatosReporting> GetDataReporting(string fechaini, string fechafin, string deviceID, string accountID, double? minSpeedKPH = null);
 
         Task<List<StopsReporting>> GetStopData (string fechaini, string fechafin, string deviceID, string accountID);
 

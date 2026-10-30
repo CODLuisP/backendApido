@@ -30,7 +30,7 @@ namespace VelsatBackendAPI.Data.Repositories
             _secondTransaction = secondTransaction; // ✅ ASIGNAR
         }
 
-        public async Task<DatosReporting> GetDataReporting(string fechaini, string fechafin, string deviceID, string accountID)
+        public async Task<DatosReporting> GetDataReporting(string fechaini, string fechafin, string deviceID, string accountID, double? minSpeedKPH = null)
         {
             const string sqlAccountFromDevice = "SELECT accountID FROM device WHERE deviceID = @DeviceID";
             var newAccountID = _defaultConnection.QueryFirstOrDefault<string>(
@@ -54,18 +54,19 @@ namespace VelsatBackendAPI.Data.Repositories
             }
 
             var dates = FormatDate(fechaini, fechafin);
+            string speedClause = minSpeedKPH.HasValue ? "AND speedKPH >= @MinSpeed" : "";
             fechaini = dates.dateStart;
             fechafin = dates.dateEnd;
             var resultadoDias = CalcularDias(fechaini, fechafin);
             double numdias = resultadoDias.NumDias;
 
-            if (numdias <= 3)
+            if (numdias <= 31)
             {
                 const string sql = "SELECT tabla FROM historicos WHERE timeini <= @FechafinUnix AND timefin >= @FechainiUnix";
 
                 var nombresTablas = _defaultConnection.Query<Historicos>(
                     sql,
-                    new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                    new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
                     transaction: _defaultTransaction).ToList();
 
                 var datosReporting = new DatosReporting
@@ -75,17 +76,17 @@ namespace VelsatBackendAPI.Data.Repositories
 
                 if (nombresTablas.Count == 0)
                 {
-                    string sqlEventData = @"
+                    string sqlEventData = $@"
                         SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address 
                         FROM eventdata 
                         WHERE accountID = @AccountID 
                           AND deviceID = @DeviceID 
-                          AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
+                          AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
                         ORDER BY timestamp";
 
                     datosReporting.ListaTablas = _defaultConnection.Query<TablasReporting>(
                         sqlEventData,
-                        new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                        new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
                         transaction: _defaultTransaction).ToList();
 
                     for (int i = 0; i < datosReporting.ListaTablas.Count; i++)
@@ -104,13 +105,13 @@ namespace VelsatBackendAPI.Data.Repositories
                             FROM {consultaTabla} 
                             WHERE accountID = @AccountID 
                               AND deviceID = @DeviceID 
-                              AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
+                              AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
                             ORDER BY timestamp";
 
                         // ✅ USAR _secondTransaction aquí
                         var datosTabla = _secondConnection.Query<TablasReporting>(
                             sqlR,
-                            new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                            new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
                             transaction: _secondTransaction).ToList(); // ✅ CAMBIAR aquí
 
                         datosReporting.ListaTablas.AddRange(datosTabla);
@@ -136,7 +137,7 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 return new DatosReporting
                 {
-                    Mensaje = "La diferencia entre las fechas es mayor a 3 días; seleccione otras fechas"
+                    Mensaje = "La diferencia entre las fechas es mayor a 31 días; seleccione otras fechas"
                 };
             }
         }
@@ -177,13 +178,13 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<List<SpeedReporting>> GetSpeedData(string fechaini, string fechafin, string deviceID, double speedKPH, string accountID)
         {
-            var datosreporte = await GetDataReporting(fechaini, fechafin, deviceID, accountID);
+            var datosreporte = await GetDataReporting(fechaini, fechafin, deviceID, accountID, speedKPH);
 
             List<SpeedReporting> SpeedData = new List<SpeedReporting>();
 
             if (datosreporte != null && datosreporte.ListaTablas.Count > 0)
             {
-                for (int i = 0; i < datosreporte.ListaTablas.Count - 1; i++)
+                for (int i = 0; i < datosreporte.ListaTablas.Count; i++)
                 {
                     if (datosreporte.ListaTablas[i].SpeedKPH >= speedKPH)
                     {
@@ -204,21 +205,22 @@ namespace VelsatBackendAPI.Data.Repositories
             return SpeedData;
         }
 
-        public async Task<DatosReporting> GetAllDataReporting(string fechaini, string fechafin, string accountID)
+        public async Task<DatosReporting> GetAllDataReporting(string fechaini, string fechafin, string accountID, double? minSpeedKPH = null)
         {
             var dates = FormatDate(fechaini, fechafin);
+            string speedClause = minSpeedKPH.HasValue ? "AND speedKPH >= @MinSpeed" : "";
             fechaini = dates.dateStart;
             fechafin = dates.dateEnd;
             var resultadoDias = CalcularDias(fechaini, fechafin);
             double numdias = resultadoDias.NumDias;
 
-            if (numdias <= 3)
+            if (numdias <= 7)
             {
                 const string sql = "SELECT tabla FROM historicos WHERE timeini <= @FechafinUnix AND timefin >= @FechainiUnix";
 
                 var nombresTablas = _defaultConnection.Query<Historicos>(
                     sql,
-                    new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                    new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
                     transaction: _defaultTransaction).ToList();
 
                 var datosReporting = new DatosReporting
@@ -228,16 +230,16 @@ namespace VelsatBackendAPI.Data.Repositories
 
                 if (nombresTablas.Count == 0)
                 {
-                    string sqlEventData = @"
+                    string sqlEventData = $@"
                         SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
                         FROM eventdata
                         WHERE accountID = @AccountID
-                          AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
+                          AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
                         ORDER BY timestamp";
 
                     datosReporting.ListaTablas = _defaultConnection.Query<TablasReporting>(
                         sqlEventData,
-                        new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                        new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
                         transaction: _defaultTransaction).ToList();
                 }
                 else
@@ -250,12 +252,12 @@ namespace VelsatBackendAPI.Data.Repositories
                             SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
                             FROM {consultaTabla}
                             WHERE accountID = @AccountID
-                              AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix
+                              AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
                             ORDER BY timestamp";
 
                         var datosTabla = _secondConnection.Query<TablasReporting>(
                             sqlR,
-                            new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin },
+                            new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
                             transaction: _secondTransaction).ToList();
 
                         datosReporting.ListaTablas.AddRange(datosTabla);
@@ -281,14 +283,14 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 return new DatosReporting
                 {
-                    Mensaje = "La diferencia entre las fechas es mayor a 3 días; seleccione otras fechas"
+                    Mensaje = "La diferencia entre las fechas es mayor a 7 días; seleccione otras fechas"
                 };
             }
         }
 
         public async Task<List<SpeedReporting>> GetAllSpeedData(string fechaini, string fechafin, double speedKPH, string accountID)
         {
-            var datosreporte = await GetAllDataReporting(fechaini, fechafin, accountID);
+            var datosreporte = await GetAllDataReporting(fechaini, fechafin, accountID, speedKPH);
 
             List<SpeedReporting> SpeedData = new List<SpeedReporting>();
 

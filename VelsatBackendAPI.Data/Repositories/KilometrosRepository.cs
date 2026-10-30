@@ -48,7 +48,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
             double numdias = resultadoDias.NumDias;
 
-            if (numdias <= 5)
+            if (numdias <= 31)
             {
                 const string sql = "select tabla from historicos where timeini<=@FechafinUnix and timefin>=@FechainiUnix";
 
@@ -108,7 +108,7 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 return new KilometrosReporting
                 {
-                    Mensaje = "La diferencia entre las fechas es mayor a 5 días; seleccione otra fechas"
+                    Mensaje = "La diferencia entre las fechas es mayor a 31 días; seleccione otra fechas"
                 };
             }
         }
@@ -127,7 +127,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 ListaKilometros = new List<KilometrosRecorridos>()
             };
 
-            if (numdias <= 5)
+            if (numdias <= 7)
             {
                 // Consultar la tabla "historicos"
                 const string sql = "select tabla from historicos where timeini <= @FechafinUnix and timefin >= @FechainiUnix";
@@ -186,7 +186,7 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 return new KilometrosReporting
                 {
-                    Mensaje = "La diferencia entre las fechas es mayor a 5 días; seleccione otra fechas"
+                    Mensaje = "La diferencia entre las fechas es mayor a 7 días; seleccione otra fechas"
                 };
             }
         }

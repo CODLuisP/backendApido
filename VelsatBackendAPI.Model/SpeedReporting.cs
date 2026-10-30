@@ -18,4 +18,14 @@ namespace VelsatBackendAPI.Model
         public double Longitude { get; set; }
         public string Address { get; set; }
     }
+
+    public class SpeedExcelRequest
+    {
+        public string FechaIni { get; set; }
+        public string FechaFin { get; set; }
+        public string DeviceId { get; set; }
+        public string AccountID { get; set; }
+        public bool AllUnits { get; set; }
+        public List<SpeedReporting> Rows { get; set; }
+    }
 }
