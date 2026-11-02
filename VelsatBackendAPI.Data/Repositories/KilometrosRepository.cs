@@ -48,69 +48,115 @@ namespace VelsatBackendAPI.Data.Repositories
 
             double numdias = resultadoDias.NumDias;
 
-            if (numdias <= 15)
-            {
-                const string sql = "select tabla from historicos where timeini<=@FechafinUnix and timefin>=@FechainiUnix";
-
-                var nombresTablas = _defaultConnection.Query<Historicos>(sql, new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin }, transaction: _defaultTransaction).ToList();
-
-                var kilometrosReporting = new KilometrosReporting
-                {
-                    ListaKilometros = new List<KilometrosRecorridos>()
-                };
-
-                if (nombresTablas.Count == 0)
-                {
-                    // Si no se encontraron nombres de tablas, consultamos directamente la tabla "eventdata"
-                    string sqlEventData = @"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo, (MAX(odometerKM) - MIN(odometerKM)) as kilometros from eventdata where accountID = @AccountID and deviceID = @DeviceID and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
-
-                    kilometrosReporting.ListaKilometros = _defaultConnection.Query<KilometrosRecorridos>(sqlEventData, new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin }, transaction: _defaultTransaction).ToList();
-
-                    for (int i = 0; i < kilometrosReporting.ListaKilometros.Count; i++)
-                    {
-                        kilometrosReporting.ListaKilometros[i].Item = i + 1;
-                    }
-
-                }
-
-                else
-
-                {
-                    foreach (var nombreTabla in nombresTablas)
-                    {
-                        string consultaTabla = nombreTabla.Tabla;
-
-                        string sqlR = $@"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo, (MAX(odometerKM) - MIN(odometerKM)) as kilometros from {consultaTabla} where accountID = @AccountID and deviceID = @DeviceID and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
-
-                        var datosTabla = _secondConnection.Query<KilometrosRecorridos>(sqlR, new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin }, transaction: _secondTransaction).ToList();
-
-                        kilometrosReporting.ListaKilometros.AddRange(datosTabla);
-
-                    }
-
-                    for (int i = 0; i < kilometrosReporting.ListaKilometros.Count; i++)
-                    {
-                        kilometrosReporting.ListaKilometros[i].Item = i + 1;
-                    }
-                }
-
-                if (kilometrosReporting.ListaKilometros.Count == 0 || kilometrosReporting.ListaKilometros == null)
-                {
-                    return new KilometrosReporting
-                    {
-                        Mensaje = "No se encontro datos disponible en el rango de fechas ingresado"
-                    };
-                }
-
-                return kilometrosReporting;
-            }
-            else
+            if (numdias > 15)
             {
                 return new KilometrosReporting
                 {
                     Mensaje = "La diferencia entre las fechas es mayor a 15 días; seleccione otra fechas"
                 };
             }
+
+            // La depuración diaria mueve a historicos, con un retraso de 7 días, el registro
+            // del día calendario correspondiente (hoy - 7). Todo lo posterior a ese día
+            // (los últimos 6 días hasta hoy) aún no ha sido migrado y sigue en eventdata.
+            DateTime diaLimite = DateTime.Now.Date.AddDays(-7);
+            int unixLimite = DateUnix(diaLimite.ToString("dd/MM/yyyy") + " 23:59");
+
+            List<KilometrosRecorridos> lista;
+
+            if (resultadoDias.UnixFechaFin <= unixLimite)
+            {
+                lista = ConsultarHistoricosKm(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
+            }
+            else if (resultadoDias.UnixFechaInicio > unixLimite)
+            {
+                lista = ConsultarEventDataKm(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
+            }
+            else
+            {
+                // El rango solicitado cruza el límite de depuración: una parte está en
+                // historicos y la parte más reciente todavía está en eventdata. El máximo y
+                // mínimo de odómetro deben combinarse por dispositivo, no concatenarse.
+                var datosHistoricos = ConsultarHistoricosKm(accountID, deviceID, resultadoDias.UnixFechaInicio, unixLimite);
+                var datosEventData = ConsultarEventDataKm(accountID, deviceID, unixLimite + 1, resultadoDias.UnixFechaFin);
+
+                lista = CombinarKilometros(datosHistoricos, datosEventData);
+            }
+
+            var kilometrosReporting = new KilometrosReporting
+            {
+                ListaKilometros = lista
+            };
+
+            for (int i = 0; i < kilometrosReporting.ListaKilometros.Count; i++)
+            {
+                kilometrosReporting.ListaKilometros[i].Item = i + 1;
+            }
+
+            if (kilometrosReporting.ListaKilometros.Count == 0 || kilometrosReporting.ListaKilometros == null)
+            {
+                return new KilometrosReporting
+                {
+                    Mensaje = "No se encontro datos disponible en el rango de fechas ingresado"
+                };
+            }
+
+            return kilometrosReporting;
+        }
+
+        private List<KilometrosRecorridos> ConsultarHistoricosKm(string accountID, string deviceID, int unixFechaInicio, int unixFechaFin)
+        {
+            const string sql = "select tabla from historicos where timeini<=@FechafinUnix and timefin>=@FechainiUnix";
+
+            var nombresTablas = _defaultConnection.Query<Historicos>(sql, new { FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin }, transaction: _defaultTransaction).ToList();
+
+            if (nombresTablas.Count == 0)
+            {
+                return ConsultarEventDataKm(accountID, deviceID, unixFechaInicio, unixFechaFin);
+            }
+
+            var lista = new List<KilometrosRecorridos>();
+
+            foreach (var nombreTabla in nombresTablas)
+            {
+                string consultaTabla = nombreTabla.Tabla;
+
+                string sqlR = $@"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo, (MAX(odometerKM) - MIN(odometerKM)) as kilometros from {consultaTabla} where accountID = @AccountID and deviceID = @DeviceID and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
+
+                var datosTabla = _secondConnection.Query<KilometrosRecorridos>(sqlR, new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin }, transaction: _secondTransaction).ToList();
+
+                lista.AddRange(datosTabla);
+            }
+
+            return lista;
+        }
+
+        private List<KilometrosRecorridos> ConsultarEventDataKm(string accountID, string deviceID, int unixFechaInicio, int unixFechaFin)
+        {
+            const string sqlEventData = @"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo, (MAX(odometerKM) - MIN(odometerKM)) as kilometros from eventdata where accountID = @AccountID and deviceID = @DeviceID and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
+
+            return _defaultConnection.Query<KilometrosRecorridos>(sqlEventData, new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin }, transaction: _defaultTransaction).ToList();
+        }
+
+        private List<KilometrosRecorridos> CombinarKilometros(List<KilometrosRecorridos> a, List<KilometrosRecorridos> b)
+        {
+            var combinado = new List<KilometrosRecorridos>();
+
+            foreach (var grupo in a.Concat(b).GroupBy(k => k.DeviceId))
+            {
+                double maximo = grupo.Max(k => k.Maximo);
+                double minimo = grupo.Min(k => k.Minimo);
+
+                combinado.Add(new KilometrosRecorridos
+                {
+                    DeviceId = grupo.Key,
+                    Maximo = maximo,
+                    Minimo = minimo,
+                    Kilometros = maximo - minimo
+                });
+            }
+
+            return combinado;
         }
 
         public async Task<KilometrosReporting> GetAllKmReporting(string fechaini, string fechafin, string accountID)
@@ -122,73 +168,98 @@ namespace VelsatBackendAPI.Data.Repositories
             var resultadoDias = CalcularDias(fechaini, fechafin);
             double numdias = resultadoDias.NumDias;
 
-            var kilometrosReporting = new KilometrosReporting
-            {
-                ListaKilometros = new List<KilometrosRecorridos>()
-            };
-
-            if (numdias <= 7)
-            {
-                // Consultar la tabla "historicos"
-                const string sql = "select tabla from historicos where timeini <= @FechafinUnix and timefin >= @FechainiUnix";
-                var nombresTablas = _defaultConnection.Query<Historicos>(sql, new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin }, transaction: _defaultTransaction).ToList();
-
-                if (nombresTablas.Count == 0)
-                {
-                    // Consultar directamente la tabla "eventdata"
-                    string sqlEventData = $"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo " +
-                        $"from eventdata where deviceID in (select deviceID from device where accountID=@AccountID) and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
-
-
-                    var parameters = new DynamicParameters();
-                    parameters.Add("FechainiUnix", resultadoDias.UnixFechaInicio);
-                    parameters.Add("FechafinUnix", resultadoDias.UnixFechaFin);
-                    parameters.Add("AccountID", accountID);
-
-                    kilometrosReporting.ListaKilometros = _defaultConnection.Query<KilometrosRecorridos>(sqlEventData, parameters, transaction: _defaultTransaction).ToList();
-                }
-                else
-                {
-                    foreach (var nombreTabla in nombresTablas)
-                    {
-                        string consultaTabla = nombreTabla.Tabla;
-
-                        // Consultar cada tabla histórica
-                        string sqlR = $"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo " +
-                            $"from {consultaTabla} where deviceID in (select deviceID from gts.device where accountID=@AccountID) and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
-
-                        var parameters = new DynamicParameters();
-                        parameters.Add("FechainiUnix", resultadoDias.UnixFechaInicio);
-                        parameters.Add("FechafinUnix", resultadoDias.UnixFechaFin);
-                        parameters.Add("AccountID", accountID);
-
-                        var datosTabla = _secondConnection.Query<KilometrosRecorridos>(sqlR, parameters, transaction: _secondTransaction).ToList();
-                        kilometrosReporting.ListaKilometros.AddRange(datosTabla);
-                    }
-                }
-
-                for (int i = 0; i < kilometrosReporting.ListaKilometros.Count; i++)
-                {
-                    kilometrosReporting.ListaKilometros[i].Item = i + 1;
-                }
-
-                if (kilometrosReporting.ListaKilometros.Count == 0)
-                {
-                    return new KilometrosReporting
-                    {
-                        Mensaje = "No se encontró datos disponible en el rango de fechas ingresado"
-                    };
-                }
-
-                return kilometrosReporting;
-            }
-            else
+            if (numdias > 7)
             {
                 return new KilometrosReporting
                 {
                     Mensaje = "La diferencia entre las fechas es mayor a 7 días; seleccione otra fechas"
                 };
             }
+
+            DateTime diaLimite = DateTime.Now.Date.AddDays(-7);
+            int unixLimite = DateUnix(diaLimite.ToString("dd/MM/yyyy") + " 23:59");
+
+            List<KilometrosRecorridos> lista;
+
+            if (resultadoDias.UnixFechaFin <= unixLimite)
+            {
+                lista = ConsultarHistoricosKmAll(accountID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
+            }
+            else if (resultadoDias.UnixFechaInicio > unixLimite)
+            {
+                lista = ConsultarEventDataKmAll(accountID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
+            }
+            else
+            {
+                var datosHistoricos = ConsultarHistoricosKmAll(accountID, resultadoDias.UnixFechaInicio, unixLimite);
+                var datosEventData = ConsultarEventDataKmAll(accountID, unixLimite + 1, resultadoDias.UnixFechaFin);
+
+                lista = CombinarKilometros(datosHistoricos, datosEventData);
+            }
+
+            var kilometrosReporting = new KilometrosReporting
+            {
+                ListaKilometros = lista
+            };
+
+            for (int i = 0; i < kilometrosReporting.ListaKilometros.Count; i++)
+            {
+                kilometrosReporting.ListaKilometros[i].Item = i + 1;
+            }
+
+            if (kilometrosReporting.ListaKilometros.Count == 0)
+            {
+                return new KilometrosReporting
+                {
+                    Mensaje = "No se encontró datos disponible en el rango de fechas ingresado"
+                };
+            }
+
+            return kilometrosReporting;
+        }
+
+        private List<KilometrosRecorridos> ConsultarHistoricosKmAll(string accountID, int unixFechaInicio, int unixFechaFin)
+        {
+            const string sql = "select tabla from historicos where timeini <= @FechafinUnix and timefin >= @FechainiUnix";
+            var nombresTablas = _defaultConnection.Query<Historicos>(sql, new { FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin }, transaction: _defaultTransaction).ToList();
+
+            if (nombresTablas.Count == 0)
+            {
+                return ConsultarEventDataKmAll(accountID, unixFechaInicio, unixFechaFin);
+            }
+
+            var lista = new List<KilometrosRecorridos>();
+
+            foreach (var nombreTabla in nombresTablas)
+            {
+                string consultaTabla = nombreTabla.Tabla;
+
+                string sqlR = $"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo " +
+                    $"from {consultaTabla} where deviceID in (select deviceID from device where accountID=@AccountID) and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("FechainiUnix", unixFechaInicio);
+                parameters.Add("FechafinUnix", unixFechaFin);
+                parameters.Add("AccountID", accountID);
+
+                var datosTabla = _secondConnection.Query<KilometrosRecorridos>(sqlR, parameters, transaction: _secondTransaction).ToList();
+                lista.AddRange(datosTabla);
+            }
+
+            return lista;
+        }
+
+        private List<KilometrosRecorridos> ConsultarEventDataKmAll(string accountID, int unixFechaInicio, int unixFechaFin)
+        {
+            string sqlEventData = $"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo " +
+                $"from eventdata where deviceID in (select deviceID from device where accountID=@AccountID) and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("FechainiUnix", unixFechaInicio);
+            parameters.Add("FechafinUnix", unixFechaFin);
+            parameters.Add("AccountID", accountID);
+
+            return _defaultConnection.Query<KilometrosRecorridos>(sqlEventData, parameters, transaction: _defaultTransaction).ToList();
         }
 
         public async Task<KilometrajeBatchReporting> GetKmReportingBatch(KilometrajeBatchRequest request)

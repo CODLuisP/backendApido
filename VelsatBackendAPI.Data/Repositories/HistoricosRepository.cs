@@ -60,86 +60,114 @@ namespace VelsatBackendAPI.Data.Repositories
             var resultadoDias = CalcularDias(fechaini, fechafin);
             double numdias = resultadoDias.NumDias;
 
-            if (numdias <= 15)
-            {
-                const string sql = "SELECT tabla FROM historicos WHERE timeini <= @FechafinUnix AND timefin >= @FechainiUnix";
-
-                var nombresTablas = _defaultConnection.Query<Historicos>(
-                    sql,
-                    new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
-                    transaction: _defaultTransaction).ToList();
-
-                var datosReporting = new DatosReporting
-                {
-                    ListaTablas = new List<TablasReporting>()
-                };
-
-                if (nombresTablas.Count == 0)
-                {
-                    string sqlEventData = $@"
-                        SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address 
-                        FROM eventdata 
-                        WHERE accountID = @AccountID 
-                          AND deviceID = @DeviceID 
-                          AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
-                        ORDER BY timestamp";
-
-                    datosReporting.ListaTablas = _defaultConnection.Query<TablasReporting>(
-                        sqlEventData,
-                        new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
-                        transaction: _defaultTransaction).ToList();
-
-                    for (int i = 0; i < datosReporting.ListaTablas.Count; i++)
-                    {
-                        datosReporting.ListaTablas[i].Item = i + 1;
-                    }
-                }
-                else
-                {
-                    foreach (var nombreTabla in nombresTablas)
-                    {
-                        string consultaTabla = nombreTabla.Tabla;
-
-                        string sqlR = $@"
-                            SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address 
-                            FROM {consultaTabla} 
-                            WHERE accountID = @AccountID 
-                              AND deviceID = @DeviceID 
-                              AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
-                            ORDER BY timestamp";
-
-                        // ✅ USAR _secondTransaction aquí
-                        var datosTabla = _secondConnection.Query<TablasReporting>(
-                            sqlR,
-                            new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
-                            transaction: _secondTransaction).ToList(); // ✅ CAMBIAR aquí
-
-                        datosReporting.ListaTablas.AddRange(datosTabla);
-                    }
-
-                    for (int i = 0; i < datosReporting.ListaTablas.Count; i++)
-                    {
-                        datosReporting.ListaTablas[i].Item = i + 1;
-                    }
-                }
-
-                if (datosReporting.ListaTablas.Count == 0 || datosReporting.ListaTablas == null)
-                {
-                    return new DatosReporting
-                    {
-                        Mensaje = "No se encontró datos disponible en el rango de fechas ingresado"
-                    };
-                }
-
-                return datosReporting;
-            }
-            else
+            if (numdias > 15)
             {
                 return new DatosReporting
                 {
                     Mensaje = "La diferencia entre las fechas es mayor a 15 días; seleccione otras fechas"
                 };
             }
+
+            // La depuración diaria mueve a historicos, con un retraso de 7 días, el registro
+            // del día calendario correspondiente (hoy - 7). Todo lo posterior a ese día
+            // (los últimos 6 días hasta hoy) aún no ha sido migrado y sigue en eventdata.
+            DateTime diaLimite = DateTime.Now.Date.AddDays(-7);
+            int unixLimite = DateUnix(diaLimite.ToString("dd/MM/yyyy") + " 23:59");
+
+            var datosReporting = new DatosReporting
+            {
+                ListaTablas = new List<TablasReporting>()
+            };
+
+            if (resultadoDias.UnixFechaFin <= unixLimite)
+            {
+                datosReporting.ListaTablas = ConsultarHistoricos(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin, speedClause, minSpeedKPH);
+            }
+            else if (resultadoDias.UnixFechaInicio > unixLimite)
+            {
+                datosReporting.ListaTablas = ConsultarEventData(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin, speedClause, minSpeedKPH);
+            }
+            else
+            {
+                // El rango solicitado cruza el límite de depuración: una parte está en
+                // historicos y la parte más reciente todavía está en eventdata.
+                var datosHistoricos = ConsultarHistoricos(accountID, deviceID, resultadoDias.UnixFechaInicio, unixLimite, speedClause, minSpeedKPH);
+                var datosEventData = ConsultarEventData(accountID, deviceID, unixLimite + 1, resultadoDias.UnixFechaFin, speedClause, minSpeedKPH);
+
+                datosReporting.ListaTablas.AddRange(datosHistoricos);
+                datosReporting.ListaTablas.AddRange(datosEventData);
+                datosReporting.ListaTablas = datosReporting.ListaTablas.OrderBy(t => t.Timestamp).ToList();
+            }
+
+            for (int i = 0; i < datosReporting.ListaTablas.Count; i++)
+            {
+                datosReporting.ListaTablas[i].Item = i + 1;
+            }
+
+            if (datosReporting.ListaTablas.Count == 0 || datosReporting.ListaTablas == null)
+            {
+                return new DatosReporting
+                {
+                    Mensaje = "No se encontró datos disponible en el rango de fechas ingresado"
+                };
+            }
+
+            return datosReporting;
+        }
+
+        private List<TablasReporting> ConsultarHistoricos(string accountID, string deviceID, int unixFechaInicio, int unixFechaFin, string speedClause, double? minSpeedKPH)
+        {
+            const string sql = "SELECT tabla FROM historicos WHERE timeini <= @FechafinUnix AND timefin >= @FechainiUnix";
+
+            var nombresTablas = _defaultConnection.Query<Historicos>(
+                sql,
+                new { FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin },
+                transaction: _defaultTransaction).ToList();
+
+            if (nombresTablas.Count == 0)
+            {
+                return ConsultarEventData(accountID, deviceID, unixFechaInicio, unixFechaFin, speedClause, minSpeedKPH);
+            }
+
+            var lista = new List<TablasReporting>();
+
+            foreach (var nombreTabla in nombresTablas)
+            {
+                string consultaTabla = nombreTabla.Tabla;
+
+                string sqlR = $@"
+                    SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
+                    FROM {consultaTabla}
+                    WHERE accountID = @AccountID
+                      AND deviceID = @DeviceID
+                      AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
+                    ORDER BY timestamp";
+
+                var datosTabla = _secondConnection.Query<TablasReporting>(
+                    sqlR,
+                    new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
+                    transaction: _secondTransaction).ToList();
+
+                lista.AddRange(datosTabla);
+            }
+
+            return lista;
+        }
+
+        private List<TablasReporting> ConsultarEventData(string accountID, string deviceID, int unixFechaInicio, int unixFechaFin, string speedClause, double? minSpeedKPH)
+        {
+            string sqlEventData = $@"
+                SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
+                FROM eventdata
+                WHERE accountID = @AccountID
+                  AND deviceID = @DeviceID
+                  AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
+                ORDER BY timestamp";
+
+            return _defaultConnection.Query<TablasReporting>(
+                sqlEventData,
+                new { AccountID = accountID, DeviceID = deviceID, FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
+                transaction: _defaultTransaction).ToList();
         }
 
         public int DateUnix(string fecha)
