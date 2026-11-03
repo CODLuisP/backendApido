@@ -402,8 +402,8 @@ namespace VelsatBackendAPI.Controllers
                     worksheet.Cell(i + 13, 3).Value = speed.SpeedKPH;
                     worksheet.Cell(i + 13, 4).Value = speed.Date;
                     worksheet.Cell(i + 13, 5).Value = speed.Time;
-                    worksheet.Cell(i + 13, 6).Value = Math.Round(speed.Latitude, 5);
-                    worksheet.Cell(i + 13, 7).Value = Math.Round(speed.Longitude, 5);
+                    worksheet.Cell(i + 13, 6).Value = speed.Latitude.HasValue ? Math.Round(speed.Latitude.Value, 5) : (double?)null;
+                    worksheet.Cell(i + 13, 7).Value = speed.Longitude.HasValue ? Math.Round(speed.Longitude.Value, 5) : (double?)null;
                     worksheet.Cell(i + 13, 8).Value = speed.Address;
 
                     worksheet.Range(i + 13, 8, i + 13, 10).Merge();
@@ -608,8 +608,8 @@ namespace VelsatBackendAPI.Controllers
                     worksheet.Cell(i + 13, 4).Value = speed.SpeedKPH;
                     worksheet.Cell(i + 13, 5).Value = speed.Date;
                     worksheet.Cell(i + 13, 6).Value = speed.Time;
-                    worksheet.Cell(i + 13, 7).Value = Math.Round(speed.Latitude, 5);
-                    worksheet.Cell(i + 13, 8).Value = Math.Round(speed.Longitude, 5);
+                    worksheet.Cell(i + 13, 7).Value = speed.Latitude.HasValue ? Math.Round(speed.Latitude.Value, 5) : (double?)null;
+                    worksheet.Cell(i + 13, 8).Value = speed.Longitude.HasValue ? Math.Round(speed.Longitude.Value, 5) : (double?)null;
                     worksheet.Cell(i + 13, 9).Value = speed.Address;
 
                     worksheet.Range(i + 13, 9, i + 13, 11).Merge();
