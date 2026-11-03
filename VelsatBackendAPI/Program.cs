@@ -107,7 +107,6 @@ var app = builder.Build();
 try
 {
     MySql.Data.MySqlClient.MySqlConnection.ClearAllPools();
-    Console.WriteLine("✅ [Startup] Pools de MySQL limpiados correctamente");
 }
 catch (Exception ex)
 {

@@ -1717,8 +1717,6 @@ namespace VelsatBackendAPI.Data.Repositories
                 Lastdespacho = row.lastdespacho != null ? row.lastdespacho.ToString() : "N/A"
             };
 
-            Console.WriteLine($"✅ Objeto GPS creado: {unidad.Numequipo}");
-
             return unidad;
         }
 
