@@ -41,6 +41,7 @@ namespace VelsatBackendAPI.Data.Repositories
         private readonly Lazy<IGeocercasRepository> _geocercasRepository;
         private readonly Lazy<IGeocercasVehiculosRepository> _geocercasVehiculosRepository;
         private readonly Lazy<IConfiguracionRepository> _configuracionRepository;
+        private readonly Lazy<IServiciosRutasRepository> _serviciosRutasRepository;
 
         private bool _disposed = false;
         private bool _committed = false;
@@ -111,6 +112,9 @@ namespace VelsatBackendAPI.Data.Repositories
 
             _configuracionRepository = new Lazy<IConfiguracionRepository>(() =>
                 new ConfiguracionRepository(DefaultConnection, _defaultTransaction));
+
+            _serviciosRutasRepository = new Lazy<IServiciosRutasRepository>(() =>
+                new ServiciosRutasRepository(DOConnection, _doTransaction));
         }
 
         // ✅ Conexión principal con inicialización thread-safe y retry logic
@@ -465,6 +469,15 @@ namespace VelsatBackendAPI.Data.Repositories
             }
         }
 
+        public IServiciosRutasRepository ServiciosRutasRepository
+        {
+            get
+            {
+                ValidateNotDisposedOrCommitted();
+                return _serviciosRutasRepository.Value;
+            }
+        }
+
         // ✅ SaveChanges optimizado
         public void SaveChanges()
         {
@@ -652,6 +665,7 @@ namespace VelsatBackendAPI.Data.Repositories
             TryDisposeRepository(_geocercasRepository);
             TryDisposeRepository(_geocercasVehiculosRepository);
             TryDisposeRepository(_configuracionRepository);
+            TryDisposeRepository(_serviciosRutasRepository);
         }
 
         private void TryDisposeRepository<T>(Lazy<T> lazyRepo)
