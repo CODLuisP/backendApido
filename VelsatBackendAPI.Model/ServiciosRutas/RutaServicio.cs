@@ -19,6 +19,9 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         // Solo en el listado
         public int? CantidadParaderos { get; set; }
 
+        // Solo en el listado: minutos totales de la ruta (suma de los tramos de sus paraderos activos).
+        public int? DuracionMin { get; set; }
+
         // Solo en el detalle (GET por id)
         public List<RutaParadero>? Paraderos { get; set; }
     }

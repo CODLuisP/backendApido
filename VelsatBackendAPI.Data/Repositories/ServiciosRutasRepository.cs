@@ -48,7 +48,8 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             string sql = $@"
                 SELECT {RutaColumns},
-                       (SELECT COUNT(*) FROM ruta_paradero p WHERE p.ruta_id = ruta.id AND p.activo = 1) AS CantidadParaderos
+                       (SELECT COUNT(*) FROM ruta_paradero p WHERE p.ruta_id = ruta.id AND p.activo = 1) AS CantidadParaderos,
+                       (SELECT COALESCE(SUM(p.minutos_desde_anterior), 0) FROM ruta_paradero p WHERE p.ruta_id = ruta.id AND p.activo = 1) AS DuracionMin
                 FROM ruta
                 WHERE account_id = @AccountID AND (@IncluirInactivas = 1 OR activo = 1)
                 ORDER BY nombre";
@@ -239,7 +240,11 @@ namespace VelsatBackendAPI.Data.Repositories
             string accountID, DateTime? desde, DateTime? hasta, string? estado, string? deviceID)
         {
             string sql = $@"
-                SELECT {ServicioColumns}
+                SELECT {ServicioColumns},
+                       (SELECT COUNT(*) FROM servicio_ruta_paradero sp
+                         WHERE sp.servicio_id = s.id AND sp.hora_llegada_real IS NOT NULL) AS ParaderosCompletados,
+                       (SELECT COUNT(*) FROM servicio_ruta_paradero sp
+                         WHERE sp.servicio_id = s.id) AS TotalParaderos
                 FROM servicio_ruta s
                 JOIN ruta r ON r.id = s.ruta_id
                 WHERE s.account_id = @AccountID

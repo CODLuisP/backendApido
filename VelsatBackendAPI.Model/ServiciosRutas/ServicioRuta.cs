@@ -36,6 +36,10 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
+        // Solo en el listado: paraderos con llegada registrada / total de paraderos del servicio.
+        public int? ParaderosCompletados { get; set; }
+        public int? TotalParaderos { get; set; }
+
         // Solo en el detalle (GET por id)
         public List<ServicioRutaParadero>? Paraderos { get; set; }
     }
