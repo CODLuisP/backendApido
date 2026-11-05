@@ -15,6 +15,10 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public string? Grupo { get; set; }
         public string? Descripcion { get; set; }
         public decimal? DistanciaKm { get; set; }
+
+        // Línea del recorrido como pares [latitud, longitud]. Al EDITAR: null = conservar el trazado
+        // actual (así el administrador de rutas no lo borra), lista vacía = borrarlo.
+        public List<double[]>? Trazado { get; set; }
         public List<ParaderoRequest> Paraderos { get; set; } = new();
     }
 

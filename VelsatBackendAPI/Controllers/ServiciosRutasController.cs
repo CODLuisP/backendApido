@@ -490,6 +490,19 @@ namespace VelsatBackendAPI.Controllers
             if (r.Paraderos == null || r.Paraderos.Count < 2)
                 return "La ruta necesita al menos 2 paraderos (origen y destino)";
 
+            if (r.Trazado != null)
+            {
+                if (r.Trazado.Count > 20000) return "El trazado no puede superar 20000 puntos";
+                for (int i = 0; i < r.Trazado.Count; i++)
+                {
+                    var pt = r.Trazado[i];
+                    if (pt == null || pt.Length != 2)
+                        return $"Trazado, punto {i + 1}: debe ser un par [latitud, longitud]";
+                    if (pt[0] < -90 || pt[0] > 90 || pt[1] < -180 || pt[1] > 180)
+                        return $"Trazado, punto {i + 1}: coordenadas fuera de rango";
+                }
+            }
+
             r.Codigo = r.Codigo.Trim();
             r.Nombre = r.Nombre.Trim();
             r.Grupo = string.IsNullOrWhiteSpace(r.Grupo) ? null : r.Grupo.Trim();

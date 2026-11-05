@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace VelsatBackendAPI.Model.ServiciosRutas
 {
@@ -21,6 +22,15 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
 
         // Solo en el listado: minutos totales de la ruta (suma de los tramos de sus paraderos activos).
         public int? DuracionMin { get; set; }
+
+        // Texto JSON tal como está guardado en la columna `trazado`. No sale en la respuesta:
+        // el detalle lo entrega ya convertido en la lista `Trazado`.
+        [JsonIgnore]
+        public string? TrazadoJson { get; set; }
+
+        // Solo en el detalle (GET por id): línea del recorrido como pares [latitud, longitud]
+        // en el orden en que se recorre. Null si la ruta no tiene trazado cargado.
+        public List<double[]>? Trazado { get; set; }
 
         // Solo en el detalle (GET por id)
         public List<RutaParadero>? Paraderos { get; set; }

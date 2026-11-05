@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using VelsatBackendAPI.Model.ServiciosRutas;
 
@@ -60,10 +61,12 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public async Task<RutaServicio?> GetRutaById(long id, string accountID)
         {
-            string sql = $"SELECT {RutaColumns} FROM ruta WHERE id = @Id AND account_id = @AccountID";
+            string sql = $"SELECT {RutaColumns}, trazado AS TrazadoJson FROM ruta WHERE id = @Id AND account_id = @AccountID";
             var ruta = await _connection.QueryFirstOrDefaultAsync<RutaServicio>(
                 sql, new { Id = id, AccountID = accountID }, _transaction);
             if (ruta == null) return null;
+
+            ruta.Trazado = ParsearTrazado(ruta.TrazadoJson);
 
             string sqlParaderos = $@"
                 SELECT {ParaderoColumns} FROM ruta_paradero
@@ -84,6 +87,25 @@ namespace VelsatBackendAPI.Data.Repositories
             return ruta;
         }
 
+        // El trazado se guarda como texto JSON [[lat,lng],...]. Si el texto está dañado se devuelve
+        // null en vez de romper toda la ruta.
+        private static List<double[]>? ParsearTrazado(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                return JsonSerializer.Deserialize<List<double[]>>(json);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        // Lista vacía o null = sin trazado (NULL en la base).
+        private static string? SerializarTrazado(List<double[]>? trazado) =>
+            trazado == null || trazado.Count == 0 ? null : JsonSerializer.Serialize(trazado);
+
         public async Task<bool> ExisteCodigoRuta(string accountID, string codigo, long? excluirId)
         {
             const string sql = @"
@@ -97,8 +119,8 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<long> InsertRuta(RutaRequest request)
         {
             const string sql = @"
-                INSERT INTO ruta (account_id, codigo, nombre, grupo, descripcion, distancia_km)
-                VALUES (@AccountID, @Codigo, @Nombre, @Grupo, @Descripcion, @DistanciaKm);
+                INSERT INTO ruta (account_id, codigo, nombre, grupo, descripcion, distancia_km, trazado)
+                VALUES (@AccountID, @Codigo, @Nombre, @Grupo, @Descripcion, @DistanciaKm, @Trazado);
                 SELECT LAST_INSERT_ID();";
 
             long rutaId = await _connection.QuerySingleAsync<long>(sql, new
@@ -108,7 +130,8 @@ namespace VelsatBackendAPI.Data.Repositories
                 request.Nombre,
                 request.Grupo,
                 request.Descripcion,
-                request.DistanciaKm
+                request.DistanciaKm,
+                Trazado = SerializarTrazado(request.Trazado)
             }, _transaction);
 
             for (int i = 0; i < request.Paraderos.Count; i++)
@@ -124,7 +147,8 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             const string sqlRuta = @"
                 UPDATE ruta
-                SET codigo = @Codigo, nombre = @Nombre, grupo = @Grupo, descripcion = @Descripcion, distancia_km = @DistanciaKm
+                SET codigo = @Codigo, nombre = @Nombre, grupo = @Grupo, descripcion = @Descripcion, distancia_km = @DistanciaKm,
+                    trazado = CASE WHEN @ActualizarTrazado = 1 THEN @Trazado ELSE trazado END
                 WHERE id = @Id AND account_id = @AccountID";
 
             await _connection.ExecuteAsync(sqlRuta, new
@@ -135,7 +159,10 @@ namespace VelsatBackendAPI.Data.Repositories
                 request.Nombre,
                 request.Grupo,
                 request.Descripcion,
-                request.DistanciaKm
+                request.DistanciaKm,
+                // Sin trazado en la solicitud (null) se conserva el que ya tenía la ruta.
+                ActualizarTrazado = request.Trazado != null ? 1 : 0,
+                Trazado = SerializarTrazado(request.Trazado)
             }, _transaction);
 
             // "Estaciona" todos los paraderos con orden negativo y tipo INTERMEDIO para que reordenar
