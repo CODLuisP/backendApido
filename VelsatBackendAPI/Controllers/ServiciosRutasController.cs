@@ -262,6 +262,51 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // Reprograma un servicio PROGRAMADO o EN_CURSO: nueva fecha/hora de salida. Las horas esperadas
+        // de los paraderos sin llegada se corren la misma diferencia; las llegadas ya marcadas se conservan.
+        [HttpPatch("servicios/{id:long}/reprogramar")]
+        public async Task<ActionResult> Reprogramar(long id, [FromBody] ReprogramarServicioRequest request)
+        {
+            try
+            {
+                if (!request.FechaSalida.HasValue)
+                    return BadRequest(new { message = "La fecha de salida es obligatoria (dd/MM/yyyy)" });
+                if (!request.HoraSalida.HasValue)
+                    return BadRequest(new { message = "La hora de salida es obligatoria (HH:mm)" });
+                if (request.HoraSalida.Value < TimeSpan.Zero || request.HoraSalida.Value >= TimeSpan.FromDays(1))
+                    return BadRequest(new { message = "La hora de salida debe estar entre 00:00 y 23:59" });
+
+                string? motivo = string.IsNullOrWhiteSpace(request.Motivo) ? null : request.Motivo.Trim();
+                if (motivo != null && motivo.Length > 200)
+                    return BadRequest(new { message = "El motivo no puede superar 200 caracteres" });
+
+                var existente = await _uow.ServiciosRutasRepository.GetServicioById(id, AccountId!);
+                if (existente == null)
+                    return NotFound(new { message = "Servicio no encontrado" });
+
+                if (existente.Estado != "PROGRAMADO" && existente.Estado != "EN_CURSO")
+                    return Conflict(new { message = $"Solo se pueden reprogramar servicios PROGRAMADO o EN_CURSO (estado actual: {existente.Estado})" });
+
+                DateTime actual = existente.FechaSalida!.Value.Date + existente.HoraSalida!.Value;
+                DateTime nueva = request.FechaSalida.Value.Date + request.HoraSalida.Value;
+                int desplazamiento = (int)Math.Round((nueva - actual).TotalMinutes);
+                if (desplazamiento == 0)
+                    return BadRequest(new { message = "La nueva fecha y hora es igual a la actual" });
+
+                int filas = await _uow.ServiciosRutasRepository.ReprogramarServicio(
+                    id, AccountId!, existente.Estado, nueva, desplazamiento, motivo);
+                if (filas == 0)
+                    return Conflict(new { message = "El estado del servicio cambió mientras se procesaba la solicitud" });
+
+                _uow.SaveChanges();
+                return Ok(new { id, desplazamientoMin = desplazamiento, message = "Servicio reprogramado" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al reprogramar el servicio", error = ex.Message });
+            }
+        }
+
         // PROGRAMADO -> EN_CURSO | CANCELADO ; EN_CURSO -> FINALIZADO | CANCELADO.
         // inicio_real / fin_real se registran en hora de Perú (igual que fecha/hora de salida y
         // hora_esperada), para que las diferencias en minutos se calculen en la misma zona.

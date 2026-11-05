@@ -368,6 +368,39 @@ namespace VelsatBackendAPI.Data.Repositories
             return _connection.ExecuteAsync(sql, new { ServicioId = servicioId }, _transaction);
         }
 
+        // Cambia fecha y hora de salida y corre las horas esperadas de los paraderos que aún no tienen
+        // llegada (PENDIENTE) la misma cantidad de minutos. Las llegadas ya registradas no se tocan.
+        // Devuelve 0 si el estado actual ya no era el esperado (p. ej. lo cambió la app móvil).
+        public async Task<int> ReprogramarServicio(long id, string accountID, string estadoActual,
+            DateTime nuevaSalida, int desplazamientoMin, string? motivo)
+        {
+            const string sql = @"
+                UPDATE servicio_ruta
+                SET fecha_salida = @Fecha, hora_salida = @Hora,
+                    observaciones = CASE WHEN @Motivo IS NULL THEN observaciones
+                                         ELSE CONCAT_WS(' | ', observaciones, CONCAT('Reprogramado: ', @Motivo)) END
+                WHERE id = @Id AND account_id = @AccountID AND estado = @Actual";
+
+            int filas = await _connection.ExecuteAsync(sql, new
+            {
+                Id = id,
+                AccountID = accountID,
+                Actual = estadoActual,
+                Fecha = nuevaSalida.Date,
+                Hora = nuevaSalida.TimeOfDay,
+                Motivo = motivo
+            }, _transaction);
+            if (filas == 0) return 0;
+
+            await _connection.ExecuteAsync(@"
+                UPDATE servicio_ruta_paradero
+                SET hora_esperada = DATE_ADD(hora_esperada, INTERVAL @Delta MINUTE)
+                WHERE servicio_id = @Id AND hora_llegada_real IS NULL AND estado = 'PENDIENTE'",
+                new { Id = id, Delta = desplazamientoMin }, _transaction);
+
+            return filas;
+        }
+
         // Devuelve las filas afectadas: 0 si el estado actual ya no era el esperado.
         public Task<int> CambiarEstadoServicio(long id, string accountID, string estadoActual, string nuevoEstado,
             DateTime ahoraUtc, decimal? distanciaRealKm, string? observaciones)

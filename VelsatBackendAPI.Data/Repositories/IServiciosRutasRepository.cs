@@ -21,6 +21,8 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> ContarParaderosDeRutaActiva(long rutaId, string accountID);
         Task<long> InsertServicio(ServicioRuta servicio);
         Task UpdateServicio(ServicioRuta servicio);
+        Task<int> ReprogramarServicio(long id, string accountID, string estadoActual,
+            DateTime nuevaSalida, int desplazamientoMin, string? motivo);
         Task<int> CambiarEstadoServicio(long id, string accountID, string estadoActual, string nuevoEstado,
             DateTime ahoraUtc, decimal? distanciaRealKm, string? observaciones);
 

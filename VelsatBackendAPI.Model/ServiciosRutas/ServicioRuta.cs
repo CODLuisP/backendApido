@@ -61,6 +61,19 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public string Estado { get; set; } = "PENDIENTE";   // PENDIENTE | A_TIEMPO | ADELANTADO | RETRASADO | OMITIDO
     }
 
+    // Reprogramar un servicio PROGRAMADO o EN_CURSO: nueva fecha y hora de salida (misma convención
+    // de formato que el resto: "dd/MM/yyyy" y "HH:mm"). Motivo es opcional y queda en observaciones.
+    public class ReprogramarServicioRequest
+    {
+        [JsonConverter(typeof(FechaDdMmYyyyJsonConverter))]
+        public DateTime? FechaSalida { get; set; }
+
+        [JsonConverter(typeof(HoraHmJsonConverter))]
+        public TimeSpan? HoraSalida { get; set; }
+
+        public string? Motivo { get; set; }
+    }
+
     public class CambiarEstadoServicioRequest
     {
         public string? Estado { get; set; }
