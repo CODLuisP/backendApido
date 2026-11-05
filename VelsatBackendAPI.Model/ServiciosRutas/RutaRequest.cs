@@ -10,6 +10,9 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public string? AccountID { get; set; }
         public string? Codigo { get; set; }
         public string? Nombre { get; set; }
+
+        // Grupo al que pertenece la ruta (ej. "Grupo A"). Opcional, máx. 50 caracteres.
+        public string? Grupo { get; set; }
         public string? Descripcion { get; set; }
         public decimal? DistanciaKm { get; set; }
         public List<ParaderoRequest> Paraderos { get; set; } = new();

@@ -439,12 +439,15 @@ namespace VelsatBackendAPI.Controllers
             if (string.IsNullOrWhiteSpace(r.Nombre)) return "El nombre es obligatorio";
             if (r.Codigo.Length > 30) return "El código no puede superar 30 caracteres";
             if (r.Nombre.Length > 150) return "El nombre no puede superar 150 caracteres";
+            if (!string.IsNullOrWhiteSpace(r.Grupo) && r.Grupo.Trim().Length > 50)
+                return "El grupo no puede superar 50 caracteres";
             if (r.DistanciaKm.HasValue && r.DistanciaKm.Value < 0) return "La distancia no puede ser negativa";
             if (r.Paraderos == null || r.Paraderos.Count < 2)
                 return "La ruta necesita al menos 2 paraderos (origen y destino)";
 
             r.Codigo = r.Codigo.Trim();
             r.Nombre = r.Nombre.Trim();
+            r.Grupo = string.IsNullOrWhiteSpace(r.Grupo) ? null : r.Grupo.Trim();
 
             for (int i = 0; i < r.Paraderos.Count; i++)
             {

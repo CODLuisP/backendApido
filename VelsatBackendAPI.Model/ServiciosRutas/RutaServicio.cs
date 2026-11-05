@@ -9,6 +9,7 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public string AccountID { get; set; } = string.Empty;
         public string Codigo { get; set; } = string.Empty;
         public string Nombre { get; set; } = string.Empty;
+        public string? Grupo { get; set; }
         public string? Descripcion { get; set; }
         public decimal? DistanciaKm { get; set; }
         public bool Activo { get; set; }

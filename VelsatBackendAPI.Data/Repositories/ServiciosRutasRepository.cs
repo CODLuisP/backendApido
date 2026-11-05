@@ -24,7 +24,7 @@ namespace VelsatBackendAPI.Data.Repositories
         }
 
         private const string RutaColumns = @"
-            id, account_id AS AccountID, codigo, nombre, descripcion, distancia_km AS DistanciaKm,
+            id, account_id AS AccountID, codigo, nombre, grupo, descripcion, distancia_km AS DistanciaKm,
             activo, created_at AS CreatedAt, updated_at AS UpdatedAt";
 
         private const string ParaderoColumns = @"
@@ -96,8 +96,8 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<long> InsertRuta(RutaRequest request)
         {
             const string sql = @"
-                INSERT INTO ruta (account_id, codigo, nombre, descripcion, distancia_km)
-                VALUES (@AccountID, @Codigo, @Nombre, @Descripcion, @DistanciaKm);
+                INSERT INTO ruta (account_id, codigo, nombre, grupo, descripcion, distancia_km)
+                VALUES (@AccountID, @Codigo, @Nombre, @Grupo, @Descripcion, @DistanciaKm);
                 SELECT LAST_INSERT_ID();";
 
             long rutaId = await _connection.QuerySingleAsync<long>(sql, new
@@ -105,6 +105,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 request.AccountID,
                 request.Codigo,
                 request.Nombre,
+                request.Grupo,
                 request.Descripcion,
                 request.DistanciaKm
             }, _transaction);
@@ -122,7 +123,7 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             const string sqlRuta = @"
                 UPDATE ruta
-                SET codigo = @Codigo, nombre = @Nombre, descripcion = @Descripcion, distancia_km = @DistanciaKm
+                SET codigo = @Codigo, nombre = @Nombre, grupo = @Grupo, descripcion = @Descripcion, distancia_km = @DistanciaKm
                 WHERE id = @Id AND account_id = @AccountID";
 
             await _connection.ExecuteAsync(sqlRuta, new
@@ -131,6 +132,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 request.AccountID,
                 request.Codigo,
                 request.Nombre,
+                request.Grupo,
                 request.Descripcion,
                 request.DistanciaKm
             }, _transaction);
