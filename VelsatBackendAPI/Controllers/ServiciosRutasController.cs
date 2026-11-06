@@ -1,10 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using VelsatBackendAPI.Data.Repositories;
 using VelsatBackendAPI.Model.ServiciosRutas;
@@ -12,10 +10,11 @@ using VelsatBackendAPI.Model.ServiciosRutas;
 namespace VelsatBackendAPI.Controllers
 {
     // Rutas con paraderos (geocercas), servicios programados sobre esas rutas y configuración.
-    // La cuenta (accountID) sale siempre del token: nunca se acepta del cliente.
-    [Route("api/servicios-rutas")]
+    // La cuenta (accountID) va en la URL: api/servicios-rutas/{accountId}/rutas, etc.
+    // Sin [Authorize] por ahora (la app móvil usa otro login). Cuando se active, hay que validar que
+    // la cuenta del token coincida con {accountId}; si no, cualquiera podría pedir los datos de otra cuenta.
+    [Route("api/servicios-rutas/{accountId}")]
     [ApiController]
-    [Authorize]
     public class ServiciosRutasController : ControllerBase
     {
         private readonly IReadOnlyUnitOfWork _readOnlyUow;
@@ -27,7 +26,10 @@ namespace VelsatBackendAPI.Controllers
             _uow = uow;
         }
 
-        private string? AccountId => User.FindFirstValue(ClaimTypes.NameIdentifier);
+        // Cuenta tomada de la URL ({accountId}). Se declara como propiedad enlazada a la ruta para que
+        // todas las acciones la usen sin repetir el parámetro (Swagger la muestra en cada endpoint).
+        [FromRoute(Name = "accountId")]
+        public string AccountId { get; set; } = string.Empty;
 
         private static readonly string[] EstadosServicio = { "PROGRAMADO", "EN_CURSO", "FINALIZADO", "CANCELADO" };
 
