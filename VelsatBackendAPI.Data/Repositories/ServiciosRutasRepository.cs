@@ -296,7 +296,8 @@ namespace VelsatBackendAPI.Data.Repositories
         // =====================================================================
 
         public async Task<IEnumerable<ServicioRuta>> GetServicios(
-            string accountID, DateTime? desde, DateTime? hasta, string? estado, string? deviceID)
+            string accountID, DateTime? desde, DateTime? hasta, string? estado, string? deviceID,
+            string? conductorBrevete = null)
         {
             string sql = $@"
                 SELECT {ServicioColumns},
@@ -311,10 +312,17 @@ namespace VelsatBackendAPI.Data.Repositories
                   AND (@Hasta IS NULL OR s.fecha_salida <= @Hasta)
                   AND (@Estado IS NULL OR s.estado = @Estado)
                   AND (@DeviceID IS NULL OR s.device_id = @DeviceID)
+                  AND (@ConductorBrevete IS NULL OR s.conductor_brevete = @ConductorBrevete)
                 ORDER BY s.fecha_salida DESC, s.hora_salida DESC";
 
             return await _connection.QueryAsync<ServicioRuta>(
-                sql, new { AccountID = accountID, Desde = desde, Hasta = hasta, Estado = estado, DeviceID = deviceID }, _transaction);
+                sql,
+                new
+                {
+                    AccountID = accountID, Desde = desde, Hasta = hasta, Estado = estado,
+                    DeviceID = deviceID, ConductorBrevete = conductorBrevete
+                },
+                _transaction);
         }
 
         public async Task<ServicioRuta?> GetServicioById(long id, string accountID)

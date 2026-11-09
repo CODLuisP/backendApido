@@ -16,7 +16,8 @@ namespace VelsatBackendAPI.Data.Repositories
         Task SetRutaActivo(long id, string accountID, bool activo);
 
         // ---------- Servicios ----------
-        Task<IEnumerable<ServicioRuta>> GetServicios(string accountID, DateTime? desde, DateTime? hasta, string? estado, string? deviceID);
+        Task<IEnumerable<ServicioRuta>> GetServicios(string accountID, DateTime? desde, DateTime? hasta, string? estado, string? deviceID,
+            string? conductorBrevete = null);
         Task<ServicioRuta?> GetServicioById(long id, string accountID);
         Task<int> ContarParaderosDeRutaActiva(long rutaId, string accountID);
         Task<long> InsertServicio(ServicioRuta servicio);

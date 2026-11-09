@@ -192,7 +192,7 @@ namespace VelsatBackendAPI.Controllers
         [HttpGet("servicios")]
         public async Task<ActionResult<IEnumerable<ServicioRuta>>> GetServicios(
             [FromQuery] string? desde, [FromQuery] string? hasta,
-            [FromQuery] string? estado, [FromQuery] string? deviceID)
+            [FromQuery] string? estado, [FromQuery] string? deviceID, [FromQuery] string? conductorBrevete)
         {
             try
             {
@@ -207,7 +207,8 @@ namespace VelsatBackendAPI.Controllers
 
                 var result = await _readOnlyUow.ServiciosRutasRepository.GetServicios(
                     AccountId!, fechaDesde, fechaHasta, estadoNormalizado,
-                    string.IsNullOrWhiteSpace(deviceID) ? null : deviceID.Trim());
+                    string.IsNullOrWhiteSpace(deviceID) ? null : deviceID.Trim(),
+                    string.IsNullOrWhiteSpace(conductorBrevete) ? null : conductorBrevete.Trim());
                 return Ok(result);
             }
             catch (Exception ex)
@@ -224,6 +225,10 @@ namespace VelsatBackendAPI.Controllers
                 var result = await _readOnlyUow.ServiciosRutasRepository.GetServicioById(id, AccountId!);
                 if (result == null)
                     return NotFound(new { message = "Servicio no encontrado" });
+
+                // La ruta completa (trazado y paraderos con coordenadas y radio) viaja dentro del servicio:
+                // la app del conductor entra a un servicio y ya tiene todo para navegar y marcar geocercas.
+                result.Ruta = await _readOnlyUow.ServiciosRutasRepository.GetRutaById(result.RutaId, AccountId!);
 
                 return Ok(result);
             }

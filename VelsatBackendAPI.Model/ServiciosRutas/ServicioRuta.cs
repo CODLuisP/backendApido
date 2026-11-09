@@ -43,6 +43,10 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
 
         // Solo en el detalle (GET por id)
         public List<ServicioRutaParadero>? Paraderos { get; set; }
+
+        // Solo en el detalle (GET por id): la ruta completa del servicio (datos, trazado y paraderos
+        // con latitud, longitud y radio). Solo lectura: se ignora al crear o editar un servicio.
+        public RutaServicio? Ruta { get; set; }
     }
 
     public class ServicioRutaParadero
