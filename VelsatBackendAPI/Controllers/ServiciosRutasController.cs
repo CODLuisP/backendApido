@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using VelsatBackendAPI.Data.Repositories;
+using VelsatBackendAPI.Hubs;
 using VelsatBackendAPI.Model.ServiciosRutas;
 
 namespace VelsatBackendAPI.Controllers
@@ -19,11 +21,19 @@ namespace VelsatBackendAPI.Controllers
     {
         private readonly IReadOnlyUnitOfWork _readOnlyUow;
         private readonly IUnitOfWork _uow;
+        private readonly IHubContext<ServiciosRutasHub> _hub;
+        private readonly PosicionesEnVivoStore _posiciones;
 
-        public ServiciosRutasController(IReadOnlyUnitOfWork readOnlyUow, IUnitOfWork uow)
+        public ServiciosRutasController(
+            IReadOnlyUnitOfWork readOnlyUow,
+            IUnitOfWork uow,
+            IHubContext<ServiciosRutasHub> hub,
+            PosicionesEnVivoStore posiciones)
         {
             _readOnlyUow = readOnlyUow;
             _uow = uow;
+            _hub = hub;
+            _posiciones = posiciones;
         }
 
         // Cuenta tomada de la URL ({accountId}). Se declara como propiedad enlazada a la ruta para que
@@ -235,6 +245,7 @@ namespace VelsatBackendAPI.Controllers
 
                 var id = await _uow.ServiciosRutasRepository.InsertServicio(servicio);
                 _uow.SaveChanges();
+                await Notificar(new AvisoServicio { ServicioId = id, Tipo = "CREADO", DeviceID = servicio.DeviceID });
                 return Ok(new { id });
             }
             catch (Exception ex)
@@ -264,6 +275,7 @@ namespace VelsatBackendAPI.Controllers
 
                 await _uow.ServiciosRutasRepository.UpdateServicio(servicio);
                 _uow.SaveChanges();
+                await Notificar(new AvisoServicio { ServicioId = id, Tipo = "EDITADO", DeviceID = servicio.DeviceID });
                 return Ok(new { message = "Servicio actualizado" });
             }
             catch (Exception ex)
@@ -309,6 +321,7 @@ namespace VelsatBackendAPI.Controllers
                     return Conflict(new { message = "El estado del servicio cambió mientras se procesaba la solicitud" });
 
                 _uow.SaveChanges();
+                await Notificar(new AvisoServicio { ServicioId = id, Tipo = "REPROGRAMADO", DeviceID = existente.DeviceID });
                 return Ok(new { id, desplazamientoMin = desplazamiento, message = "Servicio reprogramado" });
             }
             catch (Exception ex)
@@ -346,6 +359,10 @@ namespace VelsatBackendAPI.Controllers
                     return Conflict(new { message = "El estado del servicio cambió mientras se procesaba la solicitud" });
 
                 _uow.SaveChanges();
+                await Notificar(new AvisoServicio
+                {
+                    ServicioId = id, Tipo = "ESTADO", DeviceID = existente.DeviceID, EstadoServicio = nuevo
+                });
                 return Ok(new { id, estado = nuevo });
             }
             catch (Exception ex)
@@ -399,6 +416,12 @@ namespace VelsatBackendAPI.Controllers
 
                 await _uow.ServiciosRutasRepository.MarcarOmitidosAnteriores(id, orden);
                 _uow.SaveChanges();
+                await Notificar(new AvisoServicio
+                {
+                    ServicioId = id, Tipo = "LLEGADA", DeviceID = servicio.DeviceID,
+                    Orden = orden, Paradero = paradero.Nombre, Hora = horaLlegada.ToString("HH:mm:ss"),
+                    EstadoParadero = estado, DiferenciaMin = diferencia
+                });
                 return Ok(new { id, orden, estado, diferenciaMin = diferencia, toleranciaMin = tolerancia });
             }
             catch (Exception ex)
@@ -433,11 +456,18 @@ namespace VelsatBackendAPI.Controllers
                 if (paradero.HoraSalidaReal.HasValue)
                     return Conflict(new { message = "La salida de este paradero ya fue registrada" });
 
-                int filas = await _uow.ServiciosRutasRepository.RegistrarSalida(id, orden, hora ?? AhoraPeru());
+                DateTime horaSalida = hora ?? AhoraPeru();
+                int filas = await _uow.ServiciosRutasRepository.RegistrarSalida(id, orden, horaSalida);
                 if (filas == 0)
                     return Conflict(new { message = "La salida de este paradero ya fue registrada" });
 
                 _uow.SaveChanges();
+                await Notificar(new AvisoServicio
+                {
+                    ServicioId = id, Tipo = "SALIDA", DeviceID = servicio.DeviceID,
+                    Orden = orden, Paradero = paradero.Nombre, Hora = horaSalida.ToString("HH:mm:ss"),
+                    PermanenciaMin = (int)Math.Max(0, Math.Truncate((horaSalida - paradero.HoraLlegadaReal!.Value).TotalMinutes))
+                });
                 return Ok(new { id, orden });
             }
             catch (Exception ex)
@@ -481,6 +511,77 @@ namespace VelsatBackendAPI.Controllers
             {
                 return StatusCode(500, new { message = "Error al guardar la configuración", error = ex.Message });
             }
+        }
+
+        // Avisa a la web (evento "ServicioActualizado") que algo cambió en un servicio: llegada/salida de un
+        // paradero, cambio de estado, etc. Es solo una notificación: lo importante ya quedó guardado en la
+        // base. Si falla el aviso, no se hace fallar la operación (la web igual se actualiza en su refresco).
+        private async Task Notificar(AvisoServicio aviso)
+        {
+            try
+            {
+                await _hub.Clients.Group(AccountId).SendAsync("ServicioActualizado", aviso);
+            }
+            catch
+            {
+                // Sin conexión SignalR no pasa nada: el refresco periódico de la web lo cubre.
+            }
+        }
+
+        // =====================================================================
+        // POSICIONES EN VIVO (no se guardan en la base de datos)
+        // =====================================================================
+
+        // La app del conductor la llama cada pocos segundos. Se reenvía por SignalR al grupo de la cuenta
+        // (evento "PosicionActualizada") y se recuerda la última posición de la unidad solo en memoria.
+        [HttpPost("posiciones")]
+        public async Task<ActionResult> EnviarPosicion([FromBody] EnviarPosicionRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.DeviceID))
+                return BadRequest(new { message = "El deviceID es obligatorio" });
+            if (request.DeviceID.Trim().Length > 50)
+                return BadRequest(new { message = "El deviceID no puede superar 50 caracteres" });
+            if (request.Latitud < -90 || request.Latitud > 90 || request.Longitud < -180 || request.Longitud > 180)
+                return BadRequest(new { message = "Coordenadas fuera de rango" });
+            if (request.Latitud == 0 && request.Longitud == 0)
+                return BadRequest(new { message = "Coordenadas inválidas (0,0)" });
+
+            var deviceID = request.DeviceID.Trim();
+            var posicion = new PosicionEnVivo
+            {
+                Clave = deviceID,
+                DeviceID = deviceID,
+                Conductor = string.IsNullOrWhiteSpace(request.Conductor) ? null : request.Conductor.Trim(),
+                RutaId = request.RutaId,
+                ServicioId = request.ServicioId,
+                Latitud = request.Latitud,
+                Longitud = request.Longitud,
+                Rumbo = request.Rumbo.HasValue ? ((request.Rumbo.Value % 360) + 360) % 360 : 0,
+                Velocidad = request.Velocidad,
+                Fecha = DateTime.UtcNow
+            };
+
+            _posiciones.Guardar(AccountId, posicion);
+
+            try
+            {
+                await _hub.Clients.Group(AccountId).SendAsync("PosicionActualizada", posicion);
+            }
+            catch (Exception ex)
+            {
+                // Un fallo al notificar a la web no debe hacer fallar el envío del celular.
+                return Ok(new { recibida = true, notificada = false, error = ex.Message });
+            }
+
+            return Ok(new { recibida = true, notificada = true });
+        }
+
+        // Última posición de cada unidad que reportó en los últimos 2 minutos (la web la usa una sola vez
+        // al abrirse; luego recibe todo por SignalR). Viene de memoria, no de la base de datos.
+        [HttpGet("posiciones")]
+        public ActionResult<IEnumerable<PosicionEnVivo>> GetPosiciones()
+        {
+            return Ok(_posiciones.Vigentes(AccountId));
         }
 
         // =====================================================================

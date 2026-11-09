@@ -93,6 +93,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<VelsatBackendAPI.Hubs.PosicionesEnVivoStore>();
 
 builder.Services.AddDistributedMemoryCache();
 
@@ -129,5 +130,6 @@ app.UseSession();
 
 app.MapControllers();
 app.MapHub<TurismoMensajesHub>("/turismoHub/{usuario}");
+app.MapHub<VelsatBackendAPI.Hubs.ServiciosRutasHub>("/serviciosRutasHub/{usuario}");
 
 app.Run();
