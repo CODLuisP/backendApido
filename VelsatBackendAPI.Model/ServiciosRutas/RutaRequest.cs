@@ -13,6 +13,13 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
 
         // Grupo al que pertenece la ruta (ej. "Grupo A"). Opcional, máx. 50 caracteres.
         public string? Grupo { get; set; }
+
+        // "IDA" o "REGRESO". Null: al crear = IDA, al editar = conserva el actual.
+        public string? Sentido { get; set; }
+
+        // Ruta del sentido contrario. Debe ser de la misma cuenta y de sentido distinto. Se enlaza en
+        // las dos rutas. Al EDITAR, null = sin pareja (si tenía una, se desenlaza).
+        public long? RutaParejaId { get; set; }
         public string? Descripcion { get; set; }
         public decimal? DistanciaKm { get; set; }
 

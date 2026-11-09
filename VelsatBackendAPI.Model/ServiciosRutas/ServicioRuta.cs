@@ -15,6 +15,7 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         // Solo lectura: se completan con un JOIN al listar / consultar.
         public string? RutaCodigo { get; set; }
         public string? RutaNombre { get; set; }
+        public string? RutaSentido { get; set; }   // "IDA" | "REGRESO"
 
         // Misma convención que Turismo: fecha "dd/MM/yyyy" y hora "HH:mm" en el JSON.
         [JsonConverter(typeof(FechaDdMmYyyyJsonConverter))]

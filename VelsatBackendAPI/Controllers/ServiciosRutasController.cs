@@ -90,6 +90,10 @@ namespace VelsatBackendAPI.Controllers
                 if (await _uow.ServiciosRutasRepository.ExisteCodigoRuta(AccountId!, request.Codigo!, null))
                     return Conflict(new { message = $"Ya existe una ruta con el código '{request.Codigo}'" });
 
+                var errorPareja = await ValidarPareja(null, request.Sentido ?? "IDA", request.RutaParejaId);
+                if (errorPareja != null)
+                    return BadRequest(new { message = errorPareja });
+
                 var id = await _uow.ServiciosRutasRepository.InsertRuta(request);
                 _uow.SaveChanges();
                 return Ok(new { id });
@@ -118,6 +122,10 @@ namespace VelsatBackendAPI.Controllers
 
                 if (await _uow.ServiciosRutasRepository.ExisteCodigoRuta(AccountId!, request.Codigo!, id))
                     return Conflict(new { message = $"Ya existe otra ruta con el código '{request.Codigo}'" });
+
+                var errorPareja = await ValidarPareja(id, request.Sentido ?? existente.Sentido, request.RutaParejaId);
+                if (errorPareja != null)
+                    return BadRequest(new { message = errorPareja });
 
                 var idsRuta = existente.Paraderos!.Select(p => p.Id).ToHashSet();
                 var ajenos = request.Paraderos
@@ -479,6 +487,20 @@ namespace VelsatBackendAPI.Controllers
         // Validaciones
         // =====================================================================
 
+        // La pareja debe existir en la misma cuenta, no ser la propia ruta y tener el sentido contrario.
+        private async Task<string?> ValidarPareja(long? rutaId, string sentido, long? parejaId)
+        {
+            if (!parejaId.HasValue) return null;
+            if (rutaId.HasValue && parejaId.Value == rutaId.Value)
+                return "Una ruta no puede ser su propia pareja";
+
+            var pareja = await _uow.ServiciosRutasRepository.GetRutaById(parejaId.Value, AccountId!);
+            if (pareja == null) return "La ruta pareja no existe";
+            if (string.Equals(pareja.Sentido, sentido, StringComparison.OrdinalIgnoreCase))
+                return $"La ruta pareja debe ser de sentido {(sentido == "IDA" ? "REGRESO" : "IDA")}";
+            return null;
+        }
+
         private static string? ValidarRuta(RutaRequest r)
         {
             if (string.IsNullOrWhiteSpace(r.AccountID)) return "No se pudo determinar la cuenta";
@@ -508,6 +530,16 @@ namespace VelsatBackendAPI.Controllers
             r.Codigo = r.Codigo.Trim();
             r.Nombre = r.Nombre.Trim();
             r.Grupo = string.IsNullOrWhiteSpace(r.Grupo) ? null : r.Grupo.Trim();
+
+            if (string.IsNullOrWhiteSpace(r.Sentido))
+                r.Sentido = null;
+            else
+            {
+                r.Sentido = r.Sentido.Trim().ToUpperInvariant();
+                if (r.Sentido != "IDA" && r.Sentido != "REGRESO")
+                    return "El sentido debe ser IDA o REGRESO";
+            }
+            if (r.RutaParejaId.HasValue && r.RutaParejaId.Value <= 0) r.RutaParejaId = null;
 
             for (int i = 0; i < r.Paraderos.Count; i++)
             {

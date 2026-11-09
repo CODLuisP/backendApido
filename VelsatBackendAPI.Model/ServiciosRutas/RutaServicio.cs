@@ -11,6 +11,15 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public string Codigo { get; set; } = string.Empty;
         public string Nombre { get; set; } = string.Empty;
         public string? Grupo { get; set; }
+
+        // "IDA" o "REGRESO". Cada sentido es una ruta propia.
+        public string Sentido { get; set; } = "IDA";
+
+        // Ruta del sentido contrario (null si no tiene). Se guarda en las dos rutas.
+        public long? RutaParejaId { get; set; }
+        public string? RutaParejaCodigo { get; set; }
+        public string? RutaParejaNombre { get; set; }
+
         public string? Descripcion { get; set; }
         public decimal? DistanciaKm { get; set; }
         public bool Activo { get; set; }
