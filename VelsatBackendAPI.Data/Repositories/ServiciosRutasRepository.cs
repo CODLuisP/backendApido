@@ -387,8 +387,13 @@ namespace VelsatBackendAPI.Data.Repositories
 
         private static string? Hm(DateTime? fecha) => fecha?.ToString("HH:mm");
 
+        private static string? Hms(DateTime? fecha) => fecha?.ToString("HH:mm:ss");
+
         private static int? Minutos(DateTime? desde, DateTime? hasta) =>
             desde.HasValue && hasta.HasValue ? (int)Math.Round((hasta.Value - desde.Value).TotalMinutes) : null;
+
+        private static int? Segundos(DateTime? desde, DateTime? hasta) =>
+            desde.HasValue && hasta.HasValue ? (int)Math.Round((hasta.Value - desde.Value).TotalSeconds) : null;
 
         public async Task<List<ReporteServicioItem>> GetReporteServicios(
             string accountID, DateTime? desde, DateTime? hasta, string? estado, string? deviceID,
@@ -450,8 +455,8 @@ namespace VelsatBackendAPI.Data.Repositories
                     Estado = f.Estado,
                     FechaSalida = f.FechaSalida,
                     HoraSalida = f.HoraSalida,
-                    InicioReal = Hm(f.InicioReal),
-                    FinReal = Hm(f.FinReal),
+                    InicioReal = Hms(f.InicioReal),
+                    FinReal = Hms(f.FinReal),
                     DuracionEstimadaMin = filasParaderos.Count > 0
                         ? Minutos(filasParaderos[0].HoraEsperada, filasParaderos[ultimo].HoraEsperada) : null,
                     DuracionRealMin = Minutos(f.InicioReal, f.FinReal),
@@ -472,11 +477,12 @@ namespace VelsatBackendAPI.Data.Repositories
                         Nombre = p.Nombre,
                         Tipo = p.Tipo ?? (i == 0 ? "ORIGEN" : i == ultimo ? "DESTINO" : "INTERMEDIO"),
                         RadioMetros = p.RadioMetros ?? 0,
-                        HoraEsperada = Hm(p.HoraEsperada),
-                        LlegadaReal = Hm(p.HoraLlegadaReal),
-                        SalidaReal = Hm(p.HoraSalidaReal),
-                        PermanenciaMin = Minutos(p.HoraLlegadaReal, p.HoraSalidaReal),
+                        HoraEsperada = Hms(p.HoraEsperada),
+                        LlegadaReal = Hms(p.HoraLlegadaReal),
+                        SalidaReal = Hms(p.HoraSalidaReal),
+                        PermanenciaSeg = Segundos(p.HoraLlegadaReal, p.HoraSalidaReal),
                         DiferenciaMin = p.DiferenciaMin ?? Minutos(p.HoraEsperada, p.HoraLlegadaReal),
+                        DiferenciaSeg = Segundos(p.HoraEsperada, p.HoraLlegadaReal),
                         Estado = p.Estado
                     }).ToList()
                 };

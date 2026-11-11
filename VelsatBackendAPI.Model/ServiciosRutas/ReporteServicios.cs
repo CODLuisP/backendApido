@@ -28,8 +28,10 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
 
         // % de paradas a tiempo sobre las completadas (0 si no hay ninguna completada).
         public int PorcentajePuntualidad { get; set; }
-        public int PermanenciaTotalMin { get; set; }
-        public decimal PermanenciaPromedioMin { get; set; }
+        public int PermanenciaTotalSeg { get; set; }
+
+        // Promedio por paradero con estancia medida (llegada y salida registradas).
+        public int PermanenciaPromedioSeg { get; set; }
     }
 
     public class ReporteRuta
@@ -49,7 +51,7 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public int Adelantadas { get; set; }
         public int Retrasadas { get; set; }
         public int Omitidas { get; set; }
-        public int PermanenciaTotalMin { get; set; }
+        public int PermanenciaTotalSeg { get; set; }
     }
 
     public class ReporteServicioItem
@@ -63,7 +65,7 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         [JsonConverter(typeof(HoraHmJsonConverter))]
         public TimeSpan? HoraSalida { get; set; }
 
-        // "HH:mm" (null si el servicio no empezó / no terminó).
+        // "HH:mm:ss" (null si el servicio no empezó / no terminó).
         public string? InicioReal { get; set; }
         public string? FinReal { get; set; }
 
@@ -91,15 +93,18 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public string Tipo { get; set; } = "INTERMEDIO";   // ORIGEN | INTERMEDIO | DESTINO
         public int RadioMetros { get; set; }
 
+        // Todas en "HH:mm:ss".
         public string? HoraEsperada { get; set; }
         public string? LlegadaReal { get; set; }
         public string? SalidaReal { get; set; }
 
-        // Minutos entre la llegada y la salida (null si falta alguna).
-        public int? PermanenciaMin { get; set; }
+        // Segundos entre la llegada y la salida (null si falta alguna).
+        public int? PermanenciaSeg { get; set; }
 
-        // Positivo = retraso, negativo = adelanto.
+        // Positivo = retraso, negativo = adelanto. Minutos tal como los guarda la base (con ellos se decide
+        // el estado) y segundos exactos entre la hora esperada y la llegada.
         public int? DiferenciaMin { get; set; }
+        public int? DiferenciaSeg { get; set; }
 
         // PENDIENTE | A_TIEMPO | ADELANTADO | RETRASADO | OMITIDO
         public string Estado { get; set; } = "PENDIENTE";
@@ -127,13 +132,14 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
                     Adelantadas = s.Paraderos.Count(p => p.Estado == "ADELANTADO"),
                     Retrasadas = s.Paraderos.Count(p => p.Estado == "RETRASADO"),
                     Omitidas = s.Paraderos.Count(p => p.Estado == "OMITIDO"),
-                    PermanenciaTotalMin = s.Paraderos.Sum(p => p.PermanenciaMin ?? 0)
+                    PermanenciaTotalSeg = s.Paraderos.Sum(p => p.PermanenciaSeg ?? 0)
                 };
             }
 
             int completadas = servicios.Sum(s => s.Conteo.Completadas);
             int aTiempo = servicios.Sum(s => s.Conteo.ATiempo);
-            int permanencia = servicios.Sum(s => s.Conteo.PermanenciaTotalMin);
+            int permanencia = servicios.Sum(s => s.Conteo.PermanenciaTotalSeg);
+            int conEstancia = servicios.Sum(s => s.Paraderos.Count(p => p.PermanenciaSeg != null));
 
             return new ReporteResumen
             {
@@ -145,8 +151,8 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
                 Retrasadas = servicios.Sum(s => s.Conteo.Retrasadas),
                 Omitidas = servicios.Sum(s => s.Conteo.Omitidas),
                 PorcentajePuntualidad = completadas > 0 ? (int)Math.Round(100.0 * aTiempo / completadas) : 0,
-                PermanenciaTotalMin = permanencia,
-                PermanenciaPromedioMin = completadas > 0 ? Math.Round((decimal)permanencia / completadas, 1) : 0
+                PermanenciaTotalSeg = permanencia,
+                PermanenciaPromedioSeg = conEstancia > 0 ? (int)Math.Round((double)permanencia / conEstancia) : 0
             };
         }
     }
