@@ -25,9 +25,7 @@ namespace VelsatBackendAPI.Data.Repositories
         }
 
         private const string RutaColumns = @"
-            id, account_id AS AccountID, codigo, nombre, grupo, sentido, ruta_pareja_id AS RutaParejaId,
-            (SELECT rp.codigo FROM ruta rp WHERE rp.id = ruta.ruta_pareja_id) AS RutaParejaCodigo,
-            (SELECT rp.nombre FROM ruta rp WHERE rp.id = ruta.ruta_pareja_id) AS RutaParejaNombre,
+            id, account_id AS AccountID, codigo, nombre, grupo, sentido,
             descripcion, distancia_km AS DistanciaKm,
             activo, created_at AS CreatedAt, updated_at AS UpdatedAt";
 
@@ -122,8 +120,8 @@ namespace VelsatBackendAPI.Data.Repositories
         public async Task<long> InsertRuta(RutaRequest request)
         {
             const string sql = @"
-                INSERT INTO ruta (account_id, codigo, nombre, grupo, sentido, ruta_pareja_id, descripcion, distancia_km, trazado)
-                VALUES (@AccountID, @Codigo, @Nombre, @Grupo, @Sentido, @RutaParejaId, @Descripcion, @DistanciaKm, @Trazado);
+                INSERT INTO ruta (account_id, codigo, nombre, grupo, sentido, descripcion, distancia_km, trazado)
+                VALUES (@AccountID, @Codigo, @Nombre, @Grupo, @Sentido, @Descripcion, @DistanciaKm, @Trazado);
                 SELECT LAST_INSERT_ID();";
 
             long rutaId = await _connection.QuerySingleAsync<long>(sql, new
@@ -133,7 +131,6 @@ namespace VelsatBackendAPI.Data.Repositories
                 request.Nombre,
                 request.Grupo,
                 Sentido = request.Sentido ?? "IDA",
-                request.RutaParejaId,
                 request.Descripcion,
                 request.DistanciaKm,
                 Trazado = SerializarTrazado(request.Trazado)
@@ -142,29 +139,7 @@ namespace VelsatBackendAPI.Data.Repositories
             for (int i = 0; i < request.Paraderos.Count; i++)
                 await InsertParadero(rutaId, request.Paraderos[i], i, request.Paraderos.Count);
 
-            await SincronizarPareja(rutaId, request.AccountID!, request.RutaParejaId);
             return rutaId;
-        }
-
-        // La pareja se guarda en las dos rutas (A -> B y B -> A). Primero se sueltan los enlaces viejos
-        // de ambas y luego se enlaza la nueva pareja, así una ruta nunca queda apuntada por dos.
-        private async Task SincronizarPareja(long rutaId, string accountID, long? parejaId)
-        {
-            await _connection.ExecuteAsync(@"
-                UPDATE ruta SET ruta_pareja_id = NULL
-                WHERE account_id = @AccountID AND ruta_pareja_id = @RutaId AND (@ParejaId IS NULL OR id <> @ParejaId)",
-                new { AccountID = accountID, RutaId = rutaId, ParejaId = parejaId }, _transaction);
-
-            if (!parejaId.HasValue) return;
-
-            await _connection.ExecuteAsync(@"
-                UPDATE ruta SET ruta_pareja_id = NULL
-                WHERE account_id = @AccountID AND ruta_pareja_id = @ParejaId AND id <> @RutaId",
-                new { AccountID = accountID, RutaId = rutaId, ParejaId = parejaId }, _transaction);
-
-            await _connection.ExecuteAsync(@"
-                UPDATE ruta SET ruta_pareja_id = @RutaId WHERE id = @ParejaId AND account_id = @AccountID",
-                new { AccountID = accountID, RutaId = rutaId, ParejaId = parejaId }, _transaction);
         }
 
         // Reemplaza los datos de la ruta y su lista de paraderos. Los paraderos que ya no vienen en la
@@ -175,7 +150,7 @@ namespace VelsatBackendAPI.Data.Repositories
             const string sqlRuta = @"
                 UPDATE ruta
                 SET codigo = @Codigo, nombre = @Nombre, grupo = @Grupo, descripcion = @Descripcion, distancia_km = @DistanciaKm,
-                    sentido = COALESCE(@Sentido, sentido), ruta_pareja_id = @RutaParejaId,
+                    sentido = COALESCE(@Sentido, sentido),
                     trazado = CASE WHEN @ActualizarTrazado = 1 THEN @Trazado ELSE trazado END
                 WHERE id = @Id AND account_id = @AccountID";
 
@@ -187,15 +162,12 @@ namespace VelsatBackendAPI.Data.Repositories
                 request.Nombre,
                 request.Grupo,
                 request.Sentido,
-                request.RutaParejaId,
                 request.Descripcion,
                 request.DistanciaKm,
                 // Sin trazado en la solicitud (null) se conserva el que ya tenía la ruta.
                 ActualizarTrazado = request.Trazado != null ? 1 : 0,
                 Trazado = SerializarTrazado(request.Trazado)
             }, _transaction);
-
-            await SincronizarPareja(id, request.AccountID!, request.RutaParejaId);
 
             // "Estaciona" todos los paraderos con orden negativo y tipo INTERMEDIO para que reordenar
             // o cambiar origen/destino no choque con los índices únicos (ruta_id+orden, origen, destino).

@@ -36,7 +36,7 @@ namespace VelsatBackendAPI.Hubs
         private readonly ConcurrentDictionary<string, PosicionEnVivo> _ultimas = new();
 
         // Una posición más vieja que esto se considera que la unidad dejó de reportar.
-        public static readonly TimeSpan Vigencia = TimeSpan.FromMinutes(2);
+        public static readonly TimeSpan Vigencia = TimeSpan.FromMinutes(10);
 
         private static string Clave(string cuenta, string deviceID) =>
             $"{cuenta.ToLowerInvariant()}|{deviceID.ToLowerInvariant()}";
