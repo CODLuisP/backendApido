@@ -41,6 +41,8 @@ namespace VelsatBackendAPI.Controllers
         [FromRoute(Name = "accountId")]
         public string AccountId { get; set; } = string.Empty;
 
+        private const int MaxDiasReporte = 31;
+
         private static readonly string[] EstadosServicio = { "PROGRAMADO", "EN_CURSO", "FINALIZADO", "CANCELADO" };
 
         // Transiciones permitidas: estado actual -> estados a los que puede pasar.
@@ -214,6 +216,50 @@ namespace VelsatBackendAPI.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error al obtener los servicios", error = ex.Message });
+            }
+        }
+
+        // Reporte de cumplimiento por servicio: cada servicio con sus paraderos (hora esperada, llegada y
+        // salida reales, estancia, diferencia y estado) y los totales del rango, todo en una llamada.
+        // desde / hasta (dd/MM/yyyy) obligatorios, máximo 31 días. Filtros opcionales: estado, deviceID, conductorBrevete.
+        [HttpGet("reportes/servicios")]
+        public async Task<ActionResult<ReporteServiciosResponse>> GetReporteServicios(
+            [FromQuery] string? desde, [FromQuery] string? hasta,
+            [FromQuery] string? estado, [FromQuery] string? deviceID, [FromQuery] string? conductorBrevete)
+        {
+            try
+            {
+                if (!TryParseFecha(desde, out var fechaDesde) || fechaDesde == null)
+                    return BadRequest(new { message = "El parámetro 'desde' es obligatorio y debe tener formato dd/MM/yyyy" });
+                if (!TryParseFecha(hasta, out var fechaHasta) || fechaHasta == null)
+                    return BadRequest(new { message = "El parámetro 'hasta' es obligatorio y debe tener formato dd/MM/yyyy" });
+                if (fechaHasta < fechaDesde)
+                    return BadRequest(new { message = "'hasta' no puede ser anterior a 'desde'" });
+                if ((fechaHasta.Value - fechaDesde.Value).TotalDays > MaxDiasReporte - 1)
+                    return BadRequest(new { message = $"El rango no puede superar {MaxDiasReporte} días" });
+
+                string? estadoNormalizado = string.IsNullOrWhiteSpace(estado) ? null : estado.Trim().ToUpperInvariant();
+                if (estadoNormalizado != null && !EstadosServicio.Contains(estadoNormalizado))
+                    return BadRequest(new { message = $"Estado inválido. Valores: {string.Join(", ", EstadosServicio)}" });
+
+                var servicios = await _readOnlyUow.ServiciosRutasRepository.GetReporteServicios(
+                    AccountId!, fechaDesde, fechaHasta, estadoNormalizado,
+                    string.IsNullOrWhiteSpace(deviceID) ? null : deviceID.Trim(),
+                    string.IsNullOrWhiteSpace(conductorBrevete) ? null : conductorBrevete.Trim());
+
+                var resumen = ReporteServiciosCalculos.Calcular(servicios);
+                int tolerancia = await _readOnlyUow.ServiciosRutasRepository.GetTolerancia(AccountId!);
+
+                return Ok(new ReporteServiciosResponse
+                {
+                    ToleranciaMin = tolerancia,
+                    Resumen = resumen,
+                    Servicios = servicios
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al generar el reporte de servicios", error = ex.Message });
             }
         }
 

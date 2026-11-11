@@ -350,6 +350,139 @@ namespace VelsatBackendAPI.Data.Repositories
             return servicio;
         }
 
+        private class ReporteServicioFila
+        {
+            public long Id { get; set; }
+            public string DeviceID { get; set; } = string.Empty;
+            public long RutaId { get; set; }
+            public string? RutaCodigo { get; set; }
+            public string? RutaNombre { get; set; }
+            public string? RutaGrupo { get; set; }
+            public string? RutaSentido { get; set; }
+            public DateTime? FechaSalida { get; set; }
+            public TimeSpan? HoraSalida { get; set; }
+            public string ConductorNombre { get; set; } = string.Empty;
+            public string ConductorBrevete { get; set; } = string.Empty;
+            public string ConductorCelular { get; set; } = string.Empty;
+            public string Estado { get; set; } = "PROGRAMADO";
+            public DateTime? InicioReal { get; set; }
+            public DateTime? FinReal { get; set; }
+            public decimal? DistanciaRealKm { get; set; }
+            public string? Observaciones { get; set; }
+        }
+
+        private class ReporteParaderoFila
+        {
+            public long ServicioId { get; set; }
+            public int Orden { get; set; }
+            public string Nombre { get; set; } = string.Empty;
+            public string? Tipo { get; set; }
+            public int? RadioMetros { get; set; }
+            public DateTime? HoraEsperada { get; set; }
+            public DateTime? HoraLlegadaReal { get; set; }
+            public DateTime? HoraSalidaReal { get; set; }
+            public int? DiferenciaMin { get; set; }
+            public string Estado { get; set; } = "PENDIENTE";
+        }
+
+        private static string? Hm(DateTime? fecha) => fecha?.ToString("HH:mm");
+
+        private static int? Minutos(DateTime? desde, DateTime? hasta) =>
+            desde.HasValue && hasta.HasValue ? (int)Math.Round((hasta.Value - desde.Value).TotalMinutes) : null;
+
+        public async Task<List<ReporteServicioItem>> GetReporteServicios(
+            string accountID, DateTime? desde, DateTime? hasta, string? estado, string? deviceID,
+            string? conductorBrevete)
+        {
+            const string sqlServicios = @"
+                SELECT s.id, s.device_id AS DeviceID, s.ruta_id AS RutaId,
+                       r.codigo AS RutaCodigo, r.nombre AS RutaNombre, r.grupo AS RutaGrupo, r.sentido AS RutaSentido,
+                       s.fecha_salida AS FechaSalida, s.hora_salida AS HoraSalida,
+                       s.conductor_nombre AS ConductorNombre, s.conductor_brevete AS ConductorBrevete,
+                       s.conductor_celular AS ConductorCelular, s.estado,
+                       s.inicio_real AS InicioReal, s.fin_real AS FinReal,
+                       s.distancia_real_km AS DistanciaRealKm, s.observaciones
+                FROM servicio_ruta s
+                JOIN ruta r ON r.id = s.ruta_id
+                WHERE s.account_id = @AccountID
+                  AND (@Desde IS NULL OR s.fecha_salida >= @Desde)
+                  AND (@Hasta IS NULL OR s.fecha_salida <= @Hasta)
+                  AND (@Estado IS NULL OR s.estado = @Estado)
+                  AND (@DeviceID IS NULL OR s.device_id = @DeviceID)
+                  AND (@ConductorBrevete IS NULL OR s.conductor_brevete = @ConductorBrevete)
+                ORDER BY s.fecha_salida DESC, s.hora_salida DESC";
+
+            var filas = (await _connection.QueryAsync<ReporteServicioFila>(
+                sqlServicios,
+                new
+                {
+                    AccountID = accountID, Desde = desde, Hasta = hasta, Estado = estado,
+                    DeviceID = deviceID, ConductorBrevete = conductorBrevete
+                },
+                _transaction)).ToList();
+
+            if (filas.Count == 0) return new List<ReporteServicioItem>();
+
+            const string sqlParaderos = @"
+                SELECT sp.servicio_id AS ServicioId, sp.orden, sp.nombre,
+                       rp.tipo AS Tipo, rp.radio_metros AS RadioMetros,
+                       sp.hora_esperada AS HoraEsperada, sp.hora_llegada_real AS HoraLlegadaReal,
+                       sp.hora_salida_real AS HoraSalidaReal, sp.diferencia_min AS DiferenciaMin, sp.estado
+                FROM servicio_ruta_paradero sp
+                LEFT JOIN ruta_paradero rp ON rp.id = sp.ruta_paradero_id
+                WHERE sp.servicio_id IN @Ids
+                ORDER BY sp.servicio_id, sp.orden";
+
+            var paraderosPorServicio = (await _connection.QueryAsync<ReporteParaderoFila>(
+                    sqlParaderos, new { Ids = filas.Select(f => f.Id).ToArray() }, _transaction))
+                .GroupBy(p => p.ServicioId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            return filas.Select(f =>
+            {
+                var filasParaderos = paraderosPorServicio.TryGetValue(f.Id, out var lista)
+                    ? lista : new List<ReporteParaderoFila>();
+                int ultimo = filasParaderos.Count - 1;
+
+                return new ReporteServicioItem
+                {
+                    Id = f.Id,
+                    Estado = f.Estado,
+                    FechaSalida = f.FechaSalida,
+                    HoraSalida = f.HoraSalida,
+                    InicioReal = Hm(f.InicioReal),
+                    FinReal = Hm(f.FinReal),
+                    DuracionEstimadaMin = filasParaderos.Count > 0
+                        ? Minutos(filasParaderos[0].HoraEsperada, filasParaderos[ultimo].HoraEsperada) : null,
+                    DuracionRealMin = Minutos(f.InicioReal, f.FinReal),
+                    DistanciaRealKm = f.DistanciaRealKm,
+                    Observaciones = f.Observaciones,
+                    DeviceID = f.DeviceID,
+                    ConductorNombre = f.ConductorNombre,
+                    ConductorBrevete = f.ConductorBrevete,
+                    ConductorCelular = f.ConductorCelular,
+                    Ruta = new ReporteRuta
+                    {
+                        Id = f.RutaId, Codigo = f.RutaCodigo, Nombre = f.RutaNombre,
+                        Grupo = f.RutaGrupo, Sentido = f.RutaSentido
+                    },
+                    Paraderos = filasParaderos.Select((p, i) => new ReporteParaderoItem
+                    {
+                        Orden = p.Orden,
+                        Nombre = p.Nombre,
+                        Tipo = p.Tipo ?? (i == 0 ? "ORIGEN" : i == ultimo ? "DESTINO" : "INTERMEDIO"),
+                        RadioMetros = p.RadioMetros ?? 0,
+                        HoraEsperada = Hm(p.HoraEsperada),
+                        LlegadaReal = Hm(p.HoraLlegadaReal),
+                        SalidaReal = Hm(p.HoraSalidaReal),
+                        PermanenciaMin = Minutos(p.HoraLlegadaReal, p.HoraSalidaReal),
+                        DiferenciaMin = p.DiferenciaMin ?? Minutos(p.HoraEsperada, p.HoraLlegadaReal),
+                        Estado = p.Estado
+                    }).ToList()
+                };
+            }).ToList();
+        }
+
         // Devuelve 0 si la ruta no existe, es de otra cuenta o está inactiva.
         public Task<int> ContarParaderosDeRutaActiva(long rutaId, string accountID)
         {
