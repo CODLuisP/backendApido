@@ -2872,7 +2872,8 @@ namespace VelsatBackendAPI.Data.Repositories
                   fecvalidbrevete as FecValidBrevete, 
                   estbrevete as EstBrevete, 
                   sexo as Sexo, 
-                  habilitado as Habilitado
+                  habilitado as Habilitado,
+                  ruta as Ruta
            FROM taxi 
            WHERE codusuario = @Codusuario AND estado = 'A' 
            ORDER BY habilitado DESC, apellidos";
@@ -3103,7 +3104,8 @@ namespace VelsatBackendAPI.Data.Repositories
                     turno = @Turno,
                     horainicio = @Horainicio,
                     tipo = @Tipo,
-                    unidadasig = @Unidadasig
+                    unidadasig = @Unidadasig,
+                    ruta = COALESCE(@Ruta, ruta)
                 WHERE codtaxi = @Codigo;";
 
             var parameters = new
@@ -3125,6 +3127,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 Horainicio = conductor.Horainicio,
                 Tipo = conductor.Tipo,
                 Unidadasig = conductor.Unidadasig,
+                Ruta = conductor.Ruta,
                 Codigo = conductor.Codigo
             };
 

@@ -30,5 +30,7 @@ namespace VelsatBackendAPI.Model.MovilProgramacion
         public string? Sexo { get; set; }
         public string? UnidadActual { get; set; }
         public string? Habilitado { get; set; }
+        // '1' = conductor de Servicios Rutas (columna taxi.ruta, varchar(1)).
+        public string? Ruta { get; set; }
     }
 }
