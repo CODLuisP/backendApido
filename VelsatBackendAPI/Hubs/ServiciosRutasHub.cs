@@ -13,6 +13,21 @@ namespace VelsatBackendAPI.Hubs
     // une a su propio grupo (el {usuario} de la URL), igual que TurismoMensajesHub.
     public class ServiciosRutasHub : Hub
     {
+        private const string ClaveCuenta = "cuenta";
+        private readonly PosicionesEnVivoStore _posiciones;
+
+        public ServiciosRutasHub(PosicionesEnVivoStore posiciones)
+        {
+            _posiciones = posiciones;
+        }
+
+        // Grupo de una ruta: lo usa el controlador para enviar solo a quienes miran esa ruta.
+        public static string GrupoRuta(string cuenta, long rutaId) =>
+            $"{cuenta.ToLowerInvariant()}|ruta|{rutaId}";
+
+        // Web de despacho: /serviciosRutasHub/{cuenta} -> entra al grupo de la cuenta y recibe TODAS las unidades.
+        // App del pasajero: /serviciosRutasHub/{cuenta}?pasajero=1 -> NO entra al grupo de la cuenta; solo
+        // recibe las unidades de las rutas a las que se une con UnirseARuta.
         public override async Task OnConnectedAsync()
         {
             var httpContext = Context.GetHttpContext();
@@ -20,11 +35,38 @@ namespace VelsatBackendAPI.Hubs
                 && httpContext.Request.RouteValues.TryGetValue("usuario", out var valor)
                 && !string.IsNullOrWhiteSpace(valor?.ToString()))
             {
-                await Groups.AddToGroupAsync(Context.ConnectionId, valor!.ToString()!);
+                var cuenta = valor!.ToString()!;
+                Context.Items[ClaveCuenta] = cuenta;
+
+                var esPasajero = httpContext.Request.Query["pasajero"] == "1";
+                if (!esPasajero)
+                    await Groups.AddToGroupAsync(Context.ConnectionId, cuenta);
             }
 
             await base.OnConnectedAsync();
         }
+
+        // El pasajero elige una ruta: empieza a recibir "PosicionActualizada" solo de esa ruta y recibe de
+        // inmediato las unidades que ya están en marcha en ella.
+        public async Task<IReadOnlyList<PosicionEnVivo>> UnirseARuta(long rutaId)
+        {
+            var cuenta = CuentaActual();
+            if (cuenta == null || rutaId <= 0) return Array.Empty<PosicionEnVivo>();
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, GrupoRuta(cuenta, rutaId));
+            return _posiciones.Vigentes(cuenta).Where(p => p.RutaId == rutaId).ToList();
+        }
+
+        // El pasajero sale de la ruta (o elige otra).
+        public async Task SalirDeRuta(long rutaId)
+        {
+            var cuenta = CuentaActual();
+            if (cuenta == null) return;
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, GrupoRuta(cuenta, rutaId));
+        }
+
+        private string? CuentaActual() =>
+            Context.Items.TryGetValue(ClaveCuenta, out var c) ? c as string : null;
     }
 
     // Última posición conocida de cada unidad, SOLO en memoria (no toca la base de datos). Sirve para que

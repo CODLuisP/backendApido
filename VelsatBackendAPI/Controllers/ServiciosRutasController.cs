@@ -609,6 +609,11 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 await _hub.Clients.Group(AccountId).SendAsync("PosicionActualizada", posicion);
+
+                // Pasajeros que están mirando esta ruta (ver ServiciosRutasHub.UnirseARuta).
+                if (posicion.RutaId.HasValue)
+                    await _hub.Clients.Group(ServiciosRutasHub.GrupoRuta(AccountId, posicion.RutaId.Value))
+                        .SendAsync("PosicionActualizada", posicion);
             }
             catch (Exception ex)
             {
@@ -622,9 +627,12 @@ namespace VelsatBackendAPI.Controllers
         // Última posición de cada unidad que reportó en los últimos 10 minutos (la web la usa una sola vez
         // al abrirse; luego recibe todo por SignalR). Viene de memoria, no de la base de datos.
         [HttpGet("posiciones")]
-        public ActionResult<IEnumerable<PosicionEnVivo>> GetPosiciones()
+        public ActionResult<IEnumerable<PosicionEnVivo>> GetPosiciones([FromQuery] long? rutaId = null)
         {
-            return Ok(_posiciones.Vigentes(AccountId));
+            var vigentes = _posiciones.Vigentes(AccountId);
+            if (rutaId.HasValue)
+                vigentes = vigentes.Where(p => p.RutaId == rutaId.Value).ToList();
+            return Ok(vigentes);
         }
 
         // =====================================================================
