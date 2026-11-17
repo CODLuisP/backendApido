@@ -572,6 +572,152 @@ namespace VelsatBackendAPI.Controllers
         }
 
         // =====================================================================
+        // PLANTILLAS (servicios automáticos)
+        // El backend crea cada día los servicios de las plantillas completas
+        // (ver ServiciosRutasAutomaticosService). Aquí se administran.
+        // =====================================================================
+
+        [HttpGet("plantillas")]
+        public async Task<ActionResult<IEnumerable<ServicioPlantilla>>> GetPlantillas()
+        {
+            try
+            {
+                var result = await _readOnlyUow.ServiciosRutasRepository.GetPlantillas(AccountId!, soloActivas: false);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener las plantillas", error = ex.Message });
+            }
+        }
+
+        [HttpPost("plantillas")]
+        public async Task<ActionResult> CrearPlantilla([FromBody] ServicioPlantilla plantilla)
+        {
+            try
+            {
+                plantilla.AccountID = AccountId!;
+                var error = await ValidarPlantilla(plantilla);
+                if (error != null)
+                    return error;
+
+                var id = await _uow.ServiciosRutasRepository.InsertPlantilla(plantilla);
+                _uow.SaveChanges();
+                return Ok(new { id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al crear la plantilla", error = ex.Message });
+            }
+        }
+
+        [HttpPut("plantillas/{id:long}")]
+        public async Task<ActionResult> ActualizarPlantilla(long id, [FromBody] ServicioPlantilla plantilla)
+        {
+            try
+            {
+                var existente = await _uow.ServiciosRutasRepository.GetPlantillaById(id, AccountId!);
+                if (existente == null)
+                    return NotFound(new { message = "Plantilla no encontrada" });
+
+                plantilla.Id = id;
+                plantilla.AccountID = AccountId!;
+                var error = await ValidarPlantilla(plantilla);
+                if (error != null)
+                    return error;
+
+                await _uow.ServiciosRutasRepository.UpdatePlantilla(plantilla);
+                _uow.SaveChanges();
+                return Ok(new { message = "Plantilla actualizada" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar la plantilla", error = ex.Message });
+            }
+        }
+
+        // No toca los servicios ya generados: esos se administran como cualquier servicio.
+        [HttpDelete("plantillas/{id:long}")]
+        public async Task<ActionResult> EliminarPlantilla(long id)
+        {
+            try
+            {
+                int filas = await _uow.ServiciosRutasRepository.DeletePlantilla(id, AccountId!);
+                if (filas == 0)
+                    return NotFound(new { message = "Plantilla no encontrada" });
+
+                _uow.SaveChanges();
+                return Ok(new { message = "Plantilla eliminada" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al eliminar la plantilla", error = ex.Message });
+            }
+        }
+
+        // Cada cuántos minutos el backend revisa y crea los servicios automáticos.
+        [HttpGet("plantillas/configuracion")]
+        public async Task<ActionResult> GetIntervaloPlantillas()
+        {
+            try
+            {
+                int minutos = await _readOnlyUow.ServiciosRutasRepository.GetIntervaloGeneracion(AccountId!);
+                return Ok(new { intervaloMin = minutos });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener la configuración", error = ex.Message });
+            }
+        }
+
+        [HttpPut("plantillas/configuracion")]
+        public async Task<ActionResult> SetIntervaloPlantillas([FromBody] IntervaloPlantillasRequest request)
+        {
+            try
+            {
+                if (request.IntervaloMin < 5 || request.IntervaloMin > 1440)
+                    return BadRequest(new { message = "El intervalo debe estar entre 5 y 1440 minutos" });
+
+                await _uow.ServiciosRutasRepository.SetIntervaloGeneracion(AccountId!, request.IntervaloMin);
+                _uow.SaveChanges();
+                return Ok(new { intervaloMin = request.IntervaloMin });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al guardar la configuración", error = ex.Message });
+            }
+        }
+
+        // La plantilla puede guardarse incompleta (hora, unidad o conductor vacíos): simplemente no genera
+        // servicios hasta completarse. Lo que sí debe ser válido es lo que venga informado.
+        private async Task<ActionResult?> ValidarPlantilla(ServicioPlantilla p)
+        {
+            if (p.RutaId <= 0)
+                return BadRequest(new { message = "La ruta es obligatoria" });
+
+            p.Dias = (p.Dias ?? new List<int>()).Where(d => d >= 1 && d <= 7).Distinct().OrderBy(d => d).ToList();
+            if (p.Dias.Count == 0)
+                return BadRequest(new { message = "Selecciona al menos un día de la semana" });
+
+            if (p.HoraSalida.HasValue && (p.HoraSalida.Value < TimeSpan.Zero || p.HoraSalida.Value >= TimeSpan.FromDays(1)))
+                return BadRequest(new { message = "La hora de salida debe estar entre 00:00 y 23:59" });
+
+            static string? Limpio(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+            p.DeviceID = Limpio(p.DeviceID);
+            p.ConductorBrevete = Limpio(p.ConductorBrevete);
+
+            if (p.DeviceID != null &&
+                !await _uow.ConfiguracionRepository.DispositivoPerteneceACuentaAsync(p.AccountID, p.DeviceID))
+                return BadRequest(new { message = "La unidad no existe o no pertenece a tu cuenta" });
+
+            int paraderos = await _uow.ServiciosRutasRepository.ContarParaderosDeRutaActiva(p.RutaId, p.AccountID);
+            if (paraderos < 2)
+                return BadRequest(new { message = "La ruta no existe, está inactiva o no tiene paraderos suficientes" });
+
+            return null;
+        }
+
+        // =====================================================================
         // POSICIONES EN VIVO (no se guardan en la base de datos)
         // =====================================================================
 

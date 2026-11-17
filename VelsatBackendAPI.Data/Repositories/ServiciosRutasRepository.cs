@@ -660,5 +660,177 @@ namespace VelsatBackendAPI.Data.Repositories
                 ON DUPLICATE KEY UPDATE tolerancia_min = VALUES(tolerancia_min)";
             return _connection.ExecuteAsync(sql, new { AccountID = accountID, Tolerancia = toleranciaMin }, _transaction);
         }
+
+        // =====================================================================
+        // PLANTILLAS (servicios automáticos)
+        // =====================================================================
+
+        public const int IntervaloGeneracionPorDefectoMin = 50;
+
+        public async Task<int> GetIntervaloGeneracion(string accountID)
+        {
+            const string sql = "SELECT intervalo_generacion_min FROM servicio_ruta_config WHERE account_id = @AccountID";
+            int? valor = await _connection.QueryFirstOrDefaultAsync<int?>(sql, new { AccountID = accountID }, _transaction);
+            return valor ?? IntervaloGeneracionPorDefectoMin;
+        }
+
+        // Para el generador (global): el menor intervalo configurado entre las cuentas.
+        public async Task<int> GetIntervaloGeneracionMinimo()
+        {
+            int? valor = await _connection.QueryFirstOrDefaultAsync<int?>(
+                "SELECT MIN(intervalo_generacion_min) FROM servicio_ruta_config", transaction: _transaction);
+            return valor ?? IntervaloGeneracionPorDefectoMin;
+        }
+
+        public Task SetIntervaloGeneracion(string accountID, int minutos)
+        {
+            const string sql = @"
+                INSERT INTO servicio_ruta_config (account_id, intervalo_generacion_min)
+                VALUES (@AccountID, @Minutos)
+                ON DUPLICATE KEY UPDATE intervalo_generacion_min = VALUES(intervalo_generacion_min)";
+            return _connection.ExecuteAsync(sql, new { AccountID = accountID, Minutos = minutos }, _transaction);
+        }
+
+        // ¿Ya hay un servicio (manual o no, en cualquier estado) de esa ruta, fecha y hora? Solo omite ESA plantilla.
+        public async Task<bool> ExisteServicioDeRuta(string accountID, long rutaId, DateTime fecha, TimeSpan hora)
+        {
+            const string sql = @"
+                SELECT COUNT(*) FROM servicio_ruta
+                WHERE account_id = @AccountID AND ruta_id = @RutaId
+                  AND fecha_salida = @Fecha AND hora_salida = @Hora";
+            return await _connection.ExecuteScalarAsync<int>(sql,
+                new { AccountID = accountID, RutaId = rutaId, Fecha = fecha.Date, Hora = hora }, _transaction) > 0;
+        }
+
+        // Nombre y celular NO se guardan en la plantilla: se leen del conductor (tabla taxi) por brevete,
+        // así siempre salen actualizados. Si el brevete no corresponde a un conductor de rutas activo, quedan NULL.
+        // El COLLATE evita el error 1267 si taxi tiene otro collation que servicio_plantilla.
+        private const string PlantillaColumns = @"
+            p.id, p.account_id AS AccountID, p.ruta_id AS RutaId,
+            r.codigo AS RutaCodigo, r.nombre AS RutaNombre, r.grupo AS RutaGrupo, r.sentido AS RutaSentido,
+            p.hora_salida AS HoraSalida, p.device_id AS DeviceID,
+            p.conductor_brevete AS ConductorBrevete,
+            (SELECT t.apellidos FROM taxi t
+              WHERE t.codusuario = p.account_id COLLATE utf8mb4_unicode_ci
+                AND t.brevete = p.conductor_brevete COLLATE utf8mb4_unicode_ci
+                AND t.estado = 'A' AND t.ruta = '1' LIMIT 1) AS ConductorNombre,
+            (SELECT t.telefono FROM taxi t
+              WHERE t.codusuario = p.account_id COLLATE utf8mb4_unicode_ci
+                AND t.brevete = p.conductor_brevete COLLATE utf8mb4_unicode_ci
+                AND t.estado = 'A' AND t.ruta = '1' LIMIT 1) AS ConductorCelular,
+            p.dias AS DiasCsv, p.activo,
+            p.created_at AS CreatedAt, p.updated_at AS UpdatedAt";
+
+        private static ServicioPlantilla ConDias(ServicioPlantilla p)
+        {
+            p.Dias = ServicioPlantilla.ParsearDias(p.DiasCsv);
+            return p;
+        }
+
+        // accountID null = todas las cuentas (lo usa el generador automático).
+        public async Task<IEnumerable<ServicioPlantilla>> GetPlantillas(string? accountID, bool soloActivas)
+        {
+            string sql = $@"
+                SELECT {PlantillaColumns}
+                FROM servicio_plantilla p
+                JOIN ruta r ON r.id = p.ruta_id
+                WHERE (@AccountID IS NULL OR p.account_id = @AccountID)
+                  AND (@SoloActivas = 0 OR p.activo = 1)
+                ORDER BY r.grupo, r.codigo, p.hora_salida, p.id";
+
+            var filas = await _connection.QueryAsync<ServicioPlantilla>(
+                sql, new { AccountID = accountID, SoloActivas = soloActivas ? 1 : 0 }, _transaction);
+            return filas.Select(ConDias).ToList();
+        }
+
+        public async Task<ServicioPlantilla?> GetPlantillaById(long id, string accountID)
+        {
+            string sql = $@"
+                SELECT {PlantillaColumns}
+                FROM servicio_plantilla p
+                JOIN ruta r ON r.id = p.ruta_id
+                WHERE p.id = @Id AND p.account_id = @AccountID";
+
+            var p = await _connection.QueryFirstOrDefaultAsync<ServicioPlantilla>(
+                sql, new { Id = id, AccountID = accountID }, _transaction);
+            return p == null ? null : ConDias(p);
+        }
+
+        public Task<long> InsertPlantilla(ServicioPlantilla p)
+        {
+            const string sql = @"
+                INSERT INTO servicio_plantilla
+                    (account_id, ruta_id, hora_salida, device_id, conductor_brevete, dias, activo)
+                VALUES
+                    (@AccountID, @RutaId, @HoraSalida, @DeviceID, @ConductorBrevete, @Dias, @Activo);
+                SELECT LAST_INSERT_ID();";
+
+            return _connection.QuerySingleAsync<long>(sql, new
+            {
+                p.AccountID, p.RutaId, p.HoraSalida, p.DeviceID, p.ConductorBrevete,
+                Dias = ServicioPlantilla.DiasACsv(p.Dias), p.Activo
+            }, _transaction);
+        }
+
+        public Task<int> UpdatePlantilla(ServicioPlantilla p)
+        {
+            const string sql = @"
+                UPDATE servicio_plantilla
+                SET ruta_id = @RutaId, hora_salida = @HoraSalida, device_id = @DeviceID,
+                    conductor_brevete = @ConductorBrevete, dias = @Dias, activo = @Activo
+                WHERE id = @Id AND account_id = @AccountID";
+
+            return _connection.ExecuteAsync(sql, new
+            {
+                p.Id, p.AccountID, p.RutaId, p.HoraSalida, p.DeviceID, p.ConductorBrevete,
+                Dias = ServicioPlantilla.DiasACsv(p.Dias), p.Activo
+            }, _transaction);
+        }
+
+        public async Task<int> DeletePlantilla(long id, string accountID)
+        {
+            int filas = await _connection.ExecuteAsync(
+                "DELETE FROM servicio_plantilla WHERE id = @Id AND account_id = @AccountID",
+                new { Id = id, AccountID = accountID }, _transaction);
+            if (filas > 0)
+                await _connection.ExecuteAsync(
+                    "DELETE FROM servicio_plantilla_generado WHERE plantilla_id = @Id", new { Id = id }, _transaction);
+            return filas;
+        }
+
+        // Pares (plantilla, fecha) ya generados en el rango, para no repetirlos.
+        public async Task<HashSet<(long PlantillaId, DateTime Fecha)>> GetPlantillasGeneradas(DateTime desde, DateTime hasta)
+        {
+            const string sql = @"
+                SELECT plantilla_id AS PlantillaId, fecha AS Fecha
+                FROM servicio_plantilla_generado
+                WHERE fecha BETWEEN @Desde AND @Hasta";
+
+            var filas = await _connection.QueryAsync<GeneradoFila>(
+                sql, new { Desde = desde.Date, Hasta = hasta.Date }, _transaction);
+            return filas.Select(f => (f.PlantillaId, f.Fecha.Date)).ToHashSet();
+        }
+
+        private class GeneradoFila
+        {
+            public long PlantillaId { get; set; }
+            public DateTime Fecha { get; set; }
+        }
+
+        // Reserva (plantilla, fecha). Devuelve false si ya estaba reservada (otra ejecución se adelantó).
+        public async Task<bool> ReservarGeneracion(long plantillaId, DateTime fecha)
+        {
+            int filas = await _connection.ExecuteAsync(
+                "INSERT IGNORE INTO servicio_plantilla_generado (plantilla_id, fecha) VALUES (@PlantillaId, @Fecha)",
+                new { PlantillaId = plantillaId, Fecha = fecha.Date }, _transaction);
+            return filas > 0;
+        }
+
+        public Task<int> VincularGeneracion(long plantillaId, DateTime fecha, long servicioId)
+        {
+            return _connection.ExecuteAsync(
+                "UPDATE servicio_plantilla_generado SET servicio_id = @ServicioId WHERE plantilla_id = @PlantillaId AND fecha = @Fecha",
+                new { PlantillaId = plantillaId, Fecha = fecha.Date, ServicioId = servicioId }, _transaction);
+        }
     }
 }

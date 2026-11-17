@@ -35,6 +35,20 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> MarcarOmitidosAnteriores(long servicioId, int orden);
         Task<int> RegistrarSalida(long servicioId, int orden, DateTime horaSalida);
 
+        // ---------- Plantillas (servicios automáticos) ----------
+        Task<IEnumerable<ServicioPlantilla>> GetPlantillas(string? accountID, bool soloActivas);
+        Task<ServicioPlantilla?> GetPlantillaById(long id, string accountID);
+        Task<long> InsertPlantilla(ServicioPlantilla plantilla);
+        Task<int> UpdatePlantilla(ServicioPlantilla plantilla);
+        Task<int> DeletePlantilla(long id, string accountID);
+        Task<int> GetIntervaloGeneracion(string accountID);
+        Task<int> GetIntervaloGeneracionMinimo();
+        Task SetIntervaloGeneracion(string accountID, int minutos);
+        Task<bool> ExisteServicioDeRuta(string accountID, long rutaId, DateTime fecha, TimeSpan hora);
+        Task<HashSet<(long PlantillaId, DateTime Fecha)>> GetPlantillasGeneradas(DateTime desde, DateTime hasta);
+        Task<bool> ReservarGeneracion(long plantillaId, DateTime fecha);
+        Task<int> VincularGeneracion(long plantillaId, DateTime fecha, long servicioId);
+
         // ---------- Configuración ----------
         Task<int> GetTolerancia(string accountID);
         Task SetTolerancia(string accountID, int toleranciaMin);

@@ -94,6 +94,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<VelsatBackendAPI.Hubs.PosicionesEnVivoStore>();
+builder.Services.AddHostedService<VelsatBackendAPI.Services.ServiciosRutasAutomaticosService>();
 
 builder.Services.AddDistributedMemoryCache();
 
