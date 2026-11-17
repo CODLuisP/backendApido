@@ -682,6 +682,40 @@ namespace VelsatBackendAPI.Data.Repositories
             return valor ?? IntervaloGeneracionPorDefectoMin;
         }
 
+        // Hora (Perú) desde la cual se crean los servicios del día siguiente. Por defecto 18:00.
+        public static readonly TimeSpan HoraGeneracionPorDefecto = TimeSpan.FromHours(18);
+
+        public async Task<TimeSpan> GetHoraGeneracion(string accountID)
+        {
+            const string sql = "SELECT hora_generacion FROM servicio_ruta_config WHERE account_id = @AccountID";
+            TimeSpan? valor = await _connection.QueryFirstOrDefaultAsync<TimeSpan?>(sql, new { AccountID = accountID }, _transaction);
+            return valor ?? HoraGeneracionPorDefecto;
+        }
+
+        // Para el generador: hora configurada por cuenta (las cuentas sin fila usan la de por defecto).
+        public async Task<Dictionary<string, TimeSpan>> GetHorasGeneracion()
+        {
+            var filas = await _connection.QueryAsync<HoraGeneracionFila>(
+                "SELECT account_id AS AccountID, hora_generacion AS Hora FROM servicio_ruta_config", transaction: _transaction);
+            return filas.ToDictionary(f => f.AccountID, f => f.Hora);
+        }
+
+        private class HoraGeneracionFila
+        {
+            public string AccountID { get; set; } = string.Empty;
+            public TimeSpan Hora { get; set; }
+        }
+
+        public Task SetConfigGeneracion(string accountID, int minutos, TimeSpan hora)
+        {
+            const string sql = @"
+                INSERT INTO servicio_ruta_config (account_id, intervalo_generacion_min, hora_generacion)
+                VALUES (@AccountID, @Minutos, @Hora)
+                ON DUPLICATE KEY UPDATE intervalo_generacion_min = VALUES(intervalo_generacion_min),
+                                        hora_generacion = VALUES(hora_generacion)";
+            return _connection.ExecuteAsync(sql, new { AccountID = accountID, Minutos = minutos, Hora = hora }, _transaction);
+        }
+
         public Task SetIntervaloGeneracion(string accountID, int minutos)
         {
             const string sql = @"

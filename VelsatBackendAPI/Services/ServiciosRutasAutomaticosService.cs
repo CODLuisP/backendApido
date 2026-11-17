@@ -18,7 +18,7 @@ namespace VelsatBackendAPI.Services
     // Reglas:
     //  - Revisa cada N minutos (50 por defecto, configurable desde la web) y al arrancar. Es idempotente: servicio_plantilla_generado guarda
     //    cada (plantilla, fecha) ya creada, así que no duplica ni recrea uno que el operador eliminó.
-    //  - Genera los servicios del día de hoy y, desde las 18:00 (hora Perú), los de mañana.
+    //  - Genera los servicios de hoy y, desde la hora de creación configurada (18:00 por defecto, hora Perú), los de mañana.
     //  - Solo genera si la plantilla está activa, toca ese día de la semana y está COMPLETA
     //    (hora, unidad y brevete de un conductor de rutas activo; nombre y celular se leen del conductor). Si falta algo, se omite.
     //  - No genera servicios cuya hora de salida ya pasó.
@@ -26,7 +26,6 @@ namespace VelsatBackendAPI.Services
     public class ServiciosRutasAutomaticosService : BackgroundService
     {
         private static readonly TimeSpan EsperaInicial = TimeSpan.FromSeconds(30);
-        private const int HoraGeneracionDiaSiguiente = 18;
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHubContext<ServiciosRutasHub> _hub;
@@ -91,18 +90,18 @@ namespace VelsatBackendAPI.Services
         private async Task GenerarAsync()
         {
             DateTime ahora = AhoraPeru();
-            var fechas = new List<DateTime> { ahora.Date };
-            if (ahora.Hour >= HoraGeneracionDiaSiguiente)
-                fechas.Add(ahora.Date.AddDays(1));
+            var fechas = new List<DateTime> { ahora.Date, ahora.Date.AddDays(1) };
 
             List<ServicioPlantilla> plantillas;
             HashSet<(long PlantillaId, DateTime Fecha)> generadas;
+            Dictionary<string, TimeSpan> horasGeneracion;
 
             using (var scope = _scopeFactory.CreateScope())
             {
                 var lectura = scope.ServiceProvider.GetRequiredService<IReadOnlyUnitOfWork>();
                 plantillas = (await lectura.ServiciosRutasRepository.GetPlantillas(null, soloActivas: true)).ToList();
                 generadas = await lectura.ServiciosRutasRepository.GetPlantillasGeneradas(fechas.Min(), fechas.Max());
+                horasGeneracion = await lectura.ServiciosRutasRepository.GetHorasGeneracion();
             }
 
             int creados = 0;
@@ -114,6 +113,14 @@ namespace VelsatBackendAPI.Services
                     // (dado de baja o brevete cambiado), el nombre no se resuelve y tampoco se genera.
                     if (!plantilla.EstaCompleta) continue;
                     if (!plantilla.Dias.Contains(DiaIso(fecha))) continue;
+
+                    // Los de mañana solo desde la hora de creación de esa cuenta (editable desde la web).
+                    if (fecha.Date > ahora.Date)
+                    {
+                        var horaCreacion = horasGeneracion.TryGetValue(plantilla.AccountID, out var h)
+                            ? h : ServiciosRutasRepository.HoraGeneracionPorDefecto;
+                        if (ahora.TimeOfDay < horaCreacion) continue;
+                    }
                     if (generadas.Contains((plantilla.Id, fecha.Date))) continue;
                     if (fecha.Date + plantilla.HoraSalida!.Value <= ahora) continue;
 

@@ -72,5 +72,8 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
     public class IntervaloPlantillasRequest
     {
         public int IntervaloMin { get; set; }
+
+        // Hora (Perú) desde la cual se crean los servicios del día siguiente, formato "HH:mm".
+        public string? HoraGeneracion { get; set; }
     }
 }

@@ -23,3 +23,10 @@ CREATE INDEX ix_servicio_ruta_cuenta_ruta_fecha ON servicio_ruta (account_id, ru
 
 -- 3) Consultar lo ya generado por rango de fechas (la clave primaria empieza por plantilla_id).
 CREATE INDEX ix_plantilla_generado_fecha ON servicio_plantilla_generado (fecha);
+
+-- =========================================================================
+-- Hora (Perú) desde la cual se crean los servicios del día siguiente (editable desde la web).
+-- Por defecto 18:00. Si ya ejecutaste el ALTER de intervalo_generacion_min, solo corre este.
+-- =========================================================================
+ALTER TABLE servicio_ruta_config
+    ADD COLUMN hora_generacion TIME NOT NULL DEFAULT '18:00:00';

@@ -662,7 +662,8 @@ namespace VelsatBackendAPI.Controllers
             try
             {
                 int minutos = await _readOnlyUow.ServiciosRutasRepository.GetIntervaloGeneracion(AccountId!);
-                return Ok(new { intervaloMin = minutos });
+                var hora = await _readOnlyUow.ServiciosRutasRepository.GetHoraGeneracion(AccountId!);
+                return Ok(new { intervaloMin = minutos, horaGeneracion = hora.ToString(@"hh\:mm") });
             }
             catch (Exception ex)
             {
@@ -678,9 +679,13 @@ namespace VelsatBackendAPI.Controllers
                 if (request.IntervaloMin < 5 || request.IntervaloMin > 1440)
                     return BadRequest(new { message = "El intervalo debe estar entre 5 y 1440 minutos" });
 
-                await _uow.ServiciosRutasRepository.SetIntervaloGeneracion(AccountId!, request.IntervaloMin);
+                if (!TimeSpan.TryParseExact(request.HoraGeneracion?.Trim(), new[] { @"hh\:mm", @"hh\:mm\:ss" },
+                        CultureInfo.InvariantCulture, out var hora) || hora < TimeSpan.Zero || hora >= TimeSpan.FromDays(1))
+                    return BadRequest(new { message = "La hora de creación debe tener formato HH:mm (00:00 a 23:59)" });
+
+                await _uow.ServiciosRutasRepository.SetConfigGeneracion(AccountId!, request.IntervaloMin, hora);
                 _uow.SaveChanges();
-                return Ok(new { intervaloMin = request.IntervaloMin });
+                return Ok(new { intervaloMin = request.IntervaloMin, horaGeneracion = hora.ToString(@"hh\:mm") });
             }
             catch (Exception ex)
             {
