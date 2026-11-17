@@ -16,7 +16,7 @@ namespace VelsatBackendAPI.Services
     // Crea automáticamente los servicios de Rutas a partir de las plantillas (servicio_plantilla).
     //
     // Reglas:
-    //  - Revisa cada N minutos (50 por defecto, configurable desde la web) y al arrancar. Es idempotente: servicio_plantilla_generado guarda
+    //  - Revisa cada 30 minutos (interno, no configurable) y al arrancar. Es idempotente: servicio_plantilla_generado guarda
     //    cada (plantilla, fecha) ya creada, así que no duplica ni recrea uno que el operador eliminó.
     //  - Genera los servicios de hoy y, desde la hora de creación configurada (18:00 por defecto, hora Perú), los de mañana.
     //  - Solo genera si la plantilla está activa, toca ese día de la semana y está COMPLETA
@@ -26,6 +26,7 @@ namespace VelsatBackendAPI.Services
     public class ServiciosRutasAutomaticosService : BackgroundService
     {
         private static readonly TimeSpan EsperaInicial = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan Intervalo = TimeSpan.FromMinutes(30);
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHubContext<ServiciosRutasHub> _hub;
@@ -58,26 +59,12 @@ namespace VelsatBackendAPI.Services
                         _logger.LogError(ex, "Error al generar los servicios automáticos de rutas");
                     }
 
-                    await Task.Delay(TimeSpan.FromMinutes(await LeerIntervaloAsync()), stoppingToken);
+                    await Task.Delay(Intervalo, stoppingToken);
                 }
             }
             catch (OperationCanceledException)
             {
                 // Apagado normal de la aplicación.
-            }
-        }
-
-        private async Task<int> LeerIntervaloAsync()
-        {
-            try
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var lectura = scope.ServiceProvider.GetRequiredService<IReadOnlyUnitOfWork>();
-                return Math.Max(1, await lectura.ServiciosRutasRepository.GetIntervaloGeneracionMinimo());
-            }
-            catch
-            {
-                return 50;
             }
         }
 

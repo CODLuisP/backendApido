@@ -84,9 +84,6 @@ WHERE NOT EXISTS (
       AND CAST(REGEXP_SUBSTR(r.codigo, '[0-9]+') AS UNSIGNED) = n.num
 );
 
--- =========================================================================
--- Cada cuántos minutos el backend revisa y crea los servicios automáticos (editable desde la web).
--- Por defecto 50. Si la cuenta aún no tiene fila en servicio_ruta_config, se crea al guardar.
--- =========================================================================
-ALTER TABLE servicio_ruta_config
-    ADD COLUMN intervalo_generacion_min INT NOT NULL DEFAULT 50;
+-- Nota: el intervalo de revisión (30 minutos) es interno del backend y no se guarda en la base.
+-- Si ya habías ejecutado ADD COLUMN intervalo_generacion_min, esa columna ya no se usa y puedes dejarla
+-- o quitarla con: ALTER TABLE servicio_ruta_config DROP COLUMN intervalo_generacion_min;

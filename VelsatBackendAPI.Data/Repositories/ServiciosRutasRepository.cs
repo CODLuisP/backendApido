@@ -665,23 +665,6 @@ namespace VelsatBackendAPI.Data.Repositories
         // PLANTILLAS (servicios automáticos)
         // =====================================================================
 
-        public const int IntervaloGeneracionPorDefectoMin = 50;
-
-        public async Task<int> GetIntervaloGeneracion(string accountID)
-        {
-            const string sql = "SELECT intervalo_generacion_min FROM servicio_ruta_config WHERE account_id = @AccountID";
-            int? valor = await _connection.QueryFirstOrDefaultAsync<int?>(sql, new { AccountID = accountID }, _transaction);
-            return valor ?? IntervaloGeneracionPorDefectoMin;
-        }
-
-        // Para el generador (global): el menor intervalo configurado entre las cuentas.
-        public async Task<int> GetIntervaloGeneracionMinimo()
-        {
-            int? valor = await _connection.QueryFirstOrDefaultAsync<int?>(
-                "SELECT MIN(intervalo_generacion_min) FROM servicio_ruta_config", transaction: _transaction);
-            return valor ?? IntervaloGeneracionPorDefectoMin;
-        }
-
         // Hora (Perú) desde la cual se crean los servicios del día siguiente. Por defecto 18:00.
         public static readonly TimeSpan HoraGeneracionPorDefecto = TimeSpan.FromHours(18);
 
@@ -706,23 +689,13 @@ namespace VelsatBackendAPI.Data.Repositories
             public TimeSpan Hora { get; set; }
         }
 
-        public Task SetConfigGeneracion(string accountID, int minutos, TimeSpan hora)
+        public Task SetHoraGeneracion(string accountID, TimeSpan hora)
         {
             const string sql = @"
-                INSERT INTO servicio_ruta_config (account_id, intervalo_generacion_min, hora_generacion)
-                VALUES (@AccountID, @Minutos, @Hora)
-                ON DUPLICATE KEY UPDATE intervalo_generacion_min = VALUES(intervalo_generacion_min),
-                                        hora_generacion = VALUES(hora_generacion)";
-            return _connection.ExecuteAsync(sql, new { AccountID = accountID, Minutos = minutos, Hora = hora }, _transaction);
-        }
-
-        public Task SetIntervaloGeneracion(string accountID, int minutos)
-        {
-            const string sql = @"
-                INSERT INTO servicio_ruta_config (account_id, intervalo_generacion_min)
-                VALUES (@AccountID, @Minutos)
-                ON DUPLICATE KEY UPDATE intervalo_generacion_min = VALUES(intervalo_generacion_min)";
-            return _connection.ExecuteAsync(sql, new { AccountID = accountID, Minutos = minutos }, _transaction);
+                INSERT INTO servicio_ruta_config (account_id, hora_generacion)
+                VALUES (@AccountID, @Hora)
+                ON DUPLICATE KEY UPDATE hora_generacion = VALUES(hora_generacion)";
+            return _connection.ExecuteAsync(sql, new { AccountID = accountID, Hora = hora }, _transaction);
         }
 
         // ¿Ya hay un servicio (manual o no, en cualquier estado) de esa ruta, fecha y hora? Solo omite ESA plantilla.

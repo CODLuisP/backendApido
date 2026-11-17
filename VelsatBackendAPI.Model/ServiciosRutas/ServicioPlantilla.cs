@@ -69,10 +69,8 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
             string.Join(",", dias.Where(n => n >= 1 && n <= 7).Distinct().OrderBy(n => n));
     }
 
-    public class IntervaloPlantillasRequest
+    public class ConfigPlantillasRequest
     {
-        public int IntervaloMin { get; set; }
-
         // Hora (Perú) desde la cual se crean los servicios del día siguiente, formato "HH:mm".
         public string? HoraGeneracion { get; set; }
     }

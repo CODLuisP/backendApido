@@ -655,15 +655,14 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
-        // Cada cuántos minutos el backend revisa y crea los servicios automáticos.
+        // Hora (Perú) desde la cual se crean los servicios del día siguiente.
         [HttpGet("plantillas/configuracion")]
-        public async Task<ActionResult> GetIntervaloPlantillas()
+        public async Task<ActionResult> GetConfigPlantillas()
         {
             try
             {
-                int minutos = await _readOnlyUow.ServiciosRutasRepository.GetIntervaloGeneracion(AccountId!);
                 var hora = await _readOnlyUow.ServiciosRutasRepository.GetHoraGeneracion(AccountId!);
-                return Ok(new { intervaloMin = minutos, horaGeneracion = hora.ToString(@"hh\:mm") });
+                return Ok(new { horaGeneracion = hora.ToString(@"hh\:mm") });
             }
             catch (Exception ex)
             {
@@ -672,20 +671,17 @@ namespace VelsatBackendAPI.Controllers
         }
 
         [HttpPut("plantillas/configuracion")]
-        public async Task<ActionResult> SetIntervaloPlantillas([FromBody] IntervaloPlantillasRequest request)
+        public async Task<ActionResult> SetConfigPlantillas([FromBody] ConfigPlantillasRequest request)
         {
             try
             {
-                if (request.IntervaloMin < 5 || request.IntervaloMin > 1440)
-                    return BadRequest(new { message = "El intervalo debe estar entre 5 y 1440 minutos" });
-
                 if (!TimeSpan.TryParseExact(request.HoraGeneracion?.Trim(), new[] { @"hh\:mm", @"hh\:mm\:ss" },
                         CultureInfo.InvariantCulture, out var hora) || hora < TimeSpan.Zero || hora >= TimeSpan.FromDays(1))
                     return BadRequest(new { message = "La hora de creación debe tener formato HH:mm (00:00 a 23:59)" });
 
-                await _uow.ServiciosRutasRepository.SetConfigGeneracion(AccountId!, request.IntervaloMin, hora);
+                await _uow.ServiciosRutasRepository.SetHoraGeneracion(AccountId!, hora);
                 _uow.SaveChanges();
-                return Ok(new { intervaloMin = request.IntervaloMin, horaGeneracion = hora.ToString(@"hh\:mm") });
+                return Ok(new { horaGeneracion = hora.ToString(@"hh\:mm") });
             }
             catch (Exception ex)
             {

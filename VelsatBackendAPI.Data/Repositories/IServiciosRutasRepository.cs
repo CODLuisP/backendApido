@@ -41,12 +41,9 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<long> InsertPlantilla(ServicioPlantilla plantilla);
         Task<int> UpdatePlantilla(ServicioPlantilla plantilla);
         Task<int> DeletePlantilla(long id, string accountID);
-        Task<int> GetIntervaloGeneracion(string accountID);
-        Task<int> GetIntervaloGeneracionMinimo();
-        Task SetIntervaloGeneracion(string accountID, int minutos);
         Task<TimeSpan> GetHoraGeneracion(string accountID);
         Task<Dictionary<string, TimeSpan>> GetHorasGeneracion();
-        Task SetConfigGeneracion(string accountID, int minutos, TimeSpan hora);
+        Task SetHoraGeneracion(string accountID, TimeSpan hora);
         Task<bool> ExisteServicioDeRuta(string accountID, long rutaId, DateTime fecha, TimeSpan hora);
         Task<HashSet<(long PlantillaId, DateTime Fecha)>> GetPlantillasGeneradas(DateTime desde, DateTime hasta);
         Task<bool> ReservarGeneracion(long plantillaId, DateTime fecha);
