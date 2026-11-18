@@ -235,7 +235,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 string consultaTabla = nombreTabla.Tabla;
 
                 string sqlR = $"select deviceID, MAX(odometerKM) AS maximo, MIN(odometerKM) AS minimo " +
-                    $"from {consultaTabla} where deviceID in (select deviceID from device where accountID=@AccountID) and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
+                    $"from {consultaTabla} where accountID = @AccountID and timestamp between @FechainiUnix and @FechafinUnix group by deviceID";
 
                 var parameters = new DynamicParameters();
                 parameters.Add("FechainiUnix", unixFechaInicio);
