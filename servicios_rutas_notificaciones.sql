@@ -150,6 +150,14 @@ WHERE NOT EXISTS (
     WHERE x.account_id = (@cuenta COLLATE utf8mb4_unicode_ci) AND x.codigo = t.codigo
 );
 
+-- Orden consecutivo (1, 2, 3...) por cuenta, según el orden actual.
+UPDATE servicio_notificacion_tipo t
+JOIN (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY orden, titulo) AS rn
+    FROM servicio_notificacion_tipo
+) x ON x.id = t.id
+SET t.orden = x.rn;
+
 -- Verificación: deben salir 12 tipos
 SELECT id, codigo, categoria, titulo, requiere_paradero, requiere_comentario, orden
 FROM servicio_notificacion_tipo

@@ -55,6 +55,7 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<bool> ExisteCodigoNotificacionTipo(string accountID, string codigo, long? excluirId);
         Task<long> InsertNotificacionTipo(NotificacionTipo tipo);
         Task<int> UpdateNotificacionTipo(NotificacionTipo tipo);
+        Task ReordenarNotificacionTipos(string accountID, long tipoId, int posicion);
         Task<int> DeleteNotificacionTipo(long id, string accountID);
         Task<string?> GetNombreParadero(long rutaParaderoId, long rutaId);
         Task<string?> GetNombreRuta(long rutaId, string accountID);

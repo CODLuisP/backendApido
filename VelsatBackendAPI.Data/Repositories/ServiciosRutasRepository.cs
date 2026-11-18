@@ -904,6 +904,20 @@ namespace VelsatBackendAPI.Data.Repositories
             return _connection.ExecuteAsync(sql, t, _transaction);
         }
 
+        // Deja el orden consecutivo (1, 2, 3...) colocando el tipo indicado en la posición pedida;
+        // los demás se corren. Si la posición excede el total, queda al final.
+        public async Task ReordenarNotificacionTipos(string accountID, long tipoId, int posicion)
+        {
+            var ids = (await _connection.QueryAsync<long>(
+                "SELECT id FROM servicio_notificacion_tipo WHERE account_id = @AccountID AND id <> @Id ORDER BY orden, titulo",
+                new { AccountID = accountID, Id = tipoId }, _transaction)).ToList();
+            ids.Insert(Math.Clamp(posicion - 1, 0, ids.Count), tipoId);
+            for (int i = 0; i < ids.Count; i++)
+                await _connection.ExecuteAsync(
+                    "UPDATE servicio_notificacion_tipo SET orden = @Orden WHERE id = @Id AND account_id = @AccountID AND orden <> @Orden",
+                    new { Orden = i + 1, Id = ids[i], AccountID = accountID }, _transaction);
+        }
+
         public Task<int> DeleteNotificacionTipo(long id, string accountID)
         {
             return _connection.ExecuteAsync(

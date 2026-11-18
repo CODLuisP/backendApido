@@ -755,6 +755,7 @@ namespace VelsatBackendAPI.Controllers
                     return error;
 
                 var id = await _uow.ServiciosRutasRepository.InsertNotificacionTipo(tipo);
+                await _uow.ServiciosRutasRepository.ReordenarNotificacionTipos(AccountId!, id, tipo.Orden);
                 _uow.SaveChanges();
                 return Ok(new { id });
             }
@@ -779,6 +780,7 @@ namespace VelsatBackendAPI.Controllers
                     return error;
 
                 await _uow.ServiciosRutasRepository.UpdateNotificacionTipo(tipo);
+                await _uow.ServiciosRutasRepository.ReordenarNotificacionTipos(AccountId!, id, tipo.Orden);
                 _uow.SaveChanges();
                 return Ok(new { message = "Tipo de notificación actualizado" });
             }
