@@ -68,6 +68,13 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<int> MarcarTodasNotificacionesLeidas(string accountID, DateTime ahora);
         Task<int> GestionarNotificacion(long id, string accountID, string estado, string? respuesta, string usuario, DateTime ahora);
 
+        // ---------- Avisos de espera (pasajero -> conductor) ----------
+        Task<int> UpsertEspera(string accountID, long rutaId, long rutaParaderoId, string pasajeroId, DateTime ahora);
+        Task<int> CancelarEspera(string accountID, long rutaId, string pasajeroId);
+        Task<int> AtenderEsperas(string accountID, long rutaId, long rutaParaderoId, DateTime ahora);
+        Task<IEnumerable<EsperaParadero>> GetEsperasActivas(string accountID, long rutaId, DateTime desde);
+        Task<int> ContarServiciosEnCurso(string accountID, long rutaId);
+
         // ---------- Configuración ----------
         Task<int> GetTolerancia(string accountID);
         Task SetTolerancia(string accountID, int toleranciaMin);

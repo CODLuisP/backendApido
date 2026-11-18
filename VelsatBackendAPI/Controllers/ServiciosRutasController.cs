@@ -458,7 +458,11 @@ namespace VelsatBackendAPI.Controllers
                     return Conflict(new { message = "La llegada a este paradero ya fue registrada" });
 
                 await _uow.ServiciosRutasRepository.MarcarOmitidosAnteriores(id, orden);
+                int esperasAtendidas = await _uow.ServiciosRutasRepository.AtenderEsperas(
+                    AccountId!, servicio.RutaId, paradero.RutaParaderoId, horaLlegada);
                 _uow.SaveChanges();
+                if (esperasAtendidas > 0)
+                    await PublicarEsperas(servicio.RutaId);
                 await Notificar(new AvisoServicio
                 {
                     ServicioId = id, Tipo = "LLEGADA", DeviceID = servicio.DeviceID,
@@ -1056,6 +1060,93 @@ namespace VelsatBackendAPI.Controllers
                 return Conflict(new { message = "Ya existe un tipo de notificación con ese código" });
 
             return null;
+        }
+
+        // =====================================================================
+        // AVISOS DE ESPERA (pasajero -> conductor). No llegan a la web: solo a los conductores de la ruta.
+        // =====================================================================
+
+        // Un aviso sin actividad por más de esto se considera caducado.
+        private static readonly TimeSpan VigenciaEspera = TimeSpan.FromMinutes(30);
+
+        // El pasajero avisa que espera en un paradero. Varias pulsaciones del mismo PasajeroId cuentan como una
+        // persona; si cambia de paradero, su aviso se mueve. Se avisa a las unidades de la ruta.
+        [HttpPost("esperas")]
+        public async Task<ActionResult> EnviarEspera([FromBody] EsperaRequest request)
+        {
+            try
+            {
+                string pasajeroId = (request.PasajeroId ?? string.Empty).Trim();
+                if (pasajeroId.Length < 8 || pasajeroId.Length > 64)
+                    return BadRequest(new { message = "PasajeroId es obligatorio (entre 8 y 64 caracteres)" });
+                if (request.RutaId <= 0 || request.RutaParaderoId <= 0)
+                    return BadRequest(new { message = "RutaId y RutaParaderoId son obligatorios" });
+
+                if (await _uow.ServiciosRutasRepository.GetNombreRuta(request.RutaId, AccountId!) == null)
+                    return BadRequest(new { message = "La ruta no existe" });
+                if (await _uow.ServiciosRutasRepository.GetNombreParadero(request.RutaParaderoId, request.RutaId) == null)
+                    return BadRequest(new { message = "El paradero no pertenece a la ruta" });
+
+                await _uow.ServiciosRutasRepository.UpsertEspera(AccountId!, request.RutaId, request.RutaParaderoId, pasajeroId, AhoraPeru());
+                _uow.SaveChanges();
+
+                await PublicarEsperas(request.RutaId);
+                int unidades = await _readOnlyUow.ServiciosRutasRepository.ContarServiciosEnCurso(AccountId!, request.RutaId);
+                return Ok(new { unidadesAvisadas = unidades });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al enviar el aviso de espera", error = ex.Message });
+            }
+        }
+
+        // El pasajero cancela su aviso (ya no espera / se fue).
+        [HttpDelete("esperas")]
+        public async Task<ActionResult> CancelarEspera([FromQuery] long rutaId, [FromQuery] string pasajeroId)
+        {
+            try
+            {
+                await _uow.ServiciosRutasRepository.CancelarEspera(AccountId!, rutaId, (pasajeroId ?? string.Empty).Trim());
+                _uow.SaveChanges();
+                await PublicarEsperas(rutaId);
+                return Ok(new { message = "Aviso cancelado" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al cancelar el aviso", error = ex.Message });
+            }
+        }
+
+        // Para el conductor: personas esperando en cada paradero de su ruta (carga inicial; luego en vivo por el hub).
+        [HttpGet("esperas")]
+        public async Task<ActionResult<IEnumerable<EsperaParadero>>> GetEsperas([FromQuery] long rutaId)
+        {
+            try
+            {
+                var result = await _readOnlyUow.ServiciosRutasRepository.GetEsperasActivas(
+                    AccountId!, rutaId, AhoraPeru() - VigenciaEspera);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener las esperas", error = ex.Message });
+            }
+        }
+
+        // Envía la lista vigente al grupo de la ruta (evento "EsperasActualizadas"). Nunca a la web.
+        private async Task PublicarEsperas(long rutaId)
+        {
+            try
+            {
+                var esperas = await _readOnlyUow.ServiciosRutasRepository.GetEsperasActivas(
+                    AccountId!, rutaId, AhoraPeru() - VigenciaEspera);
+                await _hub.Clients.Group(ServiciosRutasHub.GrupoRuta(AccountId!, rutaId))
+                    .SendAsync("EsperasActualizadas", new EsperasActualizadas { RutaId = rutaId, Esperas = esperas.ToList() });
+            }
+            catch
+            {
+                // El conductor igual puede consultar con GET esperas.
+            }
         }
 
         // =====================================================================

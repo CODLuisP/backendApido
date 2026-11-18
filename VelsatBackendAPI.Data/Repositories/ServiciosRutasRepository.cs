@@ -1052,5 +1052,62 @@ namespace VelsatBackendAPI.Data.Repositories
                 new { Id = id, AccountID = accountID, Estado = estado, Respuesta = respuesta, Usuario = usuario, Ahora = ahora },
                 _transaction);
         }
+
+        // =====================================================================
+        // AVISOS DE ESPERA (pasajero -> conductor)
+        // =====================================================================
+
+        // Un pasajero tiene un solo aviso ACTIVO por ruta (índice único): si vuelve a presionar o cambia de
+        // paradero, se actualiza ese mismo aviso.
+        public Task<int> UpsertEspera(string accountID, long rutaId, long rutaParaderoId, string pasajeroId, DateTime ahora)
+        {
+            const string sql = @"
+                INSERT INTO servicio_espera (account_id, ruta_id, ruta_paradero_id, pasajero_id, estado, created_at, updated_at)
+                VALUES (@AccountID, @RutaId, @RutaParaderoId, @PasajeroId, 'ACTIVA', @Ahora, @Ahora)
+                ON DUPLICATE KEY UPDATE ruta_paradero_id = VALUES(ruta_paradero_id), updated_at = VALUES(updated_at)";
+            return _connection.ExecuteAsync(sql,
+                new { AccountID = accountID, RutaId = rutaId, RutaParaderoId = rutaParaderoId, PasajeroId = pasajeroId, Ahora = ahora },
+                _transaction);
+        }
+
+        public Task<int> CancelarEspera(string accountID, long rutaId, string pasajeroId)
+        {
+            const string sql = @"
+                UPDATE servicio_espera SET estado = 'CANCELADA'
+                WHERE account_id = @AccountID AND ruta_id = @RutaId AND pasajero_id = @PasajeroId AND estado = 'ACTIVA'";
+            return _connection.ExecuteAsync(sql,
+                new { AccountID = accountID, RutaId = rutaId, PasajeroId = pasajeroId }, _transaction);
+        }
+
+        // La unidad llegó al paradero: los avisos activos de ese paradero quedan atendidos.
+        public Task<int> AtenderEsperas(string accountID, long rutaId, long rutaParaderoId, DateTime ahora)
+        {
+            const string sql = @"
+                UPDATE servicio_espera SET estado = 'ATENDIDA', atendida_at = @Ahora
+                WHERE account_id = @AccountID AND ruta_id = @RutaId AND ruta_paradero_id = @RutaParaderoId AND estado = 'ACTIVA'";
+            return _connection.ExecuteAsync(sql,
+                new { AccountID = accountID, RutaId = rutaId, RutaParaderoId = rutaParaderoId, Ahora = ahora }, _transaction);
+        }
+
+        // Personas esperando por paradero. Solo avisos activos con actividad posterior a "desde" (vigencia).
+        public async Task<IEnumerable<EsperaParadero>> GetEsperasActivas(string accountID, long rutaId, DateTime desde)
+        {
+            const string sql = @"
+                SELECT e.ruta_paradero_id AS RutaParaderoId, p.orden AS Orden, p.nombre AS Paradero, COUNT(*) AS Cantidad
+                FROM servicio_espera e
+                JOIN ruta_paradero p ON p.id = e.ruta_paradero_id
+                WHERE e.account_id = @AccountID AND e.ruta_id = @RutaId AND e.estado = 'ACTIVA' AND e.updated_at >= @Desde
+                GROUP BY e.ruta_paradero_id, p.orden, p.nombre
+                ORDER BY p.orden";
+            return await _connection.QueryAsync<EsperaParadero>(sql,
+                new { AccountID = accountID, RutaId = rutaId, Desde = desde }, _transaction);
+        }
+
+        public Task<int> ContarServiciosEnCurso(string accountID, long rutaId)
+        {
+            return _connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM servicio_ruta WHERE account_id = @AccountID AND ruta_id = @RutaId AND estado = 'EN_CURSO'",
+                new { AccountID = accountID, RutaId = rutaId }, _transaction);
+        }
     }
 }
