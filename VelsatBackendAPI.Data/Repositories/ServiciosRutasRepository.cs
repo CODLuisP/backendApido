@@ -343,9 +343,19 @@ namespace VelsatBackendAPI.Data.Repositories
             public string? Observaciones { get; set; }
         }
 
+        private class ReporteNotificacionFila
+        {
+            public long ServicioId { get; set; }
+            public long? RutaParaderoId { get; set; }
+            public string Titulo { get; set; } = string.Empty;
+            public string? Comentario { get; set; }
+            public DateTime CreatedAt { get; set; }
+        }
+
         private class ReporteParaderoFila
         {
             public long ServicioId { get; set; }
+            public long? RutaParaderoId { get; set; }
             public int Orden { get; set; }
             public string Nombre { get; set; } = string.Empty;
             public string? Tipo { get; set; }
@@ -401,7 +411,7 @@ namespace VelsatBackendAPI.Data.Repositories
             if (filas.Count == 0) return new List<ReporteServicioItem>();
 
             const string sqlParaderos = @"
-                SELECT sp.servicio_id AS ServicioId, sp.orden, sp.nombre,
+                SELECT sp.servicio_id AS ServicioId, sp.ruta_paradero_id AS RutaParaderoId, sp.orden, sp.nombre,
                        rp.tipo AS Tipo, rp.radio_metros AS RadioMetros,
                        sp.hora_esperada AS HoraEsperada, sp.hora_llegada_real AS HoraLlegadaReal,
                        sp.hora_salida_real AS HoraSalidaReal, sp.diferencia_min AS DiferenciaMin, sp.estado
@@ -414,6 +424,20 @@ namespace VelsatBackendAPI.Data.Repositories
                     sqlParaderos, new { Ids = filas.Select(f => f.Id).ToArray() }, _transaction))
                 .GroupBy(p => p.ServicioId)
                 .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Notificaciones de los conductores asociadas a un paradero del servicio: van como observación.
+            const string sqlNotificaciones = @"
+                SELECT servicio_id AS ServicioId, ruta_paradero_id AS RutaParaderoId, titulo AS Titulo,
+                       comentario AS Comentario, created_at AS CreatedAt
+                FROM servicio_notificacion
+                WHERE servicio_id IN @Ids AND ruta_paradero_id IS NOT NULL
+                ORDER BY created_at";
+
+            var notificaciones = (await _connection.QueryAsync<ReporteNotificacionFila>(
+                    sqlNotificaciones, new { Ids = filas.Select(f => f.Id).ToArray() }, _transaction))
+                .GroupBy(n => (n.ServicioId, n.RutaParaderoId))
+                .ToDictionary(g => g.Key, g => string.Join(" | ", g.Select(n =>
+                    $"{n.CreatedAt:HH:mm} {n.Titulo}" + (string.IsNullOrWhiteSpace(n.Comentario) ? "" : $": {n.Comentario}"))));
 
             return filas.Select(f =>
             {
@@ -455,7 +479,9 @@ namespace VelsatBackendAPI.Data.Repositories
                         PermanenciaSeg = Segundos(p.HoraLlegadaReal, p.HoraSalidaReal),
                         DiferenciaMin = p.DiferenciaMin ?? Minutos(p.HoraEsperada, p.HoraLlegadaReal),
                         DiferenciaSeg = Segundos(p.HoraEsperada, p.HoraLlegadaReal),
-                        Estado = p.Estado
+                        Estado = p.Estado,
+                        Observaciones = p.RutaParaderoId.HasValue
+                            && notificaciones.TryGetValue((f.Id, p.RutaParaderoId), out var obs) ? obs : null
                     }).ToList()
                 };
             }).ToList();
@@ -853,7 +879,7 @@ namespace VelsatBackendAPI.Data.Repositories
             servicio_id AS ServicioId, ruta_id AS RutaId, ruta_nombre AS RutaNombre,
             ruta_paradero_id AS RutaParaderoId, paradero_nombre AS ParaderoNombre,
             device_id AS DeviceID, conductor_brevete AS ConductorBrevete, conductor_nombre AS ConductorNombre,
-            latitud, longitud, precision_m AS PrecisionM, fecha_evento AS FechaEvento, created_at AS CreatedAt,
+            latitud, longitud, fecha_evento AS FechaEvento, created_at AS CreatedAt,
             leida, leida_at AS LeidaAt, estado, respuesta, gestionado_por AS GestionadoPor, gestionado_at AS GestionadoAt";
 
         public async Task<IEnumerable<NotificacionTipo>> GetNotificacionTipos(string accountID, bool soloActivos)
@@ -947,12 +973,12 @@ namespace VelsatBackendAPI.Data.Repositories
                     (account_id, tipo_id, tipo_codigo, categoria, titulo, comentario,
                      servicio_id, ruta_id, ruta_nombre, ruta_paradero_id, paradero_nombre,
                      device_id, conductor_brevete, conductor_nombre,
-                     latitud, longitud, precision_m, fecha_evento, created_at)
+                     latitud, longitud, fecha_evento, created_at)
                 VALUES
                     (@AccountID, @TipoId, @TipoCodigo, @Categoria, @Titulo, @Comentario,
                      @ServicioId, @RutaId, @RutaNombre, @RutaParaderoId, @ParaderoNombre,
                      @DeviceID, @ConductorBrevete, @ConductorNombre,
-                     @Latitud, @Longitud, @PrecisionM, @FechaEvento, @CreatedAt);
+                     @Latitud, @Longitud, @FechaEvento, @CreatedAt);
                 SELECT LAST_INSERT_ID();";
             return _connection.QuerySingleAsync<long>(sql, n, _transaction);
         }

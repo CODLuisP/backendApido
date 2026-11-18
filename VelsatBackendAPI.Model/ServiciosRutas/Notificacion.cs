@@ -50,7 +50,6 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         // Dónde estaba el conductor al enviarla.
         public decimal Latitud { get; set; }
         public decimal Longitud { get; set; }
-        public decimal? PrecisionM { get; set; }
 
         // Hora de Perú. FechaEvento = reloj del celular; CreatedAt = cuando llegó al servidor.
         public DateTime? FechaEvento { get; set; }
@@ -75,7 +74,6 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
         public long? RutaParaderoId { get; set; }    // paradero señalado (ej. corrección de paradero)
         public decimal Latitud { get; set; }
         public decimal Longitud { get; set; }
-        public decimal? PrecisionM { get; set; }
         public string? Comentario { get; set; }
 
         // "dd/MM/yyyy HH:mm:ss" (hora de Perú del celular). Si falta, queda vacío.

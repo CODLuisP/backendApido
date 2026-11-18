@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS servicio_notificacion (
     -- Dónde estaba el conductor al enviarla (obligatorio)
     latitud            DECIMAL(10,7) NOT NULL,
     longitud           DECIMAL(10,7) NOT NULL,
-    precision_m        DECIMAL(7,1)  NULL,       -- precisión del GPS del celular
 
     -- Cuándo (hora de Perú): fecha_evento = reloj del celular; created_at = cuando llegó al servidor
     fecha_evento       DATETIME      NULL,
@@ -149,6 +148,10 @@ WHERE NOT EXISTS (
     SELECT 1 FROM servicio_notificacion_tipo x
     WHERE x.account_id = (@cuenta COLLATE utf8mb4_unicode_ci) AND x.codigo = t.codigo
 );
+
+-- Toda notificación se asocia a un paradero (para los reportes por paradero), salvo sugerir uno nuevo.
+UPDATE servicio_notificacion_tipo SET requiere_paradero = 1 WHERE codigo <> 'NUEVO_PARADERO';
+UPDATE servicio_notificacion_tipo SET requiere_paradero = 0 WHERE codigo = 'NUEVO_PARADERO';
 
 -- Orden consecutivo (1, 2, 3...) por cuenta, según el orden actual.
 UPDATE servicio_notificacion_tipo t

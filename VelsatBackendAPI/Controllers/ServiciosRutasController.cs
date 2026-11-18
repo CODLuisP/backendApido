@@ -842,7 +842,6 @@ namespace VelsatBackendAPI.Controllers
                     Comentario = comentario,
                     Latitud = request.Latitud,
                     Longitud = request.Longitud,
-                    PrecisionM = request.PrecisionM,
                     FechaEvento = fechaEvento,
                     CreatedAt = AhoraPeru()
                 };

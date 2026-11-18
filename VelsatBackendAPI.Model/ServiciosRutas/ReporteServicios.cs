@@ -108,6 +108,10 @@ namespace VelsatBackendAPI.Model.ServiciosRutas
 
         // PENDIENTE | A_TIEMPO | ADELANTADO | RETRASADO | OMITIDO
         public string Estado { get; set; } = "PENDIENTE";
+
+        // Notificaciones que los conductores enviaron sobre este paradero durante el servicio
+        // ("HH:mm Título: comentario", separadas por " | "). Null si no hubo.
+        public string? Observaciones { get; set; }
     }
 
     public static class ReporteServiciosCalculos
