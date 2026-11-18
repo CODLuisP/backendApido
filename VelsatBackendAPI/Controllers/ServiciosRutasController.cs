@@ -719,6 +719,345 @@ namespace VelsatBackendAPI.Controllers
         }
 
         // =====================================================================
+        // NOTIFICACIONES DEL CONDUCTOR (sugerencias, alertas, incidencias)
+        // El conductor las envía desde la app; llegan a la web en tiempo real por el hub (evento
+        // "NotificacionRecibida") y quedan guardadas. Son solo informativas: no cambian rutas ni paraderos.
+        // =====================================================================
+
+        private static readonly string[] CategoriasNotificacion = { "SUGERENCIA", "ALERTA", "INCIDENCIA", "INFO" };
+        private static readonly string[] EstadosNotificacion = { "PENDIENTE", "ACEPTADA", "RECHAZADA" };
+
+        // Mensajes predefinidos. La app del conductor usa soloActivos=true (valor por defecto);
+        // la web de administración pide soloActivos=false para verlos todos.
+        [HttpGet("notificaciones/tipos")]
+        public async Task<ActionResult<IEnumerable<NotificacionTipo>>> GetNotificacionTipos([FromQuery] bool soloActivos = true)
+        {
+            try
+            {
+                var result = await _readOnlyUow.ServiciosRutasRepository.GetNotificacionTipos(AccountId!, soloActivos);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener los tipos de notificación", error = ex.Message });
+            }
+        }
+
+        [HttpPost("notificaciones/tipos")]
+        public async Task<ActionResult> CrearNotificacionTipo([FromBody] NotificacionTipo tipo)
+        {
+            try
+            {
+                tipo.AccountID = AccountId!;
+                tipo.Id = 0;
+                var error = await ValidarNotificacionTipo(tipo);
+                if (error != null)
+                    return error;
+
+                var id = await _uow.ServiciosRutasRepository.InsertNotificacionTipo(tipo);
+                _uow.SaveChanges();
+                return Ok(new { id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al crear el tipo de notificación", error = ex.Message });
+            }
+        }
+
+        [HttpPut("notificaciones/tipos/{id:long}")]
+        public async Task<ActionResult> ActualizarNotificacionTipo(long id, [FromBody] NotificacionTipo tipo)
+        {
+            try
+            {
+                if (await _uow.ServiciosRutasRepository.GetNotificacionTipoById(id, AccountId!) == null)
+                    return NotFound(new { message = "Tipo de notificación no encontrado" });
+
+                tipo.Id = id;
+                tipo.AccountID = AccountId!;
+                var error = await ValidarNotificacionTipo(tipo);
+                if (error != null)
+                    return error;
+
+                await _uow.ServiciosRutasRepository.UpdateNotificacionTipo(tipo);
+                _uow.SaveChanges();
+                return Ok(new { message = "Tipo de notificación actualizado" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al actualizar el tipo de notificación", error = ex.Message });
+            }
+        }
+
+        // El historial conserva su propia copia del texto, así que borrar un tipo no afecta lo ya enviado.
+        [HttpDelete("notificaciones/tipos/{id:long}")]
+        public async Task<ActionResult> EliminarNotificacionTipo(long id)
+        {
+            try
+            {
+                int filas = await _uow.ServiciosRutasRepository.DeleteNotificacionTipo(id, AccountId!);
+                if (filas == 0)
+                    return NotFound(new { message = "Tipo de notificación no encontrado" });
+
+                _uow.SaveChanges();
+                return Ok(new { message = "Tipo de notificación eliminado" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al eliminar el tipo de notificación", error = ex.Message });
+            }
+        }
+
+        // La app del conductor envía la notificación. Se guarda y se avisa a la web por el hub.
+        [HttpPost("notificaciones")]
+        public async Task<ActionResult> EnviarNotificacion([FromBody] EnviarNotificacionRequest request)
+        {
+            try
+            {
+                if (request.Latitud < -90 || request.Latitud > 90 || request.Longitud < -180 || request.Longitud > 180
+                    || (request.Latitud == 0 && request.Longitud == 0))
+                    return BadRequest(new { message = "Las coordenadas (latitud y longitud) son obligatorias y deben ser válidas" });
+
+                if (!TryParseMarca(request.FechaEvento, out var fechaEvento))
+                    return BadRequest(new { message = "FechaEvento debe tener formato dd/MM/yyyy HH:mm:ss" });
+
+                var tipo = await _uow.ServiciosRutasRepository.GetNotificacionTipoById(request.TipoId, AccountId!);
+                if (tipo == null || !tipo.Activo)
+                    return BadRequest(new { message = "El tipo de notificación no existe o está inactivo" });
+
+                string? comentario = string.IsNullOrWhiteSpace(request.Comentario) ? null : request.Comentario.Trim();
+                if (comentario != null && comentario.Length > 500)
+                    return BadRequest(new { message = "El comentario no puede superar los 500 caracteres" });
+                if (tipo.RequiereComentario && comentario == null)
+                    return BadRequest(new { message = "Este tipo de notificación requiere un comentario" });
+
+                var n = new Notificacion
+                {
+                    AccountID = AccountId!,
+                    TipoId = tipo.Id,
+                    TipoCodigo = tipo.Codigo,
+                    Categoria = tipo.Categoria,
+                    Titulo = tipo.Titulo,
+                    Comentario = comentario,
+                    Latitud = request.Latitud,
+                    Longitud = request.Longitud,
+                    PrecisionM = request.PrecisionM,
+                    FechaEvento = fechaEvento,
+                    CreatedAt = AhoraPeru()
+                };
+
+                // Unidad, conductor y ruta salen del servicio; sin servicio, de lo que mande la app.
+                if (request.ServicioId.HasValue)
+                {
+                    var servicio = await _uow.ServiciosRutasRepository.GetServicioById(request.ServicioId.Value, AccountId!);
+                    if (servicio == null)
+                        return BadRequest(new { message = "El servicio no existe o no pertenece a tu cuenta" });
+
+                    n.ServicioId = servicio.Id;
+                    n.RutaId = servicio.RutaId;
+                    n.RutaNombre = servicio.RutaNombre;
+                    n.DeviceID = servicio.DeviceID;
+                    n.ConductorBrevete = servicio.ConductorBrevete;
+                    n.ConductorNombre = servicio.ConductorNombre;
+                }
+                else
+                {
+                    n.DeviceID = string.IsNullOrWhiteSpace(request.DeviceID) ? null : request.DeviceID.Trim();
+                    n.ConductorBrevete = string.IsNullOrWhiteSpace(request.ConductorBrevete) ? null : request.ConductorBrevete.Trim();
+                    n.ConductorNombre = string.IsNullOrWhiteSpace(request.ConductorNombre) ? null : request.ConductorNombre.Trim();
+                    if (request.RutaId.HasValue)
+                    {
+                        n.RutaNombre = await _uow.ServiciosRutasRepository.GetNombreRuta(request.RutaId.Value, AccountId!);
+                        if (n.RutaNombre == null)
+                            return BadRequest(new { message = "La ruta no existe o no pertenece a tu cuenta" });
+                        n.RutaId = request.RutaId;
+                    }
+                }
+
+                // Paradero señalado: debe pertenecer a la ruta.
+                if (request.RutaParaderoId.HasValue)
+                {
+                    if (!n.RutaId.HasValue)
+                        return BadRequest(new { message = "Para señalar un paradero envía el servicio o la ruta" });
+
+                    n.ParaderoNombre = await _uow.ServiciosRutasRepository.GetNombreParadero(request.RutaParaderoId.Value, n.RutaId.Value);
+                    if (n.ParaderoNombre == null)
+                        return BadRequest(new { message = "El paradero no pertenece a la ruta" });
+                    n.RutaParaderoId = request.RutaParaderoId;
+                }
+                else if (tipo.RequiereParadero)
+                {
+                    return BadRequest(new { message = "Este tipo de notificación requiere indicar el paradero" });
+                }
+
+                n.Id = await _uow.ServiciosRutasRepository.InsertNotificacion(n);
+                _uow.SaveChanges();
+
+                // Aviso en tiempo real a la web. Si falla, la notificación ya quedó guardada.
+                try
+                {
+                    await _hub.Clients.Group(AccountId).SendAsync("NotificacionRecibida", n);
+                }
+                catch
+                {
+                    // La web igual la verá al consultar.
+                }
+
+                return Ok(new { id = n.Id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al enviar la notificación", error = ex.Message });
+            }
+        }
+
+        // Historial. desde / hasta (dd/MM/yyyy) por fecha de llegada, máximo 500 filas (más recientes primero).
+        [HttpGet("notificaciones")]
+        public async Task<ActionResult<IEnumerable<Notificacion>>> GetNotificaciones(
+            [FromQuery] string? desde, [FromQuery] string? hasta, [FromQuery] string? estado,
+            [FromQuery] string? tipo, [FromQuery] bool soloNoLeidas = false, [FromQuery] int limite = 200)
+        {
+            try
+            {
+                if (!TryParseFecha(desde, out var fechaDesde))
+                    return BadRequest(new { message = "'desde' debe tener formato dd/MM/yyyy" });
+                if (!TryParseFecha(hasta, out var fechaHasta))
+                    return BadRequest(new { message = "'hasta' debe tener formato dd/MM/yyyy" });
+                if (fechaDesde.HasValue && fechaHasta.HasValue && fechaHasta < fechaDesde)
+                    return BadRequest(new { message = "'hasta' no puede ser anterior a 'desde'" });
+
+                string? estadoNormalizado = string.IsNullOrWhiteSpace(estado) ? null : estado.Trim().ToUpperInvariant();
+                if (estadoNormalizado != null && !EstadosNotificacion.Contains(estadoNormalizado))
+                    return BadRequest(new { message = $"Estado inválido. Valores: {string.Join(", ", EstadosNotificacion)}" });
+
+                var result = await _readOnlyUow.ServiciosRutasRepository.GetNotificaciones(
+                    AccountId!, fechaDesde, fechaHasta, estadoNormalizado,
+                    string.IsNullOrWhiteSpace(tipo) ? null : tipo.Trim(), soloNoLeidas, Math.Clamp(limite, 1, 500));
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener las notificaciones", error = ex.Message });
+            }
+        }
+
+        [HttpGet("notificaciones/{id:long}")]
+        public async Task<ActionResult<Notificacion>> GetNotificacion(long id)
+        {
+            try
+            {
+                var result = await _readOnlyUow.ServiciosRutasRepository.GetNotificacionById(id, AccountId!);
+                return result == null ? NotFound(new { message = "Notificación no encontrada" }) : Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener la notificación", error = ex.Message });
+            }
+        }
+
+        // Para el contador de la campana.
+        [HttpGet("notificaciones/no-leidas/cantidad")]
+        public async Task<ActionResult> GetCantidadNoLeidas()
+        {
+            try
+            {
+                int cantidad = await _readOnlyUow.ServiciosRutasRepository.ContarNotificacionesNoLeidas(AccountId!);
+                return Ok(new { cantidad });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al contar las notificaciones", error = ex.Message });
+            }
+        }
+
+        [HttpPatch("notificaciones/{id:long}/leida")]
+        public async Task<ActionResult> MarcarLeida(long id)
+        {
+            try
+            {
+                int filas = await _uow.ServiciosRutasRepository.MarcarNotificacionLeida(id, AccountId!, AhoraPeru());
+                if (filas == 0)
+                    return NotFound(new { message = "Notificación no encontrada" });
+
+                _uow.SaveChanges();
+                return Ok(new { message = "Notificación marcada como leída" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al marcar la notificación", error = ex.Message });
+            }
+        }
+
+        [HttpPatch("notificaciones/leidas")]
+        public async Task<ActionResult> MarcarTodasLeidas()
+        {
+            try
+            {
+                int filas = await _uow.ServiciosRutasRepository.MarcarTodasNotificacionesLeidas(AccountId!, AhoraPeru());
+                _uow.SaveChanges();
+                return Ok(new { marcadas = filas });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al marcar las notificaciones", error = ex.Message });
+            }
+        }
+
+        // El operador acepta o rechaza (con una nota opcional). Es solo un registro: no cambia ninguna ruta.
+        [HttpPatch("notificaciones/{id:long}/gestion")]
+        public async Task<ActionResult> GestionarNotificacion(long id, [FromBody] GestionarNotificacionRequest request)
+        {
+            try
+            {
+                string estado = (request.Estado ?? string.Empty).Trim().ToUpperInvariant();
+                if (!EstadosNotificacion.Contains(estado))
+                    return BadRequest(new { message = $"Estado inválido. Valores: {string.Join(", ", EstadosNotificacion)}" });
+
+                string? respuesta = string.IsNullOrWhiteSpace(request.Respuesta) ? null : request.Respuesta.Trim();
+                if (respuesta != null && respuesta.Length > 500)
+                    return BadRequest(new { message = "La respuesta no puede superar los 500 caracteres" });
+
+                string usuario = string.IsNullOrWhiteSpace(request.Usuario) ? AccountId! : request.Usuario.Trim();
+                if (usuario.Length > 50) usuario = usuario[..50];
+
+                int filas = await _uow.ServiciosRutasRepository.GestionarNotificacion(
+                    id, AccountId!, estado, respuesta, usuario, AhoraPeru());
+                if (filas == 0)
+                    return NotFound(new { message = "Notificación no encontrada" });
+
+                _uow.SaveChanges();
+                return Ok(new { message = "Notificación actualizada" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al gestionar la notificación", error = ex.Message });
+            }
+        }
+
+        private async Task<ActionResult?> ValidarNotificacionTipo(NotificacionTipo t)
+        {
+            t.Codigo = (t.Codigo ?? string.Empty).Trim().ToUpperInvariant();
+            t.Categoria = (t.Categoria ?? string.Empty).Trim().ToUpperInvariant();
+            t.Titulo = (t.Titulo ?? string.Empty).Trim();
+            t.Descripcion = string.IsNullOrWhiteSpace(t.Descripcion) ? null : t.Descripcion.Trim();
+
+            if (t.Codigo.Length == 0 || t.Codigo.Length > 40)
+                return BadRequest(new { message = "El código es obligatorio (máximo 40 caracteres)" });
+            if (!System.Text.RegularExpressions.Regex.IsMatch(t.Codigo, "^[A-Z0-9_]+$"))
+                return BadRequest(new { message = "El código solo puede tener letras, números y guion bajo" });
+            if (!CategoriasNotificacion.Contains(t.Categoria))
+                return BadRequest(new { message = $"Categoría inválida. Valores: {string.Join(", ", CategoriasNotificacion)}" });
+            if (t.Titulo.Length == 0 || t.Titulo.Length > 120)
+                return BadRequest(new { message = "El título es obligatorio (máximo 120 caracteres)" });
+            if (t.Descripcion != null && t.Descripcion.Length > 255)
+                return BadRequest(new { message = "La descripción no puede superar los 255 caracteres" });
+
+            if (await _uow.ServiciosRutasRepository.ExisteCodigoNotificacionTipo(t.AccountID, t.Codigo, t.Id > 0 ? t.Id : null))
+                return Conflict(new { message = "Ya existe un tipo de notificación con ese código" });
+
+            return null;
+        }
+
+        // =====================================================================
         // POSICIONES EN VIVO (no se guardan en la base de datos)
         // =====================================================================
 

@@ -839,5 +839,178 @@ namespace VelsatBackendAPI.Data.Repositories
                 "UPDATE servicio_plantilla_generado SET servicio_id = @ServicioId WHERE plantilla_id = @PlantillaId AND fecha = @Fecha",
                 new { PlantillaId = plantillaId, Fecha = fecha.Date, ServicioId = servicioId }, _transaction);
         }
+
+        // =====================================================================
+        // NOTIFICACIONES DEL CONDUCTOR
+        // =====================================================================
+
+        private const string TipoNotifColumns = @"
+            id, account_id AS AccountID, codigo, categoria, titulo, descripcion,
+            requiere_paradero AS RequiereParadero, requiere_comentario AS RequiereComentario, activo, orden";
+
+        private const string NotifColumns = @"
+            id, account_id AS AccountID, tipo_id AS TipoId, tipo_codigo AS TipoCodigo, categoria, titulo, comentario,
+            servicio_id AS ServicioId, ruta_id AS RutaId, ruta_nombre AS RutaNombre,
+            ruta_paradero_id AS RutaParaderoId, paradero_nombre AS ParaderoNombre,
+            device_id AS DeviceID, conductor_brevete AS ConductorBrevete, conductor_nombre AS ConductorNombre,
+            latitud, longitud, precision_m AS PrecisionM, fecha_evento AS FechaEvento, created_at AS CreatedAt,
+            leida, leida_at AS LeidaAt, estado, respuesta, gestionado_por AS GestionadoPor, gestionado_at AS GestionadoAt";
+
+        public async Task<IEnumerable<NotificacionTipo>> GetNotificacionTipos(string accountID, bool soloActivos)
+        {
+            string sql = $@"
+                SELECT {TipoNotifColumns}
+                FROM servicio_notificacion_tipo
+                WHERE account_id = @AccountID AND (@SoloActivos = 0 OR activo = 1)
+                ORDER BY orden, titulo";
+            return await _connection.QueryAsync<NotificacionTipo>(
+                sql, new { AccountID = accountID, SoloActivos = soloActivos ? 1 : 0 }, _transaction);
+        }
+
+        public Task<NotificacionTipo?> GetNotificacionTipoById(long id, string accountID)
+        {
+            string sql = $"SELECT {TipoNotifColumns} FROM servicio_notificacion_tipo WHERE id = @Id AND account_id = @AccountID";
+            return _connection.QueryFirstOrDefaultAsync<NotificacionTipo?>(sql, new { Id = id, AccountID = accountID }, _transaction);
+        }
+
+        public async Task<bool> ExisteCodigoNotificacionTipo(string accountID, string codigo, long? excluirId)
+        {
+            const string sql = @"
+                SELECT COUNT(*) FROM servicio_notificacion_tipo
+                WHERE account_id = @AccountID AND codigo = @Codigo AND (@Excluir IS NULL OR id <> @Excluir)";
+            return await _connection.ExecuteScalarAsync<int>(
+                sql, new { AccountID = accountID, Codigo = codigo, Excluir = excluirId }, _transaction) > 0;
+        }
+
+        public Task<long> InsertNotificacionTipo(NotificacionTipo t)
+        {
+            const string sql = @"
+                INSERT INTO servicio_notificacion_tipo
+                    (account_id, codigo, categoria, titulo, descripcion, requiere_paradero, requiere_comentario, activo, orden)
+                VALUES
+                    (@AccountID, @Codigo, @Categoria, @Titulo, @Descripcion, @RequiereParadero, @RequiereComentario, @Activo, @Orden);
+                SELECT LAST_INSERT_ID();";
+            return _connection.QuerySingleAsync<long>(sql, t, _transaction);
+        }
+
+        public Task<int> UpdateNotificacionTipo(NotificacionTipo t)
+        {
+            const string sql = @"
+                UPDATE servicio_notificacion_tipo
+                SET codigo = @Codigo, categoria = @Categoria, titulo = @Titulo, descripcion = @Descripcion,
+                    requiere_paradero = @RequiereParadero, requiere_comentario = @RequiereComentario,
+                    activo = @Activo, orden = @Orden
+                WHERE id = @Id AND account_id = @AccountID";
+            return _connection.ExecuteAsync(sql, t, _transaction);
+        }
+
+        public Task<int> DeleteNotificacionTipo(long id, string accountID)
+        {
+            return _connection.ExecuteAsync(
+                "DELETE FROM servicio_notificacion_tipo WHERE id = @Id AND account_id = @AccountID",
+                new { Id = id, AccountID = accountID }, _transaction);
+        }
+
+        // Nombre del paradero si pertenece a la ruta; null si no.
+        public Task<string?> GetNombreParadero(long rutaParaderoId, long rutaId)
+        {
+            return _connection.QueryFirstOrDefaultAsync<string?>(
+                "SELECT nombre FROM ruta_paradero WHERE id = @Id AND ruta_id = @RutaId",
+                new { Id = rutaParaderoId, RutaId = rutaId }, _transaction);
+        }
+
+        public Task<string?> GetNombreRuta(long rutaId, string accountID)
+        {
+            return _connection.QueryFirstOrDefaultAsync<string?>(
+                "SELECT nombre FROM ruta WHERE id = @Id AND account_id = @AccountID",
+                new { Id = rutaId, AccountID = accountID }, _transaction);
+        }
+
+        public Task<long> InsertNotificacion(Notificacion n)
+        {
+            const string sql = @"
+                INSERT INTO servicio_notificacion
+                    (account_id, tipo_id, tipo_codigo, categoria, titulo, comentario,
+                     servicio_id, ruta_id, ruta_nombre, ruta_paradero_id, paradero_nombre,
+                     device_id, conductor_brevete, conductor_nombre,
+                     latitud, longitud, precision_m, fecha_evento, created_at)
+                VALUES
+                    (@AccountID, @TipoId, @TipoCodigo, @Categoria, @Titulo, @Comentario,
+                     @ServicioId, @RutaId, @RutaNombre, @RutaParaderoId, @ParaderoNombre,
+                     @DeviceID, @ConductorBrevete, @ConductorNombre,
+                     @Latitud, @Longitud, @PrecisionM, @FechaEvento, @CreatedAt);
+                SELECT LAST_INSERT_ID();";
+            return _connection.QuerySingleAsync<long>(sql, n, _transaction);
+        }
+
+        public Task<Notificacion?> GetNotificacionById(long id, string accountID)
+        {
+            string sql = $"SELECT {NotifColumns} FROM servicio_notificacion WHERE id = @Id AND account_id = @AccountID";
+            return _connection.QueryFirstOrDefaultAsync<Notificacion?>(sql, new { Id = id, AccountID = accountID }, _transaction);
+        }
+
+        // desde / hasta filtran por la fecha de llegada al servidor (inclusive). Más recientes primero.
+        public async Task<IEnumerable<Notificacion>> GetNotificaciones(
+            string accountID, DateTime? desde, DateTime? hasta, string? estado, string? tipoCodigo,
+            bool soloNoLeidas, int limite)
+        {
+            string sql = $@"
+                SELECT {NotifColumns}
+                FROM servicio_notificacion
+                WHERE account_id = @AccountID
+                  AND (@Desde IS NULL OR created_at >= @Desde)
+                  AND (@Hasta IS NULL OR created_at < DATE_ADD(@Hasta, INTERVAL 1 DAY))
+                  AND (@Estado IS NULL OR estado = @Estado)
+                  AND (@Tipo IS NULL OR tipo_codigo = @Tipo)
+                  AND (@SoloNoLeidas = 0 OR leida = 0)
+                ORDER BY created_at DESC, id DESC
+                LIMIT @Limite";
+            return await _connection.QueryAsync<Notificacion>(sql, new
+            {
+                AccountID = accountID,
+                Desde = desde?.Date,
+                Hasta = hasta?.Date,
+                Estado = estado,
+                Tipo = tipoCodigo,
+                SoloNoLeidas = soloNoLeidas ? 1 : 0,
+                Limite = limite
+            }, _transaction);
+        }
+
+        public Task<int> ContarNotificacionesNoLeidas(string accountID)
+        {
+            return _connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM servicio_notificacion WHERE account_id = @AccountID AND leida = 0",
+                new { AccountID = accountID }, _transaction);
+        }
+
+        public Task<int> MarcarNotificacionLeida(long id, string accountID, DateTime ahora)
+        {
+            return _connection.ExecuteAsync(@"
+                UPDATE servicio_notificacion SET leida = 1, leida_at = COALESCE(leida_at, @Ahora)
+                WHERE id = @Id AND account_id = @AccountID",
+                new { Id = id, AccountID = accountID, Ahora = ahora }, _transaction);
+        }
+
+        public Task<int> MarcarTodasNotificacionesLeidas(string accountID, DateTime ahora)
+        {
+            return _connection.ExecuteAsync(@"
+                UPDATE servicio_notificacion SET leida = 1, leida_at = @Ahora
+                WHERE account_id = @AccountID AND leida = 0",
+                new { AccountID = accountID, Ahora = ahora }, _transaction);
+        }
+
+        // Aceptar / rechazar / volver a PENDIENTE. Gestionarla también la marca como leída.
+        public Task<int> GestionarNotificacion(long id, string accountID, string estado, string? respuesta,
+            string usuario, DateTime ahora)
+        {
+            return _connection.ExecuteAsync(@"
+                UPDATE servicio_notificacion
+                SET estado = @Estado, respuesta = @Respuesta, gestionado_por = @Usuario, gestionado_at = @Ahora,
+                    leida = 1, leida_at = COALESCE(leida_at, @Ahora)
+                WHERE id = @Id AND account_id = @AccountID",
+                new { Id = id, AccountID = accountID, Estado = estado, Respuesta = respuesta, Usuario = usuario, Ahora = ahora },
+                _transaction);
+        }
     }
 }

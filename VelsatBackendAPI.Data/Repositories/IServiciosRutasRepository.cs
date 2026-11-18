@@ -49,6 +49,24 @@ namespace VelsatBackendAPI.Data.Repositories
         Task<bool> ReservarGeneracion(long plantillaId, DateTime fecha);
         Task<int> VincularGeneracion(long plantillaId, DateTime fecha, long servicioId);
 
+        // ---------- Notificaciones del conductor ----------
+        Task<IEnumerable<NotificacionTipo>> GetNotificacionTipos(string accountID, bool soloActivos);
+        Task<NotificacionTipo?> GetNotificacionTipoById(long id, string accountID);
+        Task<bool> ExisteCodigoNotificacionTipo(string accountID, string codigo, long? excluirId);
+        Task<long> InsertNotificacionTipo(NotificacionTipo tipo);
+        Task<int> UpdateNotificacionTipo(NotificacionTipo tipo);
+        Task<int> DeleteNotificacionTipo(long id, string accountID);
+        Task<string?> GetNombreParadero(long rutaParaderoId, long rutaId);
+        Task<string?> GetNombreRuta(long rutaId, string accountID);
+        Task<long> InsertNotificacion(Notificacion notificacion);
+        Task<Notificacion?> GetNotificacionById(long id, string accountID);
+        Task<IEnumerable<Notificacion>> GetNotificaciones(string accountID, DateTime? desde, DateTime? hasta,
+            string? estado, string? tipoCodigo, bool soloNoLeidas, int limite);
+        Task<int> ContarNotificacionesNoLeidas(string accountID);
+        Task<int> MarcarNotificacionLeida(long id, string accountID, DateTime ahora);
+        Task<int> MarcarTodasNotificacionesLeidas(string accountID, DateTime ahora);
+        Task<int> GestionarNotificacion(long id, string accountID, string estado, string? respuesta, string usuario, DateTime ahora);
+
         // ---------- Configuración ----------
         Task<int> GetTolerancia(string accountID);
         Task SetTolerancia(string accountID, int toleranciaMin);
