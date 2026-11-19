@@ -51,5 +51,7 @@ namespace VelsatBackendAPI.Data.Repositories
         IConfiguracionRepository ConfiguracionRepository { get; }
 
         IServiciosRutasRepository ServiciosRutasRepository { get; }
+
+        IServicioActualRepository ServicioActualRepository { get; }
     }
 }

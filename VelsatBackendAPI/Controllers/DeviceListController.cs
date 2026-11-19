@@ -36,6 +36,15 @@ namespace VelsatBackendApi.Controllers
 
         }
 
+        // Servicio vigente por placa (programado = "1", en curso = "2"), leído de la base DO.
+        // El front lo consulta aparte del polling de posiciones, con una frecuencia menor.
+        [HttpGet("ServiciosActuales/{username}")]
+        public async Task<IActionResult> ServiciosActuales(string username)
+        {
+            var servicios = await _readOnlyUow.ServicioActualRepository.ObtenerServiciosActuales(username);
+            return Ok(servicios);
+        }
+
         [HttpGet("Unidad/{username}/{placa}")]
         public async Task<IActionResult> ObtenerDeviceList(string username, string placa)
         {
