@@ -79,23 +79,19 @@ namespace VelsatBackendAPI.Data.Repositories
                 ListaTablas = new List<TablasReporting>()
             };
 
-            if (resultadoDias.UnixFechaFin <= unixLimite)
-            {
-                datosReporting.ListaTablas = ConsultarHistoricos(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin, speedClause, minSpeedKPH);
-            }
-            else if (resultadoDias.UnixFechaInicio > unixLimite)
-            {
-                datosReporting.ListaTablas = ConsultarEventData(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin, speedClause, minSpeedKPH);
-            }
-            else
-            {
-                // El rango solicitado cruza el límite de depuración: una parte está en
-                // historicos y la parte más reciente todavía está en eventdata.
-                var datosHistoricos = ConsultarHistoricos(accountID, deviceID, resultadoDias.UnixFechaInicio, unixLimite, speedClause, minSpeedKPH);
-                var datosEventData = ConsultarEventData(accountID, deviceID, unixLimite + 1, resultadoDias.UnixFechaFin, speedClause, minSpeedKPH);
+            // Se consulta SIEMPRE primero eventdata para todo el rango: la depuración puede
+            // no haber movido aún los registros. Solo si el rango toca la zona ya depurada
+            // (<= unixLimite) se complementa con historicos, sin duplicar timestamps.
+            var datosEventData = ConsultarEventData(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin, speedClause, minSpeedKPH);
+            datosReporting.ListaTablas.AddRange(datosEventData);
 
-                datosReporting.ListaTablas.AddRange(datosHistoricos);
-                datosReporting.ListaTablas.AddRange(datosEventData);
+            if (resultadoDias.UnixFechaInicio <= unixLimite)
+            {
+                int finHistoricos = Math.Min(resultadoDias.UnixFechaFin, unixLimite);
+                var datosHistoricos = ConsultarHistoricos(accountID, deviceID, resultadoDias.UnixFechaInicio, finHistoricos, speedClause, minSpeedKPH);
+
+                var timestampsEventData = new HashSet<long>(datosEventData.Select(t => (long)t.Timestamp));
+                datosReporting.ListaTablas.AddRange(datosHistoricos.Where(t => !timestampsEventData.Contains((long)t.Timestamp)));
                 datosReporting.ListaTablas = datosReporting.ListaTablas.OrderBy(t => t.Timestamp).ToList();
             }
 
@@ -123,11 +119,6 @@ namespace VelsatBackendAPI.Data.Repositories
                 sql,
                 new { FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin },
                 transaction: _defaultTransaction).ToList();
-
-            if (nombresTablas.Count == 0)
-            {
-                return ConsultarEventData(accountID, deviceID, unixFechaInicio, unixFechaFin, speedClause, minSpeedKPH);
-            }
 
             var lista = new List<TablasReporting>();
 
@@ -244,34 +235,42 @@ namespace VelsatBackendAPI.Data.Repositories
 
             if (numdias <= 7)
             {
-                const string sql = "SELECT tabla FROM historicos WHERE timeini <= @FechafinUnix AND timefin >= @FechainiUnix";
-
-                var nombresTablas = _defaultConnection.Query<Historicos>(
-                    sql,
-                    new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
-                    transaction: _defaultTransaction).ToList();
-
                 var datosReporting = new DatosReporting
                 {
                     ListaTablas = new List<TablasReporting>()
                 };
 
-                if (nombresTablas.Count == 0)
-                {
-                    string sqlEventData = $@"
-                        SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
-                        FROM eventdata
-                        WHERE accountID = @AccountID
-                          AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
-                        ORDER BY timestamp";
+                // Primero eventdata para todo el rango; historicos solo complementa la zona depurada.
+                string sqlEventData = $@"
+                    SELECT deviceID, timestamp, speedKPH, longitude, latitude, odometerKM, address
+                    FROM eventdata
+                    WHERE accountID = @AccountID
+                      AND timestamp BETWEEN @FechainiUnix AND @FechafinUnix {speedClause}
+                    ORDER BY timestamp";
 
-                    datosReporting.ListaTablas = _defaultConnection.Query<TablasReporting>(
-                        sqlEventData,
-                        new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
-                        transaction: _defaultTransaction).ToList();
-                }
-                else
+                var datosEventData = _defaultConnection.Query<TablasReporting>(
+                    sqlEventData,
+                    new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
+                    transaction: _defaultTransaction).ToList();
+
+                datosReporting.ListaTablas.AddRange(datosEventData);
+
+                DateTime diaLimite = DateTime.Now.Date.AddDays(-7);
+                int unixLimite = DateUnix(diaLimite.ToString("dd/MM/yyyy") + " 23:59");
+
+                if (resultadoDias.UnixFechaInicio <= unixLimite)
                 {
+                    int finHistoricos = Math.Min(resultadoDias.UnixFechaFin, unixLimite);
+
+                    const string sql = "SELECT tabla FROM historicos WHERE timeini <= @FechafinUnix AND timefin >= @FechainiUnix";
+
+                    var nombresTablas = _defaultConnection.Query<Historicos>(
+                        sql,
+                        new { FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = finHistoricos },
+                        transaction: _defaultTransaction).ToList();
+
+                    var clavesEventData = new HashSet<(string, int)>(datosEventData.Select(t => (t.DeviceId, t.Timestamp)));
+
                     foreach (var nombreTabla in nombresTablas)
                     {
                         string consultaTabla = nombreTabla.Tabla;
@@ -285,11 +284,13 @@ namespace VelsatBackendAPI.Data.Repositories
 
                         var datosTabla = _secondConnection.Query<TablasReporting>(
                             sqlR,
-                            new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = resultadoDias.UnixFechaFin, MinSpeed = minSpeedKPH ?? 0 },
+                            new { AccountID = accountID, FechainiUnix = resultadoDias.UnixFechaInicio, FechafinUnix = finHistoricos, MinSpeed = minSpeedKPH ?? 0 },
                             transaction: _secondTransaction).ToList();
 
-                        datosReporting.ListaTablas.AddRange(datosTabla);
+                        datosReporting.ListaTablas.AddRange(datosTabla.Where(t => !clavesEventData.Contains((t.DeviceId, t.Timestamp))));
                     }
+
+                    datosReporting.ListaTablas = datosReporting.ListaTablas.OrderBy(t => t.Timestamp).ToList();
                 }
 
                 for (int i = 0; i < datosReporting.ListaTablas.Count; i++)

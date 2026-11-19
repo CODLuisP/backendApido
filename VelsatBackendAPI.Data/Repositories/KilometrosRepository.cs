@@ -64,23 +64,15 @@ namespace VelsatBackendAPI.Data.Repositories
 
             List<KilometrosRecorridos> lista;
 
-            if (resultadoDias.UnixFechaFin <= unixLimite)
-            {
-                lista = ConsultarHistoricosKm(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
-            }
-            else if (resultadoDias.UnixFechaInicio > unixLimite)
-            {
-                lista = ConsultarEventDataKm(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
-            }
-            else
-            {
-                // El rango solicitado cruza el límite de depuración: una parte está en
-                // historicos y la parte más reciente todavía está en eventdata. El máximo y
-                // mínimo de odómetro deben combinarse por dispositivo, no concatenarse.
-                var datosHistoricos = ConsultarHistoricosKm(accountID, deviceID, resultadoDias.UnixFechaInicio, unixLimite);
-                var datosEventData = ConsultarEventDataKm(accountID, deviceID, unixLimite + 1, resultadoDias.UnixFechaFin);
+            // Siempre se consulta primero eventdata para todo el rango; si el rango toca la
+            // zona ya depurada se complementa con historicos. El máximo y mínimo de odómetro
+            // se combinan por dispositivo (no se concatenan).
+            lista = ConsultarEventDataKm(accountID, deviceID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
 
-                lista = CombinarKilometros(datosHistoricos, datosEventData);
+            if (resultadoDias.UnixFechaInicio <= unixLimite)
+            {
+                var datosHistoricos = ConsultarHistoricosKm(accountID, deviceID, resultadoDias.UnixFechaInicio, Math.Min(resultadoDias.UnixFechaFin, unixLimite));
+                lista = CombinarKilometros(datosHistoricos, lista);
             }
 
             var kilometrosReporting = new KilometrosReporting
@@ -109,11 +101,6 @@ namespace VelsatBackendAPI.Data.Repositories
             const string sql = "select tabla from historicos where timeini<=@FechafinUnix and timefin>=@FechainiUnix";
 
             var nombresTablas = _defaultConnection.Query<Historicos>(sql, new { FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin }, transaction: _defaultTransaction).ToList();
-
-            if (nombresTablas.Count == 0)
-            {
-                return ConsultarEventDataKm(accountID, deviceID, unixFechaInicio, unixFechaFin);
-            }
 
             var lista = new List<KilometrosRecorridos>();
 
@@ -181,20 +168,12 @@ namespace VelsatBackendAPI.Data.Repositories
 
             List<KilometrosRecorridos> lista;
 
-            if (resultadoDias.UnixFechaFin <= unixLimite)
-            {
-                lista = ConsultarHistoricosKmAll(accountID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
-            }
-            else if (resultadoDias.UnixFechaInicio > unixLimite)
-            {
-                lista = ConsultarEventDataKmAll(accountID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
-            }
-            else
-            {
-                var datosHistoricos = ConsultarHistoricosKmAll(accountID, resultadoDias.UnixFechaInicio, unixLimite);
-                var datosEventData = ConsultarEventDataKmAll(accountID, unixLimite + 1, resultadoDias.UnixFechaFin);
+            lista = ConsultarEventDataKmAll(accountID, resultadoDias.UnixFechaInicio, resultadoDias.UnixFechaFin);
 
-                lista = CombinarKilometros(datosHistoricos, datosEventData);
+            if (resultadoDias.UnixFechaInicio <= unixLimite)
+            {
+                var datosHistoricos = ConsultarHistoricosKmAll(accountID, resultadoDias.UnixFechaInicio, Math.Min(resultadoDias.UnixFechaFin, unixLimite));
+                lista = CombinarKilometros(datosHistoricos, lista);
             }
 
             var kilometrosReporting = new KilometrosReporting
@@ -222,11 +201,6 @@ namespace VelsatBackendAPI.Data.Repositories
         {
             const string sql = "select tabla from historicos where timeini <= @FechafinUnix and timefin >= @FechainiUnix";
             var nombresTablas = _defaultConnection.Query<Historicos>(sql, new { FechainiUnix = unixFechaInicio, FechafinUnix = unixFechaFin }, transaction: _defaultTransaction).ToList();
-
-            if (nombresTablas.Count == 0)
-            {
-                return ConsultarEventDataKmAll(accountID, unixFechaInicio, unixFechaFin);
-            }
 
             var lista = new List<KilometrosRecorridos>();
 
@@ -311,16 +285,13 @@ namespace VelsatBackendAPI.Data.Repositories
 
             var crudo = new List<KilometrosRecorridosServicio>();
 
-            if (nombresTablas.Count == 0)
+            // Siempre primero eventdata; las tablas históricas solo complementan (max/min
+            // se combinan después, así que un solapamiento no duplica resultados).
+            crudo.AddRange(EjecutarQueryBatch(_defaultConnection, _defaultTransaction, "eventdata", rangosConCuenta));
+
+            foreach (var nombreTabla in nombresTablas)
             {
-                crudo.AddRange(EjecutarQueryBatch(_defaultConnection, _defaultTransaction, "eventdata", rangosConCuenta));
-            }
-            else
-            {
-                foreach (var nombreTabla in nombresTablas)
-                {
-                    crudo.AddRange(EjecutarQueryBatch(_secondConnection, _secondTransaction, nombreTabla.Tabla, rangosConCuenta));
-                }
+                crudo.AddRange(EjecutarQueryBatch(_secondConnection, _secondTransaction, nombreTabla.Tabla, rangosConCuenta));
             }
 
             reporting.Resultados = crudo
