@@ -4,6 +4,8 @@ namespace VelsatBackendAPI.Model.Configuracion
     {
         public string AccountID { get; set; }
         public string? DisplayName { get; set; }
+        // Empresa / descripción de la cuenta (solo lectura: PUT perfil no la modifica).
+        public string? Description { get; set; }
         public string? ContactName { get; set; }
         public string? ContactPhone { get; set; }
         public string? ContactEmail { get; set; }

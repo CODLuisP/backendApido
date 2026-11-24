@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Mail;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using VelsatBackendAPI.Data.Repositories;
+using VelsatBackendAPI.Data.Services;
 using VelsatBackendAPI.Model.Configuracion;
 
 namespace VelsatBackendAPI.Controllers
@@ -15,11 +18,21 @@ namespace VelsatBackendAPI.Controllers
     {
         private readonly IUnitOfWork _uow;
         private readonly IReadOnlyUnitOfWork _readOnlyUow;
+        private readonly ICorreoService _correo;
+        private readonly IConfiguration _config;
 
-        public ConfiguracionController(IUnitOfWork uow, IReadOnlyUnitOfWork readOnlyUow)
+        // Reset de contraseña por enlace
+        private const int ResetMinutosValidez = 30;
+        private const int ResetSegundosEntreSolicitudes = 60;
+        private const string OrigenFront = "trackvel"; // el front lo usa para saber a qué backend llamar
+
+        public ConfiguracionController(IUnitOfWork uow, IReadOnlyUnitOfWork readOnlyUow,
+            ICorreoService correo, IConfiguration config)
         {
             _uow = uow;
             _readOnlyUow = readOnlyUow;
+            _correo = correo;
+            _config = config;
         }
 
         private string? AccountId => User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -157,6 +170,78 @@ namespace VelsatBackendAPI.Controllers
             }
         }
 
+        // Paso 1 (con sesión): envía al correo de la cuenta un enlace de un solo uso para elegir otra contraseña.
+        [HttpPost("password/solicitar-reset")]
+        public async Task<IActionResult> SolicitarResetPassword()
+        {
+            var frontBase = _config["Front:BaseUrl"]?.TrimEnd('/');
+            if (string.IsNullOrEmpty(frontBase))
+                return StatusCode(500, new { message = "El envío del enlace no está configurado (Front:BaseUrl)." });
+
+            try
+            {
+                var contacto = await _uow.ConfiguracionRepository.GetContactoAsync(AccountId!);
+                if (contacto == null)
+                    return NotFound(new { message = "No se encontró la cuenta." });
+
+                if (string.IsNullOrWhiteSpace(contacto.ContactEmail))
+                    return BadRequest(new { message = "Tu cuenta no tiene un correo registrado. Agrégalo en Mi cuenta." });
+
+                if (await _uow.ConfiguracionRepository.HayResetRecienteAsync(AccountId!, ResetSegundosEntreSolicitudes))
+                    return StatusCode(429, new { message = "Ya te enviamos un enlace hace un momento. Espera un minuto para pedir otro." });
+
+                var token = Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+                await _uow.ConfiguracionRepository.CrearResetTokenAsync(AccountId!, HashToken(token), ResetMinutosValidez);
+                _uow.SaveChanges();
+
+                var enlace = $"{frontBase}/reset-password?token={token}&origen={OrigenFront}";
+                var html = CorreoPlantillas.ResetPassword(contacto.DisplayName ?? "", enlace, ResetMinutosValidez);
+
+                if (!await _correo.EnviarAsync(contacto.ContactEmail!, "Cambio de contraseña - Velsat", html))
+                    return StatusCode(502, new { message = "No se pudo enviar el correo. Inténtalo de nuevo más tarde." });
+
+                return Ok(new
+                {
+                    message = "Te enviamos un enlace para cambiar tu contraseña.",
+                    email = EnmascararCorreo(contacto.ContactEmail!),
+                    expiraEnMinutos = ResetMinutosValidez
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al solicitar el cambio de contraseña", error = ex.Message });
+            }
+        }
+
+        // Paso 2 (sin sesión): el enlace del correo trae el token; con él se fija la nueva contraseña.
+        [AllowAnonymous]
+        [HttpPost("password/reset")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            if (request == null
+                || string.IsNullOrWhiteSpace(request.Token)
+                || string.IsNullOrEmpty(request.PasswordNueva))
+                return BadRequest(new { message = "El token y la nueva contraseña son obligatorios." });
+
+            // usuarios.password es varchar(32)
+            if (request.PasswordNueva.Length < 6 || request.PasswordNueva.Length > 32)
+                return BadRequest(new { message = "La nueva contraseña debe tener entre 6 y 32 caracteres." });
+
+            try
+            {
+                var ok = await _uow.ConfiguracionRepository.ConsumirResetTokenAsync(HashToken(request.Token.Trim()), request.PasswordNueva);
+                if (!ok)
+                    return BadRequest(new { message = "El enlace no es válido o ya venció. Solicita uno nuevo." });
+
+                _uow.SaveChanges();
+                return Ok(new { message = "Contraseña actualizada correctamente." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al cambiar la contraseña", error = ex.Message });
+            }
+        }
+
         // ------------------------------------------------------------------ ÍCONOS
 
         // Catálogo predefinido que el usuario puede elegir.
@@ -239,6 +324,22 @@ namespace VelsatBackendAPI.Controllers
             {
                 return StatusCode(500, new { message = "Error al restablecer el ícono", error = ex.Message });
             }
+        }
+
+        // ----------------------------------------------------------- RESET: UTILIDADES
+
+        private static string Base64UrlEncode(byte[] bytes)
+            => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        // En la BD solo se guarda el hash: si se filtra la tabla, los enlaces no sirven.
+        private static string HashToken(string token)
+            => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
+
+        private static string EnmascararCorreo(string email)
+        {
+            var at = email.IndexOf('@');
+            if (at <= 1) return email;
+            return email[0] + new string('*', Math.Min(at - 1, 6)) + email[at..];
         }
 
         // ----------------------------------------------------------- VALIDACIONES

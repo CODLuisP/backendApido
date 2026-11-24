@@ -15,6 +15,12 @@ namespace VelsatBackendAPI.Data.Repositories
         // UPDATE condicionado a la contraseña actual: devuelve 0 filas si no coincide.
         Task<int> CambiarPasswordAsync(string accountID, string passwordActual, string passwordNueva);
 
+        // Reset de contraseña por enlace (el token se guarda hasheado).
+        Task<ContactoCuenta?> GetContactoAsync(string accountID);
+        Task<bool> HayResetRecienteAsync(string accountID, int segundos);
+        Task CrearResetTokenAsync(string accountID, string tokenHash, int minutosValidez);
+        Task<bool> ConsumirResetTokenAsync(string tokenHash, string passwordNueva);
+
         Task<IEnumerable<IconoCatalogo>> GetCatalogoIconosAsync();
         Task<IconoCatalogo?> GetIconoCatalogoAsync(int iconoId);
 

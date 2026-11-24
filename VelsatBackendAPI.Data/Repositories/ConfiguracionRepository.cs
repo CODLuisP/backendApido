@@ -28,7 +28,7 @@ namespace VelsatBackendAPI.Data.Repositories
 
         public Task<PerfilCuenta?> GetPerfilAsync(string accountID)
         {
-            const string sql = @"SELECT accountID, displayName, contactName, contactPhone, contactEmail,
+            const string sql = @"SELECT accountID, displayName, description, contactName, contactPhone, contactEmail,
                                         addressLine1, addressLine2, addressLine3, addressCity, addressState,
                                         addressPostalCode, addressCountry
                                  FROM usuarios WHERE accountID = @AccountID LIMIT 1";
@@ -88,6 +88,72 @@ namespace VelsatBackendAPI.Data.Repositories
                 Nueva = passwordNueva,
                 Now = NowUnixPeru()
             }, _defaultTransaction);
+        }
+
+        // ------------------------------------------------ RESET DE CONTRASEÑA POR ENLACE
+
+        private static long NowUnixUtc() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        public Task<ContactoCuenta?> GetContactoAsync(string accountID)
+        {
+            const string sql = @"SELECT accountID, displayName, contactEmail
+                                 FROM usuarios WHERE accountID = @AccountID LIMIT 1";
+            return _defaultConnection.QueryFirstOrDefaultAsync<ContactoCuenta?>(sql, new { AccountID = accountID }, _defaultTransaction);
+        }
+
+        public async Task<bool> HayResetRecienteAsync(string accountID, int segundos)
+        {
+            const string sql = @"SELECT COUNT(*) FROM password_reset_tokens
+                                 WHERE accountID = @AccountID AND created_at > @Desde";
+            var n = await _defaultConnection.ExecuteScalarAsync<int>(sql,
+                new { AccountID = accountID, Desde = NowUnixUtc() - segundos }, _defaultTransaction);
+            return n > 0;
+        }
+
+        // Invalida los tokens pendientes de la cuenta y guarda el nuevo (solo hay un enlace vigente a la vez).
+        public async Task CrearResetTokenAsync(string accountID, string tokenHash, int minutosValidez)
+        {
+            var now = NowUnixUtc();
+
+            await _defaultConnection.ExecuteAsync(
+                "UPDATE password_reset_tokens SET used_at = @Now WHERE accountID = @AccountID AND used_at IS NULL",
+                new { AccountID = accountID, Now = now }, _defaultTransaction);
+
+            await _defaultConnection.ExecuteAsync(
+                @"INSERT INTO password_reset_tokens (accountID, token_hash, created_at, expires_at)
+                  VALUES (@AccountID, @TokenHash, @Now, @Expira)",
+                new { AccountID = accountID, TokenHash = tokenHash, Now = now, Expira = now + minutosValidez * 60L },
+                _defaultTransaction);
+        }
+
+        // Valida el token (vigente y sin usar), cambia la contraseña y lo marca como usado. Devuelve false si no es válido.
+        public async Task<bool> ConsumirResetTokenAsync(string tokenHash, string passwordNueva)
+        {
+            var now = NowUnixUtc();
+
+            var accountID = await _defaultConnection.QueryFirstOrDefaultAsync<string?>(
+                @"SELECT accountID FROM password_reset_tokens
+                  WHERE token_hash = @TokenHash AND used_at IS NULL AND expires_at > @Now
+                  LIMIT 1 FOR UPDATE",
+                new { TokenHash = tokenHash, Now = now }, _defaultTransaction);
+
+            if (accountID == null)
+                return false;
+
+            var rows = await _defaultConnection.ExecuteAsync(
+                @"UPDATE usuarios SET password = @Nueva, passwdChangeTime = @NowPeru, lastUpdateTime = @NowPeru
+                  WHERE accountID = @AccountID",
+                new { AccountID = accountID, Nueva = passwordNueva, NowPeru = NowUnixPeru() }, _defaultTransaction);
+
+            if (rows == 0)
+                return false;
+
+            // Quedan inutilizados este y cualquier otro token pendiente de la cuenta.
+            await _defaultConnection.ExecuteAsync(
+                "UPDATE password_reset_tokens SET used_at = @Now WHERE accountID = @AccountID AND used_at IS NULL",
+                new { AccountID = accountID, Now = now }, _defaultTransaction);
+
+            return true;
         }
 
         public Task<IEnumerable<IconoCatalogo>> GetCatalogoIconosAsync()

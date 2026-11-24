@@ -78,6 +78,7 @@ builder.Services.AddScoped<IReadOnlyUnitOfWork, ReadOnlyUnitOfWork>();
 
 builder.Services.AddHttpClient<IFirebaseService, FirebaseService>();
 builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
+builder.Services.AddHttpClient<ICorreoService, CorreoService>();
 
 // ✅ CORS configurado correctamente
 builder.Services.AddCors(options =>
