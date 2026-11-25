@@ -1,4 +1,5 @@
 using Dapper;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -37,6 +38,14 @@ namespace VelsatBackendAPI.Data.Repositories
 
             // Por placa: primero el servicio en curso (status 2) y, entre iguales, el más reciente.
             // Programado = status 1. Finalizado (3) no se devuelve: la unidad queda "sin servicio".
+            // Ventanas para descartar servicios que quedaron sin cerrar (fecha es texto dd/MM/yyyy HH:mm):
+            //  - En curso (2): solo si empezó en las últimas 24 h (cubre los que cruzan la medianoche).
+            //  - Programado (1): solo de hoy 00:00 en adelante.
+            // Las fechas se calculan en la app (TZ America/Lima) y no con NOW() para no depender de la zona de MySQL.
+            var ahora = DateTime.Now;
+            var desdeEnCurso = ahora.AddHours(-24);
+            var desdeProgramado = ahora.Date;
+
             const string sqlServicios = @"
                 SELECT DeviceId, Codservicio, Status, Numero, Tipo, Empresa, Conductor
                 FROM (
@@ -54,11 +63,19 @@ namespace VelsatBackendAPI.Data.Repositories
                     FROM servicio s
                     LEFT JOIN taxi t ON s.codconductor = t.codtaxi
                     WHERE s.unidad IN @DeviceIds
-                      AND s.status IN ('1', '2')
+                      AND (
+                            (s.status = '2' AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') >= @DesdeEnCurso)
+                         OR (s.status = '1' AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') >= @DesdeProgramado)
+                      )
                 ) x
                 WHERE rn = 1";
 
-            var servicios = await _doConnection.QueryAsync<ServicioActual>(sqlServicios, new { DeviceIds = deviceIds });
+            var servicios = await _doConnection.QueryAsync<ServicioActual>(sqlServicios, new
+            {
+                DeviceIds = deviceIds,
+                DesdeEnCurso = desdeEnCurso,
+                DesdeProgramado = desdeProgramado
+            });
             return servicios.ToList();
         }
     }
