@@ -13,5 +13,7 @@ namespace VelsatBackendAPI.Model
         public string? Tipo { get; set; }
         public string? Empresa { get; set; }
         public string? Conductor { get; set; }
+        // Texto tal como está en la base: dd/MM/yyyy HH:mm
+        public string? Fecha { get; set; }
     }
 }

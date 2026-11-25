@@ -55,7 +55,7 @@ namespace VelsatBackendAPI.Data.Repositories
             var hastaCercano = ahora.AddHours(HorasAnticipacion);
 
             const string sqlServicios = @"
-                SELECT DeviceId, Codservicio, Status, Numero, Tipo, Empresa, Conductor
+                SELECT DeviceId, Codservicio, Status, Numero, Tipo, Empresa, Conductor, Fecha
                 FROM (
                     SELECT s.unidad AS DeviceId,
                            s.codservicio AS Codservicio,
@@ -64,6 +64,7 @@ namespace VelsatBackendAPI.Data.Repositories
                            s.tipo AS Tipo,
                            s.empresa AS Empresa,
                            t.apellidos AS Conductor,
+                           s.fecha AS Fecha,
                            ROW_NUMBER() OVER (
                                PARTITION BY s.unidad
                                ORDER BY CASE
