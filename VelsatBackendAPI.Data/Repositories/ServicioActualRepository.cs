@@ -36,7 +36,13 @@ namespace VelsatBackendAPI.Data.Repositories
             if (deviceIds.Count == 0)
                 return new List<ServicioActual>();
 
-            // Por placa: primero el servicio en curso (status 2) y, entre iguales, el más reciente.
+            // Por placa, prioridad (entre iguales gana el codservicio más alto):
+            //   0) en curso que empezó hoy
+            //   1) programado de hoy que ya es hora o falta poco (hasta HorasAnticipacion h antes)
+            //   2) en curso de ayer (últimas 24 h): cubre servicios que cruzan la medianoche
+            //   3) programado lejano (hoy más tarde o futuro)
+            // Así un en curso de ayer sin finalizar cede ante el programado que ya se acerca, pero un
+            // servicio nocturno real no lo tapa un programado de la mañana.
             // Programado = status 1. Finalizado (3) no se devuelve: la unidad queda "sin servicio".
             // Ventanas para descartar servicios que quedaron sin cerrar (fecha es texto dd/MM/yyyy HH:mm):
             //  - En curso (2): solo si empezó en las últimas 24 h (cubre los que cruzan la medianoche).
@@ -45,6 +51,8 @@ namespace VelsatBackendAPI.Data.Repositories
             var ahora = DateTime.Now;
             var desdeEnCurso = ahora.AddHours(-24);
             var desdeProgramado = ahora.Date;
+            const int HorasAnticipacion = 2;
+            var hastaCercano = ahora.AddHours(HorasAnticipacion);
 
             const string sqlServicios = @"
                 SELECT DeviceId, Codservicio, Status, Numero, Tipo, Empresa, Conductor
@@ -58,7 +66,16 @@ namespace VelsatBackendAPI.Data.Repositories
                            t.apellidos AS Conductor,
                            ROW_NUMBER() OVER (
                                PARTITION BY s.unidad
-                               ORDER BY (s.status = '2') DESC, CAST(s.codservicio AS UNSIGNED) DESC
+                               ORDER BY CASE
+                                            WHEN s.status = '2'
+                                                 AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') >= @DesdeProgramado THEN 0
+                                            WHEN s.status = '1'
+                                                 AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') >= @DesdeProgramado
+                                                 AND STR_TO_DATE(s.fecha, '%d/%m/%Y %H:%i') <= @HastaCercano THEN 1
+                                            WHEN s.status = '2' THEN 2
+                                            ELSE 3
+                                        END,
+                                        CAST(s.codservicio AS UNSIGNED) DESC
                            ) AS rn
                     FROM servicio s
                     LEFT JOIN taxi t ON s.codconductor = t.codtaxi
@@ -74,7 +91,8 @@ namespace VelsatBackendAPI.Data.Repositories
             {
                 DeviceIds = deviceIds,
                 DesdeEnCurso = desdeEnCurso,
-                DesdeProgramado = desdeProgramado
+                DesdeProgramado = desdeProgramado,
+                HastaCercano = hastaCercano
             });
             return servicios.ToList();
         }
