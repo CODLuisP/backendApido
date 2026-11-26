@@ -13,14 +13,18 @@ namespace VelsatBackendAPI.Data.Services
     {
         private readonly IDbConnection _defaultConnection;
         private readonly IDbTransaction _defaultTransaction;
+        private readonly IDbConnection _doConnection;
+        private readonly IDbTransaction _doTransaction;
         private List<Geocercausu> _geocercaUsuarios;
         private List<string> _deviceIds;
         private string _currentLogin;
 
-        public DatosCargainicialService(IDbConnection defaultConnection, IDbTransaction defaultTransaction)
+        public DatosCargainicialService(IDbConnection defaultConnection, IDbTransaction defaultTransaction, IDbConnection doConnection, IDbTransaction doTransaction)
         {
             _defaultConnection = defaultConnection;
             _defaultTransaction = defaultTransaction;
+            _doConnection = doConnection;
+            _doTransaction = doTransaction;
             // NO cargar datos aquí - lazy loading
         }
 
@@ -119,10 +123,11 @@ namespace VelsatBackendAPI.Data.Services
                     WHERE s.codconductor = t.codtaxi 
                       AND s.codservicio IN @Servicios";
 
-                var serviciosData = await _defaultConnection.QueryAsync(
+                // servicio y taxi viven en la base DO, no en la local
+                var serviciosData = await _doConnection.QueryAsync(
                     sqlGetServicios,
                     new { Servicios = serviceCodes },
-                    transaction: _defaultTransaction); // ⭐ Ya tenía la transacción ✅
+                    transaction: _doTransaction);
 
                 var servicios = serviciosData.Select(row => new Servicio
                 {

@@ -930,11 +930,11 @@ namespace VelsatBackendAPI.Data.Repositories
                 parameters.Add("fecfin", fecfin, DbType.String);
                 parameters.Add("usuario", usuario, DbType.String);
 
-                int result = await _defaultConnection.ExecuteAsync(
+                int result = await _doConnection.ExecuteAsync(
                     "numserviciomovil",
                     parameters,
                     commandType: CommandType.StoredProcedure,
-                    transaction: _defaultTransaction
+                    transaction: _doTransaction
                 );
 
                 return result;

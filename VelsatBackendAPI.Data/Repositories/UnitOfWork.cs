@@ -63,7 +63,7 @@ namespace VelsatBackendAPI.Data.Repositories
                 new UserRepository(DefaultConnection, _defaultTransaction));
 
             _datosCargaInicialService = new Lazy<IDatosCargainicialService>(() =>
-                new DatosCargainicialService(DefaultConnection, _defaultTransaction));
+                new DatosCargainicialService(DefaultConnection, _defaultTransaction, DOConnection, _doTransaction));
 
             _servidorRepository = new Lazy<IServidorRepository>(() =>
                 new ServidorRepository(DefaultConnection, _defaultTransaction));
