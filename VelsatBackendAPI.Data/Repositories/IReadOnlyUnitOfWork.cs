@@ -53,5 +53,7 @@ namespace VelsatBackendAPI.Data.Repositories
         IServiciosRutasRepository ServiciosRutasRepository { get; }
 
         IServicioActualRepository ServicioActualRepository { get; }
+
+        IConductorTelemetriaRepository ConductorTelemetriaRepository { get; }
     }
 }

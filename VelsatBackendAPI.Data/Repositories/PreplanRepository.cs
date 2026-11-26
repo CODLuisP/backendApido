@@ -3199,7 +3199,7 @@ namespace VelsatBackendAPI.Data.Repositories
             string sql = "UPDATE taxi SET habilitado = '0' WHERE codtaxi = @Codigo";
             var parameters = new { Codigo = codigoConductor };
 
-            return await _defaultConnection.ExecuteAsync(sql, parameters, transaction: _defaultTransaction);
+            return await _doConnection.ExecuteAsync(sql, parameters, transaction: _doTransaction);
         }
 
         public async Task<int> LiberarConductorAsync(int codigoConductor)
