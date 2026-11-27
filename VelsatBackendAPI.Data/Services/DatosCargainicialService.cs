@@ -95,8 +95,9 @@ namespace VelsatBackendAPI.Data.Services
             const string sqlGetDevices = @"
                 SELECT deviceID, lastGPSTimestamp, lastValidLatitude, lastValidLongitude, lastOdometerKM,
                        description, direccion, codgeoact,
-                       lastValidHeading, lastValidSpeed, rutaact, servicio 
-                FROM device 
+                       lastValidHeading, lastValidSpeed, rutaact, servicio,
+                       IF(telemetria = 1, CAST(attributes AS CHAR), NULL) AS AttributesJson, telemetria
+                FROM device
                 WHERE deviceID IN @DeviceIDs";
 
             var devicesResult = await _defaultConnection.QueryAsync<Device>(
@@ -198,7 +199,7 @@ namespace VelsatBackendAPI.Data.Services
                 };
             }
 
-            const string sqlGetVehicle = @"SELECT deviceID, lastValidLatitude, lastValidLongitude, lastOdometerKM, description, direccion, codgeoact, lastValidHeading, lastValidSpeed, rutaact, servicio FROM device WHERE deviceID IN @DeviceIDs AND deviceID = @Placa";
+            const string sqlGetVehicle = @"SELECT deviceID, lastValidLatitude, lastValidLongitude, lastOdometerKM, description, direccion, codgeoact, lastValidHeading, lastValidSpeed, rutaact, servicio, IF(telemetria = 1, CAST(attributes AS CHAR), NULL) AS AttributesJson, telemetria FROM device WHERE deviceID IN @DeviceIDs AND deviceID = @Placa";
 
             var vehiculos = await _defaultConnection.QueryAsync<Device>(
                 sqlGetVehicle,
