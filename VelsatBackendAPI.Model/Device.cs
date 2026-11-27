@@ -25,6 +25,9 @@ namespace VelsatBackendAPI.Model
         public string? Servicio { get; set; }
         public bool Telemetria { get; set; }
 
+        // null = el equipo aún no ha reportado ignition.
+        public bool? Ignition { get; set; }
+
         // Texto crudo de la columna JSON "attributes"; no se envía al cliente.
         [JsonIgnore]
         public string? AttributesJson { get; set; }
